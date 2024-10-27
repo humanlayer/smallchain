@@ -3,7 +3,6 @@ import { ChatCompletionTool } from "openai/resources"
 import { open } from "sqlite"
 import sqlite3 from "sqlite3"
 import { Agent, agent_to_tool, Chain } from "./types"
-import { agents, fetchHnPostsLastDay, scrapeTools } from "./scrapetools"
 
 
 export const logger = {
@@ -110,11 +109,9 @@ export async function chainWorker(filename: string = "chains.db"): Promise<void>
   const service = new ChainService({
     store, db, openai, toolsMap: {
       "add": add,
-      ...(scrapeTools().tools_map)
     }
   })
 
-  const scraperAgents = agents()
   const calculatorAgent: Agent = {
     name: "calculator_operator",
     system_prompt: "You are a skilled calculator operator",
@@ -134,8 +131,6 @@ export async function chainWorker(filename: string = "chains.db"): Promise<void>
       `,
     tools: [
       agent_to_tool(calculatorAgent),
-      agent_to_tool(scraperAgents.contact_researcher),
-      agent_to_tool(scraperAgents.message_sender)
     ],
     delegation_tool: {
       description:
@@ -144,8 +139,6 @@ export async function chainWorker(filename: string = "chains.db"): Promise<void>
   }
 
 
-  await store.insertAgent(scraperAgents.contact_researcher)
-  await store.insertAgent(scraperAgents.message_sender)
   await store.insertAgent(calculatorAgent)
   await store.insertAgent(managerAgent)
 
