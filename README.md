@@ -26,6 +26,7 @@ Smallchain is a cloud-native orchestrator for Autonomous AI Agents. It supports 
 
 - [Getting Started](#getting-started)
 - [Why Smallchain?](#why-smallchain)
+- [Objects](#objects)
 - [Key Features](#key-features)
 - [Examples](#examples)
 - [Roadmap](#roadmap)
@@ -48,6 +49,18 @@ Stretch goals / future
 
 - *Extensible* - it should be easy to build and share agents, tools, and tasks
 - *Hackable* - it should be straightforward to unhook from the chat completions API and do whatever folks want WRT prompt / special tokens / context management 
+
+## Objects
+
+LLM = provider + keys + params
+
+AGENT = LLM + System Prompt + TOOL[]
+
+TOOL = local fn OR api OR docker OR agent
+
+TASK = AGENT + User Message
+
+TASK RUN = TASK + current context window
 
 ## Example
 
