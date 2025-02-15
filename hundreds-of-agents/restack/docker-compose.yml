@@ -1,7 +1,0 @@
-services:
-  restack:
-    image: ghcr.io/restackio/restack:main
-    ports:
-      - 5233:5233
-      - 6233:6233
-      - 7233:7233

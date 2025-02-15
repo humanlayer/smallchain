@@ -1327,10 +1327,10 @@ event: HumanContact
 
 ### kubechain-ui
 
-create a small UI that can be run as a docker container, that enables a user to inspect the state
+create a small nextjs UI that can be run as a docker container, that enables a user to inspect the state
 of all kubernetes CRs from kubechain
 
-This should include a simple typescript/express rest api on the backend that uses a kubernetes API client to fetch resources for the frontend
+This should include api routes on the nextjs a kubernetes API client to fetch resources for the frontend
 
 it does not need authorization or oauth for now, but it should include stubs for implementing those
 
