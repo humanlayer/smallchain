@@ -11,6 +11,30 @@ nodes:
         hostPort: 10002
         listenAddress: "0.0.0.0"
         protocol: tcp
+      - containerPort: 4317
+        hostPort: 4317
+        listenAddress: "0.0.0.0"
+        protocol: tcp
+      - containerPort: 4318
+        hostPort: 4318
+        listenAddress: "0.0.0.0"
+        protocol: tcp
+      # Grafana
+      - containerPort: 13000
+        hostPort: 13000
+        listenAddress: "0.0.0.0"
+        protocol: tcp
+      # Jaeger
+      - containerPort: 16686
+        hostPort: 16686
+        listenAddress: "0.0.0.0"
+        protocol: tcp
+      # Prometheus
+      - containerPort: 9090
+        hostPort: 9090
+        listenAddress: "0.0.0.0"
+        protocol: tcp
+
 kubeadmConfigPatches:
   - |
     kind: ClusterConfiguration
