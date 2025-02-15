@@ -1,0 +1,34 @@
+{
+  "resourceLogs": [
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "curl-test-service"
+            }
+          }
+        ]
+      },
+      "scopeLogs": [
+        {
+          "scope": {
+            "name": "curl-test-scope"
+          },
+          "logRecords": [
+            {
+              "timeUnixNano": "1697769600000000000",
+              "severityNumber": 9,
+              "severityText": "INFO",
+              "body": {
+                "stringValue": "Hello from curl!"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+

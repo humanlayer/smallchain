@@ -3,6 +3,8 @@ mode: deployment
 image:
   repository: otel/opentelemetry-collector-contrib
   tag: latest
+service:
+  type: NodePort
 
 presets:
   logsCollection:

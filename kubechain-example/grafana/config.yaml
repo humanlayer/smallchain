@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-config
+data:
+  grafana.ini: |
+    [server]
+    root_url = %(protocol)s://%(domain)s:%(http_port)s/
+
+    [paths]
+    data = /var/lib/grafana
+    logs = /var/log/grafana
+    plugins = /var/lib/grafana/plugins
+    provisioning = /etc/grafana/provisioning
+
+    [tracing.jaeger]
+    enabled = false
+    address = ""
+
+    [tracing]
+    enabled = false
+
+    [log]
+    mode = console
+    level = info
+
+    [security]
+    allow_embedding = true
+    cookie_secure = false

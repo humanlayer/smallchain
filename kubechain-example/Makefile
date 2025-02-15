@@ -31,41 +31,87 @@ ui-deploy:
 	@echo "Deploying kubechain-ui to cluster..."
 	kubectl apply -f deploy/kubechain-ui.yaml
 
-otel-deploy:
+otel-patch-service:
+	@echo "Patching OTEL collector service to use NodePorts..."
+	kubectl patch svc otel-collector-opentelemetry-collector -p '{"spec": {"type": "NodePort", "ports": [ \
+		{"name": "jaeger-compact", "port": 6831, "protocol": "UDP", "targetPort": 6831, "nodePort": 6831}, \
+		{"name": "jaeger-grpc", "port": 14250, "protocol": "TCP", "targetPort": 14250, "nodePort": 14250}, \
+		{"name": "jaeger-thrift", "port": 14268, "protocol": "TCP", "targetPort": 14268, "nodePort": 14268}, \
+		{"name": "otlp", "port": 4317, "protocol": "TCP", "targetPort": 4317, "nodePort": 4317}, \
+		{"name": "otlp-http", "port": 4318, "protocol": "TCP", "targetPort": 4318, "nodePort": 4318}, \
+		{"name": "zipkin", "port": 9411, "protocol": "TCP", "targetPort": 9411, "nodePort": 9411} \
+	]}}'
+
+
+otel-deploy-base:
 	@echo "Deploying OpenTelemetry collector to cluster..."
 	helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts
 	helm repo update
-	helm upgrade --install otel-collector open-telemetry/opentelemetry-collector \
-		--values otel/values.yaml
+	helm install otel-collector open-telemetry/opentelemetry-collector \
+		--values otel/values.yaml 
 
-prometheus-deploy:
+otel-up: otel-deploy-base otel-patch-service
+
+otel-test:
+	curl -v -X POST \
+		-H "Content-Type: application/json" \
+		-d @otel/otel-test-logs.json \
+		http://localhost:4318/v1/logs
+	curl -v -X POST \
+		-H "Content-Type: application/json" \
+		-d @otel/otel-test-metrics.json \
+		http://localhost:4318/v1/metrics
+	uv run otel/otel-test-traces.py
+
+	
+otel-down:
+	@echo "Deleting OpenTelemetry collector from cluster..."
+	helm delete otel-collector
+
+prometheus-up:
 	@echo "Deploying Prometheus to cluster..."
 	helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 	helm repo update
-	helm install prometheus prometheus-community/prometheus \
+	helm upgrade --install prometheus prometheus-community/prometheus \
 		--set server.service.type=NodePort \
 		--set server.service.nodePort=9090
 
-grafana-deploy:
+prometheus-down:
+	@echo "Deleting Prometheus from cluster..."
+	helm delete prometheus
+
+grafana-up:
 	@echo "Deploying Grafana to cluster..."
 	helm repo add grafana https://grafana.github.io/helm-charts
 	helm repo update
 	helm install grafana grafana/grafana \
 		--set adminPassword=admin \
 		--set service.type=NodePort \
-		--set service.nodePort=13000
+		--set service.nodePort=3000 \
+		--set persistence.enabled=true \
+		--set persistence.type=pvc \
+		--set persistence.size=1Gi \
 
-jaeger-deploy:
+grafana-down:
+	@echo "Deleting Grafana from cluster..."
+	helm delete grafana
+
+jaeger-up:
 	@echo "Deploying Jaeger to cluster..."
 	helm repo add jaegertracing https://jaegertracing.github.io/helm-charts
 	helm repo update
-	helm install jaeger jaegertracing/jaeger \
-		--set provisionDataStore.cassandra=false \
-		--set provisionDataStore.elastic=false \
-		--set query.service.type=NodePort \
-		--set query.service.nodePort=16686
+	helm upgrade --install jaeger jaegertracing/jaeger \
+		--history-max 3 \
+		--values jaeger/jaeger.yaml \
+		--set allInOne.service.type=NodePort \
+		--set allInOne.service.nodePort=16686
 
-otel-stack: otel-deploy prometheus-deploy grafana-deploy jaeger-deploy
+jaeger-down:
+	@echo "Deleting Jaeger from cluster..."
+	helm delete jaeger
+
+otel-stack: otel-up prometheus-up grafana-up jaeger-up
+otel-stack-down: otel-down prometheus-down grafana-down jaeger-down
 
 otel-access:
 	@echo "Access instructions for monitoring stack:"

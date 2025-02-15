@@ -1,0 +1,33 @@
+{
+  "resourceSpans": [
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "curl-test-service"
+            }
+          }
+        ]
+      },
+      "scopeSpans": [
+        {
+          "scope": {
+            "name": "curl-test-scope"
+          },
+          "spans": [
+            {
+              "traceId": "AAAAAAAAAAAAAAAAAAAAAA==",
+              "spanId": "AAAAAAAAAAA=",
+              "name": "curl-test-span",
+              "kind": "SPAN_KIND_SERVER",
+              "startTimeUnixNano": "1697769600000000000",
+              "endTimeUnixNano": "1697769601000000000"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
