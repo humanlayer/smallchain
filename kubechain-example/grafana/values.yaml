@@ -1,0 +1,102 @@
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: Tempo
+        type: tempo
+        uid: tempo
+        access: proxy
+        url: http://tempo:3100
+        isDefault: true
+        version: 1
+        editable: true
+
+service:
+  type: NodePort
+  nodePort: 13000
+
+persistence:
+  enabled: true
+  type: pvc
+  size: 1Gi
+
+adminPassword: admin
+
+dashboardProviders:
+  dashboardproviders.yaml:
+    apiVersion: 1
+    providers:
+      - name: "default"
+        orgId: 1
+        folder: ""
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards
+
+dashboards:
+  default:
+    traces:
+      json: |
+        {
+          "annotations": {
+            "list": []
+          },
+          "editable": true,
+          "fiscalYearStartMonth": 0,
+          "graphTooltip": 0,
+          "links": [],
+          "liveNow": false,
+          "panels": [
+            {
+              "datasource": {
+                "type": "tempo",
+                "uid": "tempo"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "custom": {
+                    "fillOpacity": 70
+                  }
+                }
+              },
+              "gridPos": {
+                "h": 20,
+                "w": 24,
+                "x": 0,
+                "y": 0
+              },
+              "id": 1,
+              "targets": [
+                {
+                  "datasource": {
+                    "type": "tempo",
+                    "uid": "tempo"
+                  },
+                  "limit": 20,
+                  "query": "{resource.service.name=\"python-random-service\"}",
+                  "queryType": "search"
+                }
+              ],
+              "title": "Example Traces",
+              "type": "traces"
+            }
+          ],
+          "refresh": "5s",
+          "schemaVersion": 39,
+          "style": "dark",
+          "tags": [],
+          "templating": {
+            "list": []
+          },
+          "time": {
+            "from": "now-15m",
+            "to": "now"
+          },
+          "timepicker": {},
+          "timezone": "",
+          "title": "Example Traces",
+          "version": 0,
+          "weekStart": ""
+        }

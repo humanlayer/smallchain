@@ -8,7 +8,7 @@ OTEL_CONFIG = otel/otel-config.yaml
 # Environment variable to customize NodePort range (if supported by your setup)
 export KIND_NODE_PORT_RANGE = 30000-35000
 
-.PHONY: kind-up kind-down operator-build operator-deploy ui-deploy otel-deploy prometheus-deploy grafana-deploy jaeger-deploy all
+.PHONY: kind-up kind-down operator-build operator-deploy ui-deploy otel-deploy prometheus-deploy grafana-deploy tempo-deploy all
 
 kind-up:
 	@echo "Creating kind cluster '$(CLUSTER_NAME)'..."
@@ -31,6 +31,13 @@ ui-deploy:
 	@echo "Deploying kubechain-ui to cluster..."
 	kubectl apply -f deploy/kubechain-ui.yaml
 
+otel-deploy-base:
+	@echo "Deploying OpenTelemetry collector to cluster..."
+	helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts
+	helm repo update
+	helm upgrade --install otel-collector open-telemetry/opentelemetry-collector \
+		--values otel/values.yaml 
+
 otel-patch-service:
 	@echo "Patching OTEL collector service to use NodePorts..."
 	kubectl patch svc otel-collector-opentelemetry-collector -p '{"spec": {"type": "NodePort", "ports": [ \
@@ -42,15 +49,7 @@ otel-patch-service:
 		{"name": "zipkin", "port": 9411, "protocol": "TCP", "targetPort": 9411, "nodePort": 9411} \
 	]}}'
 
-
-otel-deploy-base:
-	@echo "Deploying OpenTelemetry collector to cluster..."
-	helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts
-	helm repo update
-	helm install otel-collector open-telemetry/opentelemetry-collector \
-		--values otel/values.yaml 
-
-otel-up: otel-deploy-base otel-patch-service
+otel-up: otel-deploy-base otel-patch-service 
 
 otel-test:
 	curl -v -X POST \
@@ -82,15 +81,12 @@ prometheus-down:
 
 grafana-up:
 	@echo "Deploying Grafana to cluster..."
+	kubectl apply -f grafana/config.yaml
+	kubectl apply -f grafana/datasources.yaml
 	helm repo add grafana https://grafana.github.io/helm-charts
 	helm repo update
-	helm install grafana grafana/grafana \
-		--set adminPassword=admin \
-		--set service.type=NodePort \
-		--set service.nodePort=3000 \
-		--set persistence.enabled=true \
-		--set persistence.type=pvc \
-		--set persistence.size=1Gi \
+	helm upgrade --install grafana grafana/grafana \
+		--values grafana/values.yaml
 
 grafana-down:
 	@echo "Deleting Grafana from cluster..."
@@ -102,16 +98,29 @@ jaeger-up:
 	helm repo update
 	helm upgrade --install jaeger jaegertracing/jaeger \
 		--history-max 3 \
-		--values jaeger/jaeger.yaml \
-		--set allInOne.service.type=NodePort \
-		--set allInOne.service.nodePort=16686
+		--values jaeger/jaeger.yaml
 
 jaeger-down:
 	@echo "Deleting Jaeger from cluster..."
 	helm delete jaeger
 
-otel-stack: otel-up prometheus-up grafana-up jaeger-up
-otel-stack-down: otel-down prometheus-down grafana-down jaeger-down
+tempo-up:
+	@echo "Deploying Tempo to cluster..."
+	helm repo add grafana https://grafana.github.io/helm-charts
+	helm repo update
+	helm upgrade --install tempo grafana/tempo \
+		--set tempo.receivers.otlp.protocols.grpc.endpoint=0.0.0.0:4317 \
+		--set tempo.receivers.otlp.protocols.http.endpoint=0.0.0.0:4318 \
+		--set service.type=NodePort \
+		--set service.ports.otlp-grpc.nodePort=4317 \
+		--set service.ports.otlp-http.nodePort=4318
+
+tempo-down:
+	@echo "Deleting Tempo from cluster..."
+	helm delete tempo
+
+otel-stack: otel-up prometheus-up grafana-up tempo-up
+otel-stack-down: otel-down prometheus-down grafana-down tempo-down
 
 otel-access:
 	@echo "Access instructions for monitoring stack:"
@@ -123,4 +132,4 @@ otel-access:
 	@echo "\nPrometheus:"
 	@echo "Access: http://localhost:9090"
 
-all: kind-up operator-build operator-deploy ui-deploy otel-deploy prometheus-deploy grafana-deploy jaeger-deploy
+all: kind-up operator-build operator-deploy ui-deploy otel-deploy prometheus-deploy grafana-deploy tempo-deploy

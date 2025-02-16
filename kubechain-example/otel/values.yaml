@@ -23,6 +23,10 @@ presets:
 config:
   exporters:
     debug: {}
+    otlp:
+      endpoint: tempo.default.svc.cluster.local:4317
+      tls:
+        insecure: true
   extensions:
     health_check:
       endpoint: ${env:MY_POD_IP}:13133
@@ -45,7 +49,7 @@ config:
       traces:
         receivers: [otlp]
         processors: [memory_limiter, batch]
-        exporters: [debug]
+        exporters: [debug, otlp]
       metrics:
         receivers: [otlp]
         processors: [memory_limiter, batch]
