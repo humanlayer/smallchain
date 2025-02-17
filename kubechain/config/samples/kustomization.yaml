@@ -1,0 +1,4 @@
+## Append samples of your project ##
+resources:
+- kubechain_v1alpha1_llm.yaml
+# +kubebuilder:scaffold:manifestskustomizesamples

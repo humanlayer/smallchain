@@ -622,14 +622,27 @@ Initialize Kubebuilder:
 bash
 Copy
 kubebuilder init --domain=example.com --repo=github.com/your-org/ai-operator
-4.2 Creating CRDs
-We’ll create the following API groups/versions:
+## CRD Components
 
-LLM CRD
-Toolset CRD
-Agent CRD
-Task CRD
-TaskRun CRD
+### LLM CRD ✅
+- Implemented with proper validation and Kubernetes-native patterns
+- Added status subresource and custom columns
+- Controller properly handles reconciliation
+
+### Tool CRD 🔄
+[Original content for Tool CRD...]
+
+### ToolSet CRD 📝
+[Original content for ToolSet CRD...]
+
+### Agent CRD 📝
+[Original content for Agent CRD...]
+
+### Task CRD 📝
+[Original content for Task CRD...]
+
+### TaskRun CRD 📝
+[Original content for TaskRun CRD...]
 Note: Each CRD can be placed under a single API group (e.g., ai.example.com) or multiple subgroups if you prefer.
 
 4.2.1 LLM CRD & Controller

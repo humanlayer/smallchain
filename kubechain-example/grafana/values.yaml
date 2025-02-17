@@ -90,7 +90,7 @@ dashboards:
             },
             "gridPos": {
               "h": 8,
-              "w": 12,
+              "w": 24,
               "x": 0,
               "y": 0
             },
@@ -100,13 +100,7 @@ dashboards:
                 "criticalPathOnly": false,
                 "matchesOnly": false,
                 "serviceNameOperator": "=",
-                "spanNameOperator": "=",
-                "tags": [
-                  {
-                    "id": "40f4f7a5-deb",
-                    "operator": "="
-                  }
-                ]
+                "spanNameOperator": "="
               },
               "view": "TraceView"
             },
@@ -125,7 +119,7 @@ dashboards:
               }
             ],
             "title": "Test Traces",
-            "type": "traces"
+            "type": "table"
           },
           {
             "datasource": {
@@ -180,14 +174,13 @@ dashboards:
                     }
                   ]
                 },
-                "unit": "percentunit"
               },
               "overrides": []
             },
             "gridPos": {
               "h": 8,
-              "w": 12,
-              "x": 12,
+              "w": 24,
+              "x": 0,
               "y": 0
             },
             "id": 3,
@@ -265,6 +258,7 @@ dashboards:
             "type": "logs"
           }
         ],
+        "preload": true,
         "refresh": "5s",
         "schemaVersion": 40,
         "tags": [],
