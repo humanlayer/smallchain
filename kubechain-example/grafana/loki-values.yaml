@@ -1,52 +1,56 @@
+deploymentMode: SingleBinary
+
+singleBinary:
+  replicas: 1
+  persistence:
+    enabled: false
+
+  extraVolumes:
+    - name: data
+      emptyDir: {}
+  extraVolumeMounts:
+    - name: data
+      mountPath: /var/loki
+
+read:
+  replicas: 0
+write:
+  replicas: 0
+backend:
+  replicas: 0
+
 loki:
+  # Turn off structured metadata requirement with older schema
+  limits_config:
+    allow_structured_metadata: false
+
   auth_enabled: false
-  mode: "single"
-  commonConfig:
-    replication_factor: 1
+
+  # Minimal schema config: boltdb-shipper + filesystem (schema v11).
+  schemaConfig:
+    configs:
+      - from: "2022-01-01"
+        store: tsdb # required for structured metadata
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: index_
+          period: 24h
+
+  # Use filesystem-based storage (no object store needed)
   storage:
     type: filesystem
     filesystem:
       chunks_directory: /var/loki/chunks
       rules_directory: /var/loki/rules
-  config:
-    ingester:
-      wal:
-        enabled: false
-    schema_config:
-      configs:
-        - store: boltdb-shipper
-          object_store: filesystem
-          schema: v11
-          index:
-            prefix: index_
-            period: 24h
-    storage_config:
-      boltdb_shipper:
-        active_index_directory: /var/loki/index
-        cache_location: /var/loki/cache
-        shared_store: filesystem
-      filesystem:
-        directory: /var/loki/chunks
-  singleBinary:
-    enabled: true
-    replicas: 1
-  monitoring:
-    selfMonitoring:
-      enabled: false
-    lokiCanary:
-      enabled: false
-  test:
-    enabled: false
 
-sidecar:
-  enabled: false
+  commonConfig:
+    replication_factor: 1
+    path_prefix: /var/loki
 
-persistence:
-  enabled: true
-  size: 10Gi
-
-serviceMonitor:
-  enabled: true
-
-service:
-  type: NodePort
+  # Security context: readOnlyRootFilesystem is true by default
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: ["ALL"]
