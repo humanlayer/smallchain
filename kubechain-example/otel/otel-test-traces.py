@@ -6,6 +6,7 @@
 
 #!/usr/bin/env python3
 import os
+import random
 import time
 import json
 import requests #  type: ignore
@@ -36,7 +37,7 @@ logs_payload = {
                             "severityNumber": 9,
                             "severityText": "INFO",
                             "body": {
-                                "stringValue": "Hello from curl!"
+                                "stringValue": "Hello from test service!"
                             },
                             "attributes": [
                                 {
@@ -74,13 +75,13 @@ metrics_payload = {
                     "metrics": [
                         {
                             "name": "curl.test.metric",
-                            "description": "Demo metric from curl",
+                            "description": "Test metric",
                             "unit": "1",
                             "gauge": {
                                 "dataPoints": [
                                     {
                                         "timeUnixNano": str(current_time_ns),
-                                        "asInt": 42
+                                        "asInt": random.randint(0, 100)
                                     }
                                 ]
                             }
@@ -92,9 +93,10 @@ metrics_payload = {
     ]
 }
 
-# Generate trace
+# Generate trace with parent-child relationship
 trace_id_hex = os.urandom(16).hex()
-span_id_hex = os.urandom(8).hex()
+parent_span_id_hex = os.urandom(8).hex()
+child_span_id_hex = os.urandom(8).hex()
 
 trace_payload = {
     "resourceSpans": [
@@ -115,11 +117,32 @@ trace_payload = {
                     "spans": [
                         {
                             "traceId": trace_id_hex,
-                            "spanId": span_id_hex,
-                            "name": "python-random-span",
+                            "spanId": parent_span_id_hex,
+                            "name": "parent-operation",
                             "kind": "SPAN_KIND_SERVER",
                             "startTimeUnixNano": str(current_time_ns),
-                            "endTimeUnixNano": str(current_time_ns + 30_000_000_000)  # 30 seconds later
+                            "endTimeUnixNano": str(current_time_ns + 30_000_000_000),  # 30 seconds later
+                            "attributes": [
+                                {
+                                    "key": "operation.type",
+                                    "value": {"stringValue": "parent"}
+                                }
+                            ]
+                        },
+                        {
+                            "traceId": trace_id_hex,
+                            "spanId": child_span_id_hex,
+                            "parentSpanId": parent_span_id_hex,
+                            "name": "child-operation",
+                            "kind": "SPAN_KIND_INTERNAL",
+                            "startTimeUnixNano": str(current_time_ns + 5_000_000_000),  # 5 seconds after parent starts
+                            "endTimeUnixNano": str(current_time_ns + 15_000_000_000),  # 10 seconds duration
+                            "attributes": [
+                                {
+                                    "key": "operation.type",
+                                    "value": {"stringValue": "child"}
+                                }
+                            ]
                         }
                     ]
                 }
@@ -146,4 +169,5 @@ traces_response = requests.post(f"{url_base}/traces", headers=headers, json=trac
 print("Traces Status code:", traces_response.status_code)
 print("Traces Response body:", traces_response.text)
 print("Generated traceId:", trace_id_hex)
-print("Generated spanId: ", span_id_hex)
+print("Generated parent spanId:", parent_span_id_hex)
+print("Generated child spanId:", child_span_id_hex)

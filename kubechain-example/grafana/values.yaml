@@ -57,192 +57,228 @@ dashboards:
     traces:
       json: |
         {
-          "annotations": {
-            "list": []
-          },
-          "editable": true,
-          "fiscalYearStartMonth": 0,
-          "graphTooltip": 0,
-          "links": [],
-          "liveNow": false,
-          "panels": [
+        "annotations": {
+          "list": [
             {
+              "builtIn": 1,
               "datasource": {
-                "type": "tempo",
-                "uid": "tempo"
+                "type": "grafana",
+                "uid": "-- Grafana --"
               },
-              "fieldConfig": {
-                "defaults": {
-                  "custom": {
-                    "fillOpacity": 70
+              "enable": true,
+              "hide": true,
+              "iconColor": "rgba(0, 211, 255, 1)",
+              "name": "Annotations & Alerts",
+              "type": "dashboard"
+            }
+          ]
+        },
+        "editable": true,
+        "fiscalYearStartMonth": 0,
+        "graphTooltip": 0,
+        "id": 1,
+        "links": [],
+        "panels": [
+          {
+            "datasource": {
+              "type": "tempo",
+              "uid": "tempo"
+            },
+            "fieldConfig": {
+              "defaults": {},
+              "overrides": []
+            },
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 0,
+              "y": 0
+            },
+            "id": 1,
+            "options": {
+              "spanFilters": {
+                "criticalPathOnly": false,
+                "matchesOnly": false,
+                "serviceNameOperator": "=",
+                "spanNameOperator": "=",
+                "tags": [
+                  {
+                    "id": "40f4f7a5-deb",
+                    "operator": "="
                   }
-                }
+                ]
               },
-              "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 0,
-                "y": 0
-              },
-              "id": 1,
-              "targets": [
-                {
-                  "datasource": {
-                    "type": "tempo",
-                    "uid": "tempo"
+              "view": "TraceView"
+            },
+            "pluginVersion": "11.5.1",
+            "targets": [
+              {
+                "datasource": {
+                  "type": "tempo",
+                  "uid": "tempo"
+                },
+                "limit": 20,
+                "query": "{resource.service.name=\"python-random-service\"}",
+                "queryType": "traceql",
+                "refId": "A",
+                "tableType": "traces"
+              }
+            ],
+            "title": "Test Traces",
+            "type": "traces"
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "Ratio",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "barWidthFactor": 0.6,
+                  "drawStyle": "line",
+                  "fillOpacity": 10,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
                   },
-                  "limit": 20,
-                  "query": "{resource.service.name=\"python-random-service\"}",
-                  "queryType": "search"
-                }
-              ],
-              "title": "Example Traces",
-              "type": "traces",
-              "options": {
-                "view": "table"
+                  "insertNulls": false,
+                  "lineInterpolation": "linear",
+                  "lineWidth": 1,
+                  "pointSize": 5,
+                  "scaleDistribution": {
+                    "type": "linear"
+                  },
+                  "showPoints": "never",
+                  "spanNulls": false,
+                  "stacking": {
+                    "group": "A",
+                    "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                    "mode": "off"
+                  }
+                },
+                "mappings": [],
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    }
+                  ]
+                },
+                "unit": "percentunit"
+              },
+              "overrides": []
+            },
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 12,
+              "y": 0
+            },
+            "id": 3,
+            "options": {
+              "legend": {
+                "calcs": [],
+                "displayMode": "list",
+                "placement": "bottom",
+                "showLegend": true
+              },
+              "tooltip": {
+                "hideZeros": false,
+                "mode": "single",
+                "sort": "none"
               }
             },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-              },
-              "fieldConfig": {
-                "defaults": {
-                  "color": {
-                    "mode": "palette-classic"
-                  },
-                  "custom": {
-                    "axisCenteredZero": false,
-                    "axisColorMode": "text",
-                    "axisLabel": "Ratio",
-                    "axisPlacement": "auto",
-                    "barAlignment": 0,
-                    "drawStyle": "line",
-                    "fillOpacity": 10,
-                    "gradientMode": "none",
-                    "hideFrom": {
-                      "legend": false,
-                      "tooltip": false,
-                      "viz": false
-                    },
-                    "lineInterpolation": "linear",
-                    "lineWidth": 1,
-                    "pointSize": 5,
-                    "scaleDistribution": {
-                      "type": "linear"
-                    },
-                    "showPoints": "never",
-                    "spanNulls": false,
-                    "stacking": {
-                      "group": "A",
-                      "mode": "none"
-                    },
-                    "thresholdsStyle": {
-                      "mode": "off"
-                    }
-                  },
-                  "mappings": [],
-                  "thresholds": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "color": "green",
-                        "value": null
-                      }
-                    ]
-                  },
-                  "unit": "percentunit"
+            "pluginVersion": "11.5.1",
+            "targets": [
+              {
+                "datasource": {
+                  "type": "prometheus",
+                  "uid": "prometheus"
                 },
-                "overrides": []
-              },
-              "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 12,
-                "y": 0
-              },
-              "id": 3,
-              "options": {
-                "legend": {
-                  "calcs": [],
-                  "displayMode": "list",
-                  "placement": "bottom",
-                  "showLegend": true
-                },
-                "tooltip": {
-                  "mode": "single",
-                  "sort": "none"
-                }
-              },
-              "targets": [
-                {
-                  "datasource": {
-                    "type": "prometheus",
-                    "uid": "prometheus"
-                  },
-                  "editorMode": "code",
-                  "expr": "curl_test_metric_ratio",
-                  "legendFormat": "test metric",
-                  "range": true,
-                  "refId": "A"
-                }
-              ],
-              "title": "Test Metrics",
-              "type": "timeseries"
+                "editorMode": "code",
+                "expr": "curl_test_metric_ratio",
+                "legendFormat": "test metric",
+                "range": true,
+                "refId": "A"
+              }
+            ],
+            "title": "Test Metrics",
+            "type": "timeseries"
+          },
+          {
+            "datasource": {
+              "type": "loki",
+              "uid": "loki"
             },
-            {
-              "datasource": {
-                "type": "loki",
-                "uid": "loki"
-              },
-              "gridPos": {
-                "h": 8,
-                "w": 24,
-                "x": 0,
-                "y": 8
-              },
-              "id": 4,
-              "options": {
-                "dedupStrategy": "none",
-                "enableLogDetails": true,
-                "prettifyLogMessage": false,
-                "showCommonLabels": false,
-                "showLabels": false,
-                "showTime": true,
-                "sortOrder": "Descending",
-                "wrapLogMessage": false
-              },
-              "targets": [
-                {
-                  "datasource": {
-                    "type": "loki",
-                    "uid": "loki"
-                  },
-                  "editorMode": "builder",
-                  "expr": "{service_name=\"curl-test-service\"} | json",
-                  "queryType": "range",
-                  "refId": "A"
-                }
-              ],
-              "title": "Test Logs",
-              "type": "logs"
-            }
-          ],
-          "refresh": "5s",
-          "schemaVersion": 39,
-          "style": "dark",
-          "tags": [],
-          "templating": {
-            "list": []
-          },
-          "time": {
-            "from": "now-15m",
-            "to": "now"
-          },
-          "timepicker": {},
-          "timezone": "",
-          "title": "Test data",
-          "version": 0,
-          "weekStart": ""
+            "fieldConfig": {
+              "defaults": {},
+              "overrides": []
+            },
+            "gridPos": {
+              "h": 8,
+              "w": 24,
+              "x": 0,
+              "y": 8
+            },
+            "id": 4,
+            "options": {
+              "dedupStrategy": "none",
+              "enableInfiniteScrolling": false,
+              "enableLogDetails": true,
+              "prettifyLogMessage": false,
+              "showCommonLabels": false,
+              "showLabels": false,
+              "showTime": true,
+              "sortOrder": "Descending",
+              "wrapLogMessage": false
+            },
+            "pluginVersion": "11.5.1",
+            "targets": [
+              {
+                "datasource": {
+                  "type": "loki",
+                  "uid": "loki"
+                },
+                "editorMode": "builder",
+                "expr": "{service_name=\"curl-test-service\"} | json",
+                "queryType": "range",
+                "refId": "A"
+              }
+            ],
+            "title": "Test Logs",
+            "type": "logs"
+          }
+        ],
+        "refresh": "5s",
+        "schemaVersion": 40,
+        "tags": [],
+        "templating": {
+          "list": []
+        },
+        "time": {
+          "from": "now-15m",
+          "to": "now"
+        },
+        "timepicker": {},
+        "timezone": "",
+        "title": "Test data",
+        "uid": "aedak754t4uf4f",
+        "version": 9,
+        "weekStart": ""
         }
