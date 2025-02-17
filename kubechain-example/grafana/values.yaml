@@ -79,8 +79,8 @@ dashboards:
                 }
               },
               "gridPos": {
-                "h": 20,
-                "w": 24,
+                "h": 8,
+                "w": 12,
                 "x": 0,
                 "y": 0
               },
@@ -97,7 +97,10 @@ dashboards:
                 }
               ],
               "title": "Example Traces",
-              "type": "traces"
+              "type": "traces",
+              "options": {
+                "view": "table"
+              }
             },
             {
               "datasource": {
@@ -157,7 +160,7 @@ dashboards:
                 "h": 8,
                 "w": 12,
                 "x": 12,
-                "y": 20
+                "y": 0
               },
               "id": 3,
               "options": {
@@ -180,12 +183,12 @@ dashboards:
                   },
                   "editorMode": "code",
                   "expr": "curl_test_metric_ratio",
-                  "legendFormat": "Curl Test Metric Ratio",
+                  "legendFormat": "test metric",
                   "range": true,
                   "refId": "A"
                 }
               ],
-              "title": "Curl Test Metric Ratio",
+              "title": "Test Metrics",
               "type": "timeseries"
             },
             {
@@ -197,7 +200,7 @@ dashboards:
                 "h": 8,
                 "w": 24,
                 "x": 0,
-                "y": 28
+                "y": 8
               },
               "id": 4,
               "options": {
@@ -217,7 +220,7 @@ dashboards:
                     "uid": "loki"
                   },
                   "editorMode": "builder",
-                  "expr": "{service_name=\"curl-test-service\"}",
+                  "expr": "{service_name=\"curl-test-service\"} | json",
                   "queryType": "range",
                   "refId": "A"
                 }
@@ -239,7 +242,7 @@ dashboards:
           },
           "timepicker": {},
           "timezone": "",
-          "title": "Example Traces",
+          "title": "Test data",
           "version": 0,
           "weekStart": ""
         }

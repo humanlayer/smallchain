@@ -53,14 +53,6 @@ otel-patch-service:
 otel-up: otel-deploy-base otel-patch-service 
 
 otel-test:
-	curl -v -X POST \
-		-H "Content-Type: application/json" \
-		-d @otel/otel-test-logs.json \
-		http://localhost:4318/v1/logs
-	curl -v -X POST \
-		-H "Content-Type: application/json" \
-		-d @otel/otel-test-metrics.json \
-		http://localhost:4318/v1/metrics
 	uv run otel/otel-test-traces.py
 
 	
