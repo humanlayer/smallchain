@@ -1,0 +1,36 @@
+{
+  "resourceMetrics": [
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.name",
+            "value": { "stringValue": "curl-test-service" }
+          }
+        ]
+      },
+      "scopeMetrics": [
+        {
+          "scope": {
+            "name": "curl-test-scope"
+          },
+          "metrics": [
+            {
+              "name": "curl.test.metric",
+              "description": "Demo metric from curl",
+              "unit": "1",
+              "gauge": {
+                "dataPoints": [
+                  {
+                    "timeUnixNano": "1739759034N",
+                    "asInt": 42
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
