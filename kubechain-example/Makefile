@@ -46,7 +46,8 @@ otel-patch-service:
 		{"name": "jaeger-thrift", "port": 14268, "protocol": "TCP", "targetPort": 14268, "nodePort": 14268}, \
 		{"name": "otlp", "port": 4317, "protocol": "TCP", "targetPort": 4317, "nodePort": 4317}, \
 		{"name": "otlp-http", "port": 4318, "protocol": "TCP", "targetPort": 4318, "nodePort": 4318}, \
-		{"name": "zipkin", "port": 9411, "protocol": "TCP", "targetPort": 9411, "nodePort": 9411} \
+		{"name": "zipkin", "port": 9411, "protocol": "TCP", "targetPort": 9411, "nodePort": 9411}, \
+		{"name": "prometheus", "port": 8889, "protocol": "TCP", "targetPort": 8889, "nodePort": 8889} \
 	]}}'
 
 otel-up: otel-deploy-base otel-patch-service 
@@ -72,8 +73,8 @@ prometheus-up:
 	helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 	helm repo update
 	helm upgrade --install prometheus prometheus-community/prometheus \
-		--set server.service.type=NodePort \
-		--set server.service.nodePort=9090
+		--values prometheus/prometheus-values.yaml
+	kubectl get servicemonitor -o name | xargs -I {} kubectl patch {} --type=merge -p '{"metadata":{"labels":{"release":"prometheus"}}}'
 
 prometheus-down:
 	@echo "Deleting Prometheus from cluster..."

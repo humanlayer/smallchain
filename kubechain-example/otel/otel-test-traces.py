@@ -7,7 +7,7 @@
 #!/usr/bin/env python3
 import os
 import time
-import requests
+import requests #  type: ignore
 
 # Generate a 16-byte (128-bit) random trace ID, then hex-encode to 32 hex chars
 trace_id_hex = os.urandom(16).hex()  # e.g. "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d"

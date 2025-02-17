@@ -22,11 +22,14 @@ presets:
 
 config:
   exporters:
-    debug: {}
+    debug:
+      verbosity: detailed
     otlp:
       endpoint: tempo.default.svc.cluster.local:4317
       tls:
         insecure: true
+    prometheus:
+      endpoint: "0.0.0.0:8889"
   extensions:
     health_check:
       endpoint: ${env:MY_POD_IP}:13133
@@ -53,4 +56,16 @@ config:
       metrics:
         receivers: [otlp]
         processors: [memory_limiter, batch]
-        exporters: [debug]
+        exporters: [debug, prometheus]
+
+extraEnvs:
+  - name: MY_POD_IP
+    valueFrom:
+      fieldRef:
+        fieldPath: status.podIP
+
+serviceMonitor:
+  enabled: true
+  namespace: default
+  interval: 30s
+  scrapeTimeout: 10s

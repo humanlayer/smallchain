@@ -24,11 +24,6 @@ nodes:
         hostPort: 13000
         listenAddress: "0.0.0.0"
         protocol: tcp
-      # Jaeger
-      - containerPort: 16686
-        hostPort: 16686
-        listenAddress: "0.0.0.0"
-        protocol: tcp
       # Prometheus
       - containerPort: 9090
         hostPort: 9090
