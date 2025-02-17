@@ -8,7 +8,7 @@ OTEL_CONFIG = otel/otel-config.yaml
 # Environment variable to customize NodePort range (if supported by your setup)
 export KIND_NODE_PORT_RANGE = 30000-35000
 
-.PHONY: kind-up kind-down operator-build operator-deploy ui-deploy otel-deploy prometheus-deploy grafana-deploy tempo-deploy all
+.PHONY: kind-up kind-down operator-build operator-deploy ui-deploy otel-deploy prometheus-deploy grafana-deploy tempo-deploy loki-up loki-down otel-stack otel-stack-down all
 
 kind-up:
 	@echo "Creating kind cluster '$(CLUSTER_NAME)'..."
@@ -82,8 +82,6 @@ prometheus-down:
 
 grafana-up:
 	@echo "Deploying Grafana to cluster..."
-	kubectl apply -f grafana/config.yaml
-	kubectl apply -f grafana/datasources.yaml
 	helm repo add grafana https://grafana.github.io/helm-charts
 	helm repo update
 	helm upgrade --install grafana grafana/grafana \
@@ -120,8 +118,19 @@ tempo-down:
 	@echo "Deleting Tempo from cluster..."
 	helm delete tempo
 
-otel-stack: otel-up prometheus-up grafana-up tempo-up
-otel-stack-down: otel-down prometheus-down grafana-down tempo-down
+loki-up:
+	@echo "Deploying Loki to cluster..."
+	helm repo add grafana https://grafana.github.io/helm-charts
+	helm repo update
+	helm upgrade --install loki grafana/loki \
+		--values grafana/loki-values.yaml
+
+loki-down:
+	@echo "Deleting Loki from cluster..."
+	helm delete loki
+
+otel-stack: otel-up prometheus-up grafana-up tempo-up loki-up
+otel-stack-down: otel-down prometheus-down grafana-down tempo-down loki-down
 
 otel-access:
 	@echo "Access instructions for monitoring stack:"
@@ -133,4 +142,4 @@ otel-access:
 	@echo "\nPrometheus:"
 	@echo "Access: http://localhost:9090"
 
-all: kind-up operator-build operator-deploy ui-deploy otel-deploy prometheus-deploy grafana-deploy tempo-deploy
+all: kind-up operator-build operator-deploy ui-deploy otel-deploy prometheus-deploy grafana-deploy tempo-deploy loki-deploy
