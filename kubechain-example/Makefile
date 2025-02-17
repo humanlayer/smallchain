@@ -73,7 +73,7 @@ prometheus-up:
 	helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 	helm repo update
 	helm upgrade --install prometheus prometheus-community/prometheus \
-		--values prometheus/prometheus-values.yaml
+		--values prometheus/values.yaml
 	kubectl get servicemonitor -o name | xargs -I {} kubectl patch {} --type=merge -p '{"metadata":{"labels":{"release":"prometheus"}}}'
 
 prometheus-down:
@@ -90,18 +90,6 @@ grafana-up:
 grafana-down:
 	@echo "Deleting Grafana from cluster..."
 	helm delete grafana
-
-jaeger-up:
-	@echo "Deploying Jaeger to cluster..."
-	helm repo add jaegertracing https://jaegertracing.github.io/helm-charts
-	helm repo update
-	helm upgrade --install jaeger jaegertracing/jaeger \
-		--history-max 3 \
-		--values jaeger/jaeger.yaml
-
-jaeger-down:
-	@echo "Deleting Jaeger from cluster..."
-	helm delete jaeger
 
 tempo-up:
 	@echo "Deploying Tempo to cluster..."
@@ -123,7 +111,7 @@ loki-up:
 	helm repo add grafana https://grafana.github.io/helm-charts
 	helm repo update
 	helm upgrade --install loki grafana/loki \
-		--values grafana/loki-values.yaml
+		--values loki/values.yaml
 
 loki-down:
 	@echo "Deleting Loki from cluster..."
@@ -137,8 +125,6 @@ otel-access:
 	@echo "\nGrafana:"
 	@echo "Password: admin"
 	@echo "Access: http://localhost:13000"
-	@echo "\nJaeger:"
-	@echo "Access: http://localhost:16686"
 	@echo "\nPrometheus:"
 	@echo "Access: http://localhost:9090"
 

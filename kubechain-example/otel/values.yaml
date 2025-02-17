@@ -32,8 +32,6 @@ config:
       endpoint: "0.0.0.0:8889"
     loki:
       endpoint: "http://loki:3100/loki/api/v1/push"
-      tenant_id: "tenant1"
-      format: json
   extensions:
     health_check:
       endpoint: ${env:MY_POD_IP}:13133
