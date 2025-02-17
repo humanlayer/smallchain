@@ -38,7 +38,7 @@ var _ = Describe("LLM Controller", func() {
 
 		typeNamespacedName := types.NamespacedName{
 			Name:      resourceName,
-			Namespace: "default", // TODO(user):Modify as needed
+			Namespace: "default",
 		}
 		llm := &kubechainv1alpha1.LLM{}
 
@@ -51,14 +51,21 @@ var _ = Describe("LLM Controller", func() {
 						Name:      resourceName,
 						Namespace: "default",
 					},
-					// TODO(user): Specify other spec details if needed.
+					Spec: kubechainv1alpha1.LLMSpec{
+						Provider: "openai",
+						APIKeyFrom: kubechainv1alpha1.APIKeySource{
+							SecretKeyRef: kubechainv1alpha1.SecretKeyRef{
+								Name: "test-secret",
+								Key:  "api-key",
+							},
+						},
+					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 			}
 		})
 
 		AfterEach(func() {
-			// TODO(user): Cleanup logic after each test, like removing the resource instance.
 			resource := &kubechainv1alpha1.LLM{}
 			err := k8sClient.Get(ctx, typeNamespacedName, resource)
 			Expect(err).NotTo(HaveOccurred())
@@ -66,6 +73,7 @@ var _ = Describe("LLM Controller", func() {
 			By("Cleanup the specific resource instance LLM")
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
 		})
+
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
 			controllerReconciler := &LLMReconciler{
@@ -77,8 +85,13 @@ var _ = Describe("LLM Controller", func() {
 				NamespacedName: typeNamespacedName,
 			})
 			Expect(err).NotTo(HaveOccurred())
-			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
-			// Example: If you expect a certain status condition after reconciliation, verify it here.
+
+			By("Checking the resource status")
+			updatedLLM := &kubechainv1alpha1.LLM{}
+			err = k8sClient.Get(ctx, typeNamespacedName, updatedLLM)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedLLM.Status.Ready).To(BeFalse())
+			Expect(updatedLLM.Status.Message).To(ContainSubstring("failed to get secret"))
 		})
 	})
 })

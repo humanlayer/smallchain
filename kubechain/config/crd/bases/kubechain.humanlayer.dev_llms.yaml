@@ -21,6 +21,9 @@ spec:
     - jsonPath: .status.ready
       name: Ready
       type: boolean
+    - jsonPath: .status.message
+      name: Message
+      type: string
     name: v1alpha1
     schema:
       openAPIV3Schema:
@@ -88,6 +91,9 @@ spec:
           status:
             description: LLMStatus defines the observed state of LLM
             properties:
+              message:
+                description: Message provides additional information about the status
+                type: string
               ready:
                 description: Ready indicates if the external dependency (e.g. secret)
                   has been validated.

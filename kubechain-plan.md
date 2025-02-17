@@ -1,49 +1,80 @@
-AI Agent Orchestration on Kubernetes – Design & Development Plan
-Note: This document is tailored as a comprehensive plan for building a Kubernetes Operator (using Kubebuilder) that orchestrates agent-based AI workloads in a distributed manner. The design draws inspiration from:
+# KubeChain: AI Agent Orchestration on Kubernetes
 
-HumanLayer’s docs
-Got-Agents “Linear Assistant” code
-SmallChain code from “humanlayer/smallchain”
-Existing frameworks like LangChain, OpenAI Tools & Function Calling approach, Anthropic, etc.
-Below you will find:
+## Overview
 
-Executive Summary
-Detailed Architecture & Requirements
-Mermaid Diagrams for:
-High-Level System Architecture
-CRD Relationships
-Workflow Process (Task orchestration, tool calling, observability)
-Step-by-Step Development Guide (with Kubebuilder)
-Detailed Code Samples in Go
-Comparison and Discussion of Agent Frameworks
-Additional Notes on Observability (OpenTelemetry), pausing/resuming tasks, best practices, trade-offs, etc.
+This document outlines a comprehensive plan for building a Kubernetes Operator that orchestrates agent-based AI workloads in a distributed manner.
 
-1. Executive Summary
-   We propose a Kubernetes Operator that manages AI “agents” capable of handling user tasks, delegating work, maintaining context, and retrieving responses from large language models (LLMs) and specialized tools. The approach leverages:
+### Inspiration Sources
 
-Kubernetes CRDs to represent:
+- HumanLayer's docs
+- Got-Agents "Linear Assistant" code
+- SmallChain code from "humanlayer/smallchain"
+- Existing frameworks (LangChain, OpenAI Tools, Anthropic, etc.)
 
-LLM: Which model/provider (OpenAI, Anthropic) along with keys/config like temperature, etc. It should allow for keys from a secretRef or from an env var in the controller container
-Tool: Reusable “tools” that can be invoked by an agent (e.g., in-process Go functions, external containers, remote calls, or other agents in the cluster). For delegating to other agents, the tool call input is a structured object {"message": str, "goal": str, "everything_that_happened_so_far": str} and the description should instruct the calling agent to provide lots and lots of detail! delegation toolsets can have an agentRef: {name: str} or agentRef: {selector: {matchLabels: {...}}. We will have support for a builtin ToolSet called "contact human" - this will include a HumanLayer ContactChannel object (see below for humanlayer models info)
-ToolSet: a way to specify a set of tools that can be used by an agent, e.g. an MCP server is a single object in the system, but may expose multiple tools and schemas. Similarly a delegation tool may use a labelSelector to specifiy mutiple agents in a single object
-Agent: Combines an LLM with system prompts and references to one or more Tools and/or ToolSets.
-Task: A user request (prompt) targeted at a particular Agent.
-TaskRun: The actual “instance” of a run, containing the conversation context, tool calls, and final results. When calling LLM during a taskRun, assemble all relevant toolsets into a flat set of tools to send to the llm.
-TaskRunToolCall: any tool calls that are a descendant of a task run
-TaskRunEvent: either: launching the taskRun with an input object, sending context to an llm, llm response received, TaskRunToolCalls call(s) created, TaskRunToolCalls result received
+## Table of Contents
 
-The TaskRun controller should poll for TaskRun objects where either 1) the taskrun was just launched but not sent to an llm, or 2) all the TaskRunToolCalls are resolved (ready to send back to llm) and assemble a context window to send to the LLM
+1. [Executive Summary](#executive-summary)
+2. [Architecture & Requirements](#architecture--requirements)
+3. [System Diagrams](#system-diagrams)
+4. [Development Guide](#development-guide)
+5. [Framework Comparisons](#framework-comparisons)
+6. [Additional Topics](#additional-topics)
 
-A taskRunToolCall might have an agentRef, in which case it will also have a child object to represent the TaskRun for that delegation
+## Executive Summary
 
-A TaskRun might have a parentTaskRunToolCall ref
+We propose a Kubernetes Operator that manages AI "agents" capable of handling user tasks, delegating work, maintaining context, and retrieving responses from LLMs and specialized tools.
 
-OpenTelemetry (OTEL) for tracing every step, including:
+### Core Components (CRDs)
 
-Timestamps for tool calls (requested, execution start, finish, result returned).
-Automatic correlation between tasks, sub-tasks, and user involvement.
+#### LLM
 
-Workflow Interruption / Human-in-the-Loop:
+Represents model/provider configuration:
+
+- Provider selection (OpenAI, Anthropic)
+- API keys (from secretRef or env vars)
+- Model settings (temperature, etc.)
+
+#### Tool
+
+Reusable functions that can be invoked by an agent:
+
+- In-process Go functions
+- External containers
+- Remote calls
+- Other agents in the cluster
+
+#### ToolSet
+
+Groups multiple tools together:
+
+- MCP server tools
+- Delegation tools
+- Built-in tools (e.g., "contact human")
+
+#### Agent
+
+Combines:
+
+- LLM reference
+- System prompts
+- Tool/ToolSet references
+
+#### Task
+
+Represents user requests:
+
+- Target agent
+- Input prompt
+- Optional metadata
+
+#### TaskRun
+
+Execution instance containing:
+
+- Conversation context
+- Tool calls
+- Final results
+- Event history
 
 Agents can pause a workflow and ask for human input. The system must checkpoint conversation state and allow the user to resume. This is done via CRD-based status and operators.
 
@@ -52,7 +83,7 @@ There are two cases in which we pause for human input:
 - agent calls a human_contact tool - this allows the agent to contact one or more humans for input
 - agent calls a tool that requires human approval
 
-Example Application
+### Example Application
 
 ```yaml
 apiVersion: kubechain.humanlayer.dev/v1alpha1
@@ -622,26 +653,33 @@ Initialize Kubebuilder:
 bash
 Copy
 kubebuilder init --domain=example.com --repo=github.com/your-org/ai-operator
+
 ## CRD Components
 
 ### LLM CRD ✅
+
 - Implemented with proper validation and Kubernetes-native patterns
 - Added status subresource and custom columns
 - Controller properly handles reconciliation
 
 ### Tool CRD 🔄
+
 [Original content for Tool CRD...]
 
 ### ToolSet CRD 📝
+
 [Original content for ToolSet CRD...]
 
 ### Agent CRD 📝
+
 [Original content for Agent CRD...]
 
 ### Task CRD 📝
+
 [Original content for Task CRD...]
 
 ### TaskRun CRD 📝
+
 [Original content for TaskRun CRD...]
 Note: Each CRD can be placed under a single API group (e.g., ai.example.com) or multiple subgroups if you prefer.
 

@@ -20,9 +20,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
 // SecretKeyRef contains the reference to a secret key
 type SecretKeyRef struct {
 	// Name is the name of the secret
@@ -64,12 +61,17 @@ type LLMSpec struct {
 type LLMStatus struct {
 	// Ready indicates if the external dependency (e.g. secret) has been validated.
 	Ready bool `json:"ready,omitempty"`
+
+	// Message provides additional information about the status
+	// +optional
+	Message string `json:"message,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Provider",type="string",JSONPath=".spec.provider"
 // +kubebuilder:printcolumn:name="Ready",type="boolean",JSONPath=".status.ready"
+// +kubebuilder:printcolumn:name="Message",type="string",JSONPath=".status.message"
 // +kubebuilder:resource:scope=Namespaced
 
 // LLM is the Schema for the llms API
