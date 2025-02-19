@@ -1,7 +1,0 @@
-apiVersion: kubechain.humanlayer.dev/v1alpha1
-kind: TaskRun
-metadata:
-  name: calculate-sum-2-run-1
-spec:
-  taskRef:
-    name: calculate-sum-2

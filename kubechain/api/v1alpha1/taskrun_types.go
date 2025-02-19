@@ -91,7 +91,7 @@ const (
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Ready",type="boolean",JSONPath=".status.phase==\"Succeeded\""
-// +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.phase"
+// +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase"
 // +kubebuilder:printcolumn:name="Task",type="string",JSONPath=".spec.taskRef.name"
 // +kubebuilder:printcolumn:name="Preview",type="string",JSONPath=".status.userMsgPreview"
 // +kubebuilder:printcolumn:name="Output",type="string",JSONPath=".status.output"

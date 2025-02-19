@@ -6,4 +6,3 @@ spec:
   agentRef:
     name: calculator-agent
   message: "What is 2 + 2?"
-

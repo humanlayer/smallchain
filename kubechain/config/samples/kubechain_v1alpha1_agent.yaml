@@ -4,7 +4,7 @@ metadata:
   name: calculator-agent
 spec:
   llmRef:
-    name: llm-sample
+    name: gpt-4o
   tools:
     - name: add
   system: |

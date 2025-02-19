@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"flag"
 	"os"
@@ -39,6 +40,7 @@ import (
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
 	"github.com/humanlayer/smallchain/kubechain/internal/controller"
+	"github.com/humanlayer/smallchain/kubechain/internal/otel"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -86,6 +88,21 @@ func main() {
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
+
+	ctx := context.Background()
+	tracerProvider, err := otel.InitTracer(ctx)
+	if err != nil {
+		setupLog.Error(err, "failed to initialize opentelemetry tracer")
+		os.Exit(1)
+	}
+	defer func() { _ = tracerProvider.Shutdown(ctx) }()
+
+	meterProvider, err := otel.InitMeter(ctx)
+	if err != nil {
+		setupLog.Error(err, "failed to initialize opentelemetry meter")
+		os.Exit(1)
+	}
+	defer func() { _ = meterProvider.Shutdown(ctx) }()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 

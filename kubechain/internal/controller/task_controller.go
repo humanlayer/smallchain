@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -58,6 +60,48 @@ func (r *TaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	} else {
 		statusUpdate.Status.Ready = true
 		statusUpdate.Status.Status = "Agent validated successfully"
+
+		// Check if we need to create a TaskRun
+		taskRunList := &kubechainv1alpha1.TaskRunList{}
+		if err := r.List(ctx, taskRunList, client.InNamespace(task.Namespace), client.MatchingLabels{
+			"kubechain.humanlayer.dev/task": task.Name,
+		}); err != nil {
+			logger.Error(err, "Failed to list TaskRuns")
+			return ctrl.Result{}, err
+		}
+
+		if len(taskRunList.Items) == 0 {
+			// Create a new TaskRun
+			taskRun := &kubechainv1alpha1.TaskRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      task.Name + "-1",
+					Namespace: task.Namespace,
+					Labels: map[string]string{
+						"kubechain.humanlayer.dev/task": task.Name,
+					},
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							APIVersion: kubechainv1alpha1.GroupVersion.String(),
+							Kind:       "Task",
+							Name:       task.Name,
+							UID:        task.UID,
+							Controller: pointer.Bool(true),
+						},
+					},
+				},
+				Spec: kubechainv1alpha1.TaskRunSpec{
+					TaskRef: kubechainv1alpha1.LocalObjectReference{
+						Name: task.Name,
+					},
+				},
+			}
+
+			if err := r.Create(ctx, taskRun); err != nil {
+				logger.Error(err, "Failed to create TaskRun")
+				return ctrl.Result{}, err
+			}
+			logger.Info("Created TaskRun", "name", taskRun.Name)
+		}
 	}
 
 	// Update status

@@ -29,17 +29,41 @@ rules:
   resources:
   - llms
   verbs:
+  - create
+  - delete
   - get
   - list
+  - patch
+  - update
   - watch
+- apiGroups:
+  - kubechain.humanlayer.dev
+  resources:
+  - llms/status
+  verbs:
+  - get
+  - patch
+  - update
 - apiGroups:
   - kubechain.humanlayer.dev
   resources:
   - tools
   verbs:
+  - create
+  - delete
   - get
   - list
+  - patch
+  - update
   - watch
+- apiGroups:
+  - kubechain.humanlayer.dev
+  resources:
+  - tools/status
+  verbs:
+  - get
+  - patch
+  - update
 - apiGroups:
   - kubechain.humanlayer.dev
   resources:
@@ -80,3 +104,11 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch

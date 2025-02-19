@@ -7,7 +7,12 @@ extraScrapeConfigs: |
     relabel_configs:
       - source_labels: [__address__]
         target_label: instance
+
 server:
   service:
     nodePort: 9090
     type: NodePort
+
+prometheusOperator:
+  enabled: true
+  createCustomResource: true

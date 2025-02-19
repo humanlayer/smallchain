@@ -54,6 +54,9 @@ otel-up: otel-deploy-base otel-patch-service
 
 otel-test:
 	uv run otel/otel-test-traces.py
+	:
+	: Open Telemetry data has been sent to the collector.
+	: you can view the data in grafana at http://localhost:13000/d/test-data/test-data
 
 	
 otel-down:
@@ -108,7 +111,7 @@ loki-down:
 	@echo "Deleting Loki from cluster..."
 	helm delete loki
 
-otel-stack: prometheus-up otel-up grafana-up tempo-up loki-up
+otel-stack: prometheus-up otel-up grafana-up tempo-up loki-up otel-test
 otel-stack-down: otel-down prometheus-down grafana-down tempo-down loki-down
 
 otel-access:

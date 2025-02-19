@@ -1,4 +1,9 @@
-## Append samples of your project ##
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
 resources:
 - kubechain_v1alpha1_llm.yaml
+- kubechain_v1alpha1_agent.yaml
+- kubechain_v1alpha1_tool.yaml
+- kubechain_v1alpha1_task.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

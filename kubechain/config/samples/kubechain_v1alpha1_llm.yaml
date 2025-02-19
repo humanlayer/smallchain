@@ -1,12 +1,11 @@
 apiVersion: kubechain.humanlayer.dev/v1alpha1
 kind: LLM
 metadata:
-  name: llm-sample
+  name: gpt-4o
 spec:
   provider: openai
   apiKeyFrom:
     secretKeyRef:
-      name: openai-api-key
+      name: openai
       key: OPENAI_API_KEY
-  temperature: "0.7"
   maxTokens: 1000

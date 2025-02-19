@@ -24,7 +24,7 @@ spec:
     - jsonPath: .spec.agentRef.name
       name: Agent
       type: string
-    - jsonPath: .spec.userMessage
+    - jsonPath: .spec.message
       name: Preview
       type: string
     - jsonPath: .status.output
@@ -67,18 +67,13 @@ spec:
                 required:
                 - name
                 type: object
-              parameters:
-                description: Parameters contains additional configuration for the
-                  task
-                type: object
-                x-kubernetes-preserve-unknown-fields: true
-              userMessage:
-                description: UserMessage is the input prompt or request for the task
+              message:
+                description: Message is the input prompt or request for the task
                 minLength: 1
                 type: string
             required:
             - agentRef
-            - userMessage
+            - message
             type: object
           status:
             description: TaskStatus defines the observed state of Task

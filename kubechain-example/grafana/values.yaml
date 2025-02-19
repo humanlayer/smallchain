@@ -54,225 +54,291 @@ dashboardProviders:
 
 dashboards:
   default:
-    traces:
+    kubechain-traces:
       json: |
         {
-        "annotations": {
-          "list": [
-            {
-              "builtIn": 1,
-              "datasource": {
-                "type": "grafana",
-                "uid": "-- Grafana --"
-              },
-              "enable": true,
-              "hide": true,
-              "iconColor": "rgba(0, 211, 255, 1)",
-              "name": "Annotations & Alerts",
-              "type": "dashboard"
-            }
-          ]
-        },
-        "editable": true,
-        "fiscalYearStartMonth": 0,
-        "graphTooltip": 0,
-        "id": 1,
-        "links": [],
-        "panels": [
-          {
-            "datasource": {
-              "type": "tempo",
-              "uid": "tempo"
-            },
-            "fieldConfig": {
-              "defaults": {},
-              "overrides": []
-            },
-            "gridPos": {
-              "h": 8,
-              "w": 24,
-              "x": 0,
-              "y": 0
-            },
-            "id": 1,
-            "options": {
-              "spanFilters": {
-                "criticalPathOnly": false,
-                "matchesOnly": false,
-                "serviceNameOperator": "=",
-                "spanNameOperator": "="
-              },
-              "view": "TraceView"
-            },
-            "pluginVersion": "11.5.1",
-            "targets": [
+          "annotations": {
+            "list": [
               {
+                "builtIn": 1,
                 "datasource": {
-                  "type": "tempo",
-                  "uid": "tempo"
+                  "type": "grafana",
+                  "uid": "-- Grafana --"
                 },
-                "limit": 20,
-                "query": "{resource.service.name=\"python-random-service\"}",
-                "queryType": "traceql",
-                "refId": "A",
-                "tableType": "traces"
+                "enable": true,
+                "hide": true,
+                "iconColor": "rgba(0, 211, 255, 1)",
+                "name": "Annotations & Alerts",
+                "type": "dashboard"
               }
-            ],
-            "title": "Test Traces",
-            "type": "table"
+            ]
           },
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "prometheus"
+          "editable": true,
+          "fiscalYearStartMonth": 0,
+          "graphTooltip": 0,
+          "id": 1,
+          "links": [],
+          "panels": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisCenteredZero": false,
+                    "axisColorMode": "text",
+                    "axisLabel": "Count",
+                    "axisPlacement": "auto",
+                    "barAlignment": 0,
+                    "drawStyle": "line",
+                    "fillOpacity": 10,
+                    "gradientMode": "none",
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    },
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "pointSize": 5,
+                    "scaleDistribution": {
+                      "type": "linear"
+                    },
+                    "showPoints": "never",
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "mappings": [],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      }
+                    ]
+                  },
+                  "unit": "short"
+                },
+                "overrides": []
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 0
+              },
+              "id": 3,
+              "options": {
+                "legend": {
+                  "calcs": [],
+                  "displayMode": "list",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "mode": "single",
+                  "sort": "none"
+                }
+              },
+              "targets": [
+                {
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "rate(taskrun_reconcile_count[5m])",
+                  "legendFormat": "Reconciles/sec",
+                  "refId": "A"
+                },
+                {
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "rate(taskrun_phase_transition[5m])",
+                  "legendFormat": "Phase Transitions/sec",
+                  "refId": "B"
+                },
+                {
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "rate(taskrun_error_count[5m])",
+                  "legendFormat": "Errors/sec",
+                  "refId": "C"
+                },
+                {
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "histogram_quantile(0.95, sum(rate(taskrun_reconcile_duration_bucket[5m])) by (le))",
+                  "legendFormat": "p95 Reconcile Duration",
+                  "refId": "D"
+                }
+              ],
+              "title": "TaskRun Controller Metrics",
+              "type": "timeseries"
             },
-            "fieldConfig": {
-              "defaults": {
-                "color": {
-                  "mode": "palette-classic"
-                },
-                "custom": {
-                  "axisBorderShow": false,
-                  "axisCenteredZero": false,
-                  "axisColorMode": "text",
-                  "axisLabel": "Ratio",
-                  "axisPlacement": "auto",
-                  "barAlignment": 0,
-                  "barWidthFactor": 0.6,
-                  "drawStyle": "line",
-                  "fillOpacity": 10,
-                  "gradientMode": "none",
-                  "hideFrom": {
-                    "legend": false,
-                    "tooltip": false,
-                    "viz": false
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "mappings": [],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      }
+                    ]
                   },
-                  "insertNulls": false,
-                  "lineInterpolation": "linear",
-                  "lineWidth": 1,
-                  "pointSize": 5,
-                  "scaleDistribution": {
-                    "type": "linear"
+                  "unit": "none"
+                }
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 0
+              },
+              "id": 4,
+              "options": {
+                "colorMode": "value",
+                "graphMode": "area",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "reduceOptions": {
+                  "calcs": ["lastNotNull"],
+                  "fields": "",
+                  "values": false
+                }
+              },
+              "targets": [
+                {
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
                   },
-                  "showPoints": "never",
-                  "spanNulls": false,
-                  "stacking": {
-                    "group": "A",
-                    "mode": "none"
-                  },
-                  "thresholdsStyle": {
-                    "mode": "off"
+                  "expr": "sum(taskrun_phase_transition) by (to_phase)",
+                  "legendFormat": "{{to_phase}}",
+                  "refId": "A"
+                }
+              ],
+              "title": "TaskRun Phase Distribution",
+              "type": "stat"
+            },
+            {
+              "datasource": {
+                "type": "tempo",
+                "uid": "tempo"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "custom": {
+                    "align": "auto",
+                    "displayMode": "auto",
+                    "inspect": false
                   }
-                },
-                "mappings": [],
-                "thresholds": {
-                  "mode": "absolute",
-                  "steps": [
+                }
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 8
+              },
+              "id": 1,
+              "options": {
+                "showHeader": true,
+                "sortBy": [
+                  {
+                    "desc": true,
+                    "displayName": "Start Time"
+                  }
+                ]
+              },
+              "targets": [
+                {
+                  "datasource": {
+                    "type": "tempo",
+                    "uid": "tempo"
+                  },
+                  "limit": 20,
+                  "query": "{resource.service.name=\"kubechain-controller\"}",
+                  "queryType": "traceql",
+                  "tableType": "traces"
+                }
+              ],
+              "title": "Recent Kubechain Controller Traces",
+              "type": "table"
+            },
+            {
+              "datasource": {
+                "type": "tempo",
+                "uid": "tempo"
+              },
+              "fieldConfig": {
+                "defaults": {},
+                "overrides": []
+              },
+              "gridPos": {
+                "h": 12,
+                "w": 24,
+                "x": 0,
+                "y": 8
+              },
+              "id": 2,
+              "options": {
+                "spanFilters": {
+                  "filters": [
                     {
-                      "color": "green",
-                      "value": null
+                      "id": "service-name",
+                      "operator": "=",
+                      "scope": "resource",
+                      "tag": "service.name",
+                      "value": "kubechain-controller"
                     }
                   ]
                 },
+                "view": "TraceView"
               },
-              "overrides": []
-            },
-            "gridPos": {
-              "h": 8,
-              "w": 24,
-              "x": 0,
-              "y": 0
-            },
-            "id": 3,
-            "options": {
-              "legend": {
-                "calcs": [],
-                "displayMode": "list",
-                "placement": "bottom",
-                "showLegend": true
-              },
-              "tooltip": {
-                "hideZeros": false,
-                "mode": "single",
-                "sort": "none"
-              }
-            },
-            "pluginVersion": "11.5.1",
-            "targets": [
-              {
-                "datasource": {
-                  "type": "prometheus",
-                  "uid": "prometheus"
-                },
-                "editorMode": "code",
-                "expr": "curl_test_metric_ratio",
-                "legendFormat": "test metric",
-                "range": true,
-                "refId": "A"
-              }
-            ],
-            "title": "Test Metrics",
-            "type": "timeseries"
+              "title": "Trace Details",
+              "type": "traces"
+            }
+          ],
+          "refresh": "5s",
+          "schemaVersion": 38,
+          "style": "dark",
+          "tags": ["kubechain"],
+          "templating": {
+            "list": []
           },
-          {
-            "datasource": {
-              "type": "loki",
-              "uid": "loki"
-            },
-            "fieldConfig": {
-              "defaults": {},
-              "overrides": []
-            },
-            "gridPos": {
-              "h": 8,
-              "w": 24,
-              "x": 0,
-              "y": 8
-            },
-            "id": 4,
-            "options": {
-              "dedupStrategy": "none",
-              "enableInfiniteScrolling": false,
-              "enableLogDetails": true,
-              "prettifyLogMessage": false,
-              "showCommonLabels": false,
-              "showLabels": false,
-              "showTime": true,
-              "sortOrder": "Descending",
-              "wrapLogMessage": false
-            },
-            "pluginVersion": "11.5.1",
-            "targets": [
-              {
-                "datasource": {
-                  "type": "loki",
-                  "uid": "loki"
-                },
-                "editorMode": "builder",
-                "expr": "{service_name=\"curl-test-service\"} | json",
-                "queryType": "range",
-                "refId": "A"
-              }
-            ],
-            "title": "Test Logs",
-            "type": "logs"
-          }
-        ],
-        "preload": true,
-        "refresh": "5s",
-        "schemaVersion": 40,
-        "tags": [],
-        "templating": {
-          "list": []
-        },
-        "time": {
-          "from": "now-15m",
-          "to": "now"
-        },
-        "timepicker": {},
-        "timezone": "",
-        "title": "Test data",
-        "uid": "aedak754t4uf4f",
-        "version": 9,
-        "weekStart": ""
+          "time": {
+            "from": "now-15m",
+            "to": "now"
+          },
+          "timepicker": {},
+          "timezone": "",
+          "title": "Kubechain Traces",
+          "uid": "kubechain-traces",
+          "version": 1,
+          "weekStart": ""
         }

@@ -56,7 +56,7 @@ var _ = Describe("TaskRun Controller", func() {
 					AgentRef: kubechainv1alpha1.LocalObjectReference{
 						Name: agentName,
 					},
-					UserMessage: "Test input",
+					Message: "Test input",
 				},
 			}
 			Expect(k8sClient.Create(ctx, task)).To(Succeed())
@@ -88,6 +88,13 @@ var _ = Describe("TaskRun Controller", func() {
 			err = k8sClient.Get(ctx, typeNamespacedName, taskRun)
 			if err == nil {
 				Expect(k8sClient.Delete(ctx, taskRun)).To(Succeed())
+			}
+
+			By("Cleanup the unready task if it exists")
+			unreadyTask := &kubechainv1alpha1.Task{}
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: "unready-task", Namespace: "default"}, unreadyTask)
+			if err == nil {
+				Expect(k8sClient.Delete(ctx, unreadyTask)).To(Succeed())
 			}
 		})
 
@@ -121,9 +128,7 @@ var _ = Describe("TaskRun Controller", func() {
 			updatedTaskRun := &kubechainv1alpha1.TaskRun{}
 			err = k8sClient.Get(ctx, typeNamespacedName, updatedTaskRun)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(updatedTaskRun.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunPhaseSucceeded))
-			Expect(updatedTaskRun.Status.StartTime).NotTo(BeNil())
-			Expect(updatedTaskRun.Status.CompletionTime).NotTo(BeNil())
+			Expect(updatedTaskRun.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunPhaseRunning))
 		})
 
 		It("should fail when task doesn't exist", func() {
@@ -160,7 +165,7 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(updatedTaskRun.Status.Error).To(ContainSubstring("failed to get Task"))
 		})
 
-		It("should fail when task exists but is not ready", func() {
+		It("should stay pending when task exists but is not ready", func() {
 			By("creating a task that is not ready")
 			unreadyTask := &kubechainv1alpha1.Task{
 				ObjectMeta: metav1.ObjectMeta{
@@ -171,7 +176,7 @@ var _ = Describe("TaskRun Controller", func() {
 					AgentRef: kubechainv1alpha1.LocalObjectReference{
 						Name: agentName,
 					},
-					UserMessage: "Test input",
+					Message: "Test input",
 				},
 			}
 			Expect(k8sClient.Create(ctx, unreadyTask)).To(Succeed())
@@ -196,17 +201,17 @@ var _ = Describe("TaskRun Controller", func() {
 				Scheme: k8sClient.Scheme(),
 			}
 
-			_, err := reconciler.Reconcile(ctx, reconcile.Request{
+			result, err := reconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
 			})
 			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeTrue())
 
-			By("checking the taskrun status")
+			By("checking the taskrun phase")
 			updatedTaskRun := &kubechainv1alpha1.TaskRun{}
 			err = k8sClient.Get(ctx, typeNamespacedName, updatedTaskRun)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(updatedTaskRun.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunPhaseFailed))
-			Expect(updatedTaskRun.Status.Error).To(ContainSubstring("is not ready"))
+			Expect(updatedTaskRun.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunPhasePending))
 		})
 	})
 })
