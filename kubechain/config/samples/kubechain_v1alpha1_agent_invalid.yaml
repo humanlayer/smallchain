@@ -1,0 +1,11 @@
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: Agent
+metadata:
+  name: invalid-agent
+spec:
+  llmRef:
+    name: nonexistent-llm
+  tools:
+    - name: add
+  system: |
+    This agent references a non-existent LLM to test validation.

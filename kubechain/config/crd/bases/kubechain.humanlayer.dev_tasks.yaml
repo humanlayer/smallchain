@@ -1,0 +1,95 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.17.1
+  name: tasks.kubechain.humanlayer.dev
+spec:
+  group: kubechain.humanlayer.dev
+  names:
+    kind: Task
+    listKind: TaskList
+    plural: tasks
+    singular: task
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.ready
+      name: Ready
+      type: boolean
+    - jsonPath: .status.status
+      name: Status
+      type: string
+    - jsonPath: .spec.agentRef.name
+      name: Agent
+      type: string
+    - jsonPath: .spec.input
+      name: Input
+      priority: 1
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Task is the Schema for the tasks API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: TaskSpec defines the desired state of Task
+            properties:
+              agentRef:
+                description: AgentRef references the agent that will execute this
+                  task
+                properties:
+                  name:
+                    description: Name of the referent
+                    minLength: 1
+                    type: string
+                required:
+                - name
+                type: object
+              input:
+                description: Input is the input prompt or request for the task
+                minLength: 1
+                type: string
+              parameters:
+                description: Parameters contains additional configuration for the
+                  task
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+            required:
+            - agentRef
+            - input
+            type: object
+          status:
+            description: TaskStatus defines the observed state of Task
+            properties:
+              ready:
+                description: Ready indicates if the task is ready to be executed
+                type: boolean
+              status:
+                description: Status provides additional information about the task's
+                  status
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

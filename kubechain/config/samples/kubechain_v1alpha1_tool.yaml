@@ -1,0 +1,32 @@
+# Example of an inline tool (a function tool)
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: Tool
+metadata:
+  name: add
+spec:
+  toolType: function
+  name: add
+  description: Add two numbers
+  arguments:
+    type: object
+    properties:
+      a:
+        type: number
+      b:
+        type: number
+    required:
+      - a
+      - b
+  execute:
+    builtin:
+      name: add
+---
+# Example of a delegation tool which delegates to an agent
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: Tool
+metadata:
+  name: delegate-to-calculator-operator
+spec:
+  toolType: delegateToAgent
+  agentRef:
+    name: calculator-operator
