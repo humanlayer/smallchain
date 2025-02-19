@@ -5,7 +5,7 @@ metadata:
 spec:
   agentRef:
     name: calculator-agent
-  input: "What is 2 + 2?"
+  userMessage: "What is 2 + 2?"
   parameters:
     showWork: true
 ---
@@ -16,6 +16,6 @@ metadata:
 spec:
   agentRef:
     name: calculator-agent
-  input: "What is 20 + 30?"
+  userMessage: "What is 20 + 30?"
   parameters:
     showWork: true

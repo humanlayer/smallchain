@@ -38,7 +38,7 @@ type TaskStatus struct {
 // +kubebuilder:printcolumn:name="Ready",type="boolean",JSONPath=".status.ready"
 // +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.status"
 // +kubebuilder:printcolumn:name="Agent",type="string",JSONPath=".spec.agentRef.name"
-// +kubebuilder:printcolumn:name="UserMessage",type="string",JSONPath=".spec.input",priority=1
+// +kubebuilder:printcolumn:name="Preview",type="string",JSONPath=".spec.userMessage",priority=1
 // +kubebuilder:printcolumn:name="Answer",type="string",JSONPath=".status.answer",priority=1
 // +kubebuilder:resource:scope=Namespaced
 

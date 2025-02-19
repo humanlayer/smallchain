@@ -90,12 +90,13 @@ const (
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase"
+// +kubebuilder:printcolumn:name="Ready",type="boolean",JSONPath=".status.phase==\"Succeeded\""
+// +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.phase"
 // +kubebuilder:printcolumn:name="Task",type="string",JSONPath=".spec.taskRef.name"
-// +kubebuilder:printcolumn:name="Started",type="date",JSONPath=".status.startTime"
-// +kubebuilder:printcolumn:name="Completed",type="date",JSONPath=".status.completionTime"
-// +kubebuilder:printcolumn:name="Messages",type="integer",JSONPath=".status.messageCount",priority=1
 // +kubebuilder:printcolumn:name="Preview",type="string",JSONPath=".status.userMsgPreview",priority=1
+// +kubebuilder:printcolumn:name="Answer",type="string",JSONPath=".status.output",priority=1
+// +kubebuilder:printcolumn:name="Started",type="date",JSONPath=".status.startTime",priority=1
+// +kubebuilder:printcolumn:name="Completed",type="date",JSONPath=".status.completionTime",priority=1
 // +kubebuilder:printcolumn:name="Error",type="string",JSONPath=".status.error",priority=1
 // +kubebuilder:resource:scope=Namespaced
 

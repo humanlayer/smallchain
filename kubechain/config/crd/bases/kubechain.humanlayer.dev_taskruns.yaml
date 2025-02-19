@@ -15,26 +15,31 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
+    - jsonPath: .status.phase=="Succeeded"
+      name: Ready
+      type: boolean
     - jsonPath: .status.phase
-      name: Phase
+      name: Status
       type: string
     - jsonPath: .spec.taskRef.name
       name: Task
       type: string
-    - jsonPath: .status.startTime
-      name: Started
-      type: date
-    - jsonPath: .status.completionTime
-      name: Completed
-      type: date
-    - jsonPath: .status.messageCount
-      name: Messages
-      priority: 1
-      type: integer
     - jsonPath: .status.userMsgPreview
       name: Preview
       priority: 1
       type: string
+    - jsonPath: .status.output
+      name: Answer
+      priority: 1
+      type: string
+    - jsonPath: .status.startTime
+      name: Started
+      priority: 1
+      type: date
+    - jsonPath: .status.completionTime
+      name: Completed
+      priority: 1
+      type: date
     - jsonPath: .status.error
       name: Error
       priority: 1

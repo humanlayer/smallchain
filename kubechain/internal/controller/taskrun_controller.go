@@ -100,7 +100,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 				},
 				{
 					Role:    "user",
-					Content: task.Spec.Input,
+					Content: task.Spec.UserMessage,
 				},
 				{
 					Role:    "assistant",

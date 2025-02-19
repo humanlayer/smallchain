@@ -74,7 +74,7 @@ var _ = Describe("Task Controller", func() {
 					AgentRef: kubechainv1alpha1.LocalObjectReference{
 						Name: agentName,
 					},
-					Input: "Test input",
+					UserMessage: "Test input",
 				},
 			}
 			Expect(k8sClient.Create(ctx, task)).To(Succeed())
@@ -109,7 +109,7 @@ var _ = Describe("Task Controller", func() {
 					AgentRef: kubechainv1alpha1.LocalObjectReference{
 						Name: "nonexistent-agent",
 					},
-					Input: "Test input",
+					UserMessage: "Test input",
 				},
 			}
 			Expect(k8sClient.Create(ctx, task)).To(Succeed())
