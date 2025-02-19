@@ -150,7 +150,8 @@ var _ = Describe("TaskRun Controller", func() {
 			_, err := reconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
 			})
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to get Task"))
 
 			By("checking the taskrun status")
 			updatedTaskRun := &kubechainv1alpha1.TaskRun{}
@@ -172,6 +173,9 @@ var _ = Describe("TaskRun Controller", func() {
 						Name: agentName,
 					},
 					Message: "Test input",
+				},
+				Status: kubechainv1alpha1.TaskStatus{
+					Ready: false,
 				},
 			}
 			Expect(k8sClient.Create(ctx, unreadyTask)).To(Succeed())
@@ -199,7 +203,8 @@ var _ = Describe("TaskRun Controller", func() {
 			_, err := reconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
 			})
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("is not ready"))
 
 			By("checking the taskrun status")
 			updatedTaskRun := &kubechainv1alpha1.TaskRun{}

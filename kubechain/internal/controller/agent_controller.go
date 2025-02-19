@@ -80,6 +80,11 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		statusUpdate.Status.Ready = false
 		statusUpdate.Status.Status = err.Error()
 		statusUpdate.Status.ValidTools = nil
+		if err := r.Status().Update(ctx, statusUpdate); err != nil {
+			logger.Error(err, "Failed to update Agent status")
+			return ctrl.Result{}, fmt.Errorf("failed to update agent status: %v", err)
+		}
+		return ctrl.Result{}, err // requeue
 	} else {
 		// Validate Tool references
 		validTools, err := r.validateTools(ctx, &agent)
@@ -88,6 +93,11 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 			statusUpdate.Status.Ready = false
 			statusUpdate.Status.Status = err.Error()
 			statusUpdate.Status.ValidTools = validTools
+			if updateErr := r.Status().Update(ctx, statusUpdate); updateErr != nil {
+				logger.Error(updateErr, "Failed to update Agent status")
+				return ctrl.Result{}, fmt.Errorf("failed to update agent status: %v", err)
+			}
+			return ctrl.Result{}, err // requeue
 		} else {
 			statusUpdate.Status.Ready = true
 			statusUpdate.Status.Status = "Ready"

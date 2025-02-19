@@ -11,6 +11,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
+	"github.com/pkg/errors"
 )
 
 // TaskRunReconciler reconciles a TaskRun object
@@ -31,7 +32,7 @@ func (r *TaskRunReconciler) getTask(ctx context.Context, taskRun *kubechainv1alp
 	}
 
 	if !task.Status.Ready {
-		return nil, fmt.Errorf("Task %q is not ready", taskRun.Spec.TaskRef.Name)
+		return nil, fmt.Errorf("task %q is not ready", taskRun.Spec.TaskRef.Name)
 	}
 
 	return task, nil
@@ -75,6 +76,13 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		statusUpdate.Status.Error = err.Error()
 		now := metav1.Now()
 		statusUpdate.Status.CompletionTime = &now
+
+		if updateErr := r.Status().Update(ctx, statusUpdate); updateErr != nil {
+			logger.Error(updateErr, "Failed to update TaskRun status")
+			return ctrl.Result{}, errors.Wrap(err, fmt.Sprintf("failed to update task run status: %v", err))
+		}
+
+		return ctrl.Result{}, err // requeue
 	} else {
 		// Mark as Running if not already done
 		if statusUpdate.Status.Phase == kubechainv1alpha1.TaskRunPhasePending {

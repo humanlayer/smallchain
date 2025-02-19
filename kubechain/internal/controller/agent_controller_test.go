@@ -154,7 +154,8 @@ var _ = Describe("Agent Controller", func() {
 			_, err := reconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
 			})
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring(`"nonexistent-llm" not found`))
 
 			By("checking the agent status")
 			updatedAgent := &kubechainv1alpha1.Agent{}
@@ -192,14 +193,15 @@ var _ = Describe("Agent Controller", func() {
 			_, err := reconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
 			})
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring(`"nonexistent-tool" not found`))
 
 			By("checking the agent status")
 			updatedAgent := &kubechainv1alpha1.Agent{}
 			err = k8sClient.Get(ctx, typeNamespacedName, updatedAgent)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedAgent.Status.Ready).To(BeFalse())
-			Expect(updatedAgent.Status.Status).To(ContainSubstring("failed to get Tool"))
+			Expect(updatedAgent.Status.Status).To(ContainSubstring(`"nonexistent-tool" not found`))
 		})
 	})
 })
