@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -10,6 +11,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
+	"go.opentelemetry.io/otel/metric/noop"
 )
 
 var _ = Describe("TaskRun Controller", func() {
@@ -26,8 +28,47 @@ var _ = Describe("TaskRun Controller", func() {
 		}
 
 		BeforeEach(func() {
-			// Create a test Agent
+			// Clean up any existing resources first
+			By("Cleaning up any existing resources")
 			agent := &kubechainv1alpha1.Agent{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      agentName,
+					Namespace: "default",
+				},
+			}
+			_ = k8sClient.Delete(ctx, agent)
+			time.Sleep(100 * time.Millisecond)
+
+			task := &kubechainv1alpha1.Task{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      taskName,
+					Namespace: "default",
+				},
+			}
+			_ = k8sClient.Delete(ctx, task)
+			time.Sleep(100 * time.Millisecond)
+
+			taskRun := &kubechainv1alpha1.TaskRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName,
+					Namespace: "default",
+				},
+			}
+			_ = k8sClient.Delete(ctx, taskRun)
+			time.Sleep(100 * time.Millisecond)
+
+			unreadyTask := &kubechainv1alpha1.Task{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "unready-task",
+					Namespace: "default",
+				},
+			}
+			_ = k8sClient.Delete(ctx, unreadyTask)
+			time.Sleep(100 * time.Millisecond)
+
+			// Create test resources
+			By("Creating a test Agent")
+			agent = &kubechainv1alpha1.Agent{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      agentName,
 					Namespace: "default",
@@ -47,7 +88,8 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(k8sClient.Status().Update(ctx, agent)).To(Succeed())
 
 			// Create a test Task
-			task := &kubechainv1alpha1.Task{
+			By("Creating a test Task")
+			task = &kubechainv1alpha1.Task{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      taskName,
 					Namespace: "default",
@@ -78,7 +120,7 @@ var _ = Describe("TaskRun Controller", func() {
 
 			By("Cleanup the test Task")
 			task := &kubechainv1alpha1.Task{}
-			err = k8sClient.Get(ctx, types.NamespacedName{Name: taskName, Namespace: "default"}, task)
+			err = k8sClient.Get(ctx, typeNamespacedName, task)
 			if err == nil {
 				Expect(k8sClient.Delete(ctx, task)).To(Succeed())
 			}
@@ -119,7 +161,19 @@ var _ = Describe("TaskRun Controller", func() {
 				Scheme: k8sClient.Scheme(),
 			}
 
-			_, err := reconciler.Reconcile(ctx, reconcile.Request{
+			// Initialize metrics with no-op implementations for testing
+			meter := noop.NewMeterProvider().Meter("test")
+			var err error
+			reconciler.reconcileCounter, err = meter.Int64Counter("taskrun_reconcile_count")
+			Expect(err).NotTo(HaveOccurred())
+			reconciler.phaseCounter, err = meter.Int64Counter("taskrun_phase_transition")
+			Expect(err).NotTo(HaveOccurred())
+			reconciler.errorCounter, err = meter.Int64Counter("taskrun_error_count")
+			Expect(err).NotTo(HaveOccurred())
+			reconciler.reconcileDuration, err = meter.Float64Histogram("taskrun_reconcile_duration")
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = reconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -152,7 +206,19 @@ var _ = Describe("TaskRun Controller", func() {
 				Scheme: k8sClient.Scheme(),
 			}
 
-			_, err := reconciler.Reconcile(ctx, reconcile.Request{
+			// Initialize metrics with no-op implementations for testing
+			meter := noop.NewMeterProvider().Meter("test")
+			var err error
+			reconciler.reconcileCounter, err = meter.Int64Counter("taskrun_reconcile_count")
+			Expect(err).NotTo(HaveOccurred())
+			reconciler.phaseCounter, err = meter.Int64Counter("taskrun_phase_transition")
+			Expect(err).NotTo(HaveOccurred())
+			reconciler.errorCounter, err = meter.Int64Counter("taskrun_error_count")
+			Expect(err).NotTo(HaveOccurred())
+			reconciler.reconcileDuration, err = meter.Float64Histogram("taskrun_reconcile_duration")
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = reconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -200,6 +266,18 @@ var _ = Describe("TaskRun Controller", func() {
 				Client: k8sClient,
 				Scheme: k8sClient.Scheme(),
 			}
+
+			// Initialize metrics with no-op implementations for testing
+			meter := noop.NewMeterProvider().Meter("test")
+			var err error
+			reconciler.reconcileCounter, err = meter.Int64Counter("taskrun_reconcile_count")
+			Expect(err).NotTo(HaveOccurred())
+			reconciler.phaseCounter, err = meter.Int64Counter("taskrun_phase_transition")
+			Expect(err).NotTo(HaveOccurred())
+			reconciler.errorCounter, err = meter.Int64Counter("taskrun_error_count")
+			Expect(err).NotTo(HaveOccurred())
+			reconciler.reconcileDuration, err = meter.Float64Histogram("taskrun_reconcile_duration")
+			Expect(err).NotTo(HaveOccurred())
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,

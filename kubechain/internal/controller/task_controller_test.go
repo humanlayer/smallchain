@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -25,8 +26,29 @@ var _ = Describe("Task Controller", func() {
 		}
 
 		BeforeEach(func() {
-			// Create a test Agent
+			// Clean up any existing resources first
+			By("Cleaning up any existing resources")
 			agent := &kubechainv1alpha1.Agent{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      agentName,
+					Namespace: "default",
+				},
+			}
+			_ = k8sClient.Delete(ctx, agent)
+			time.Sleep(100 * time.Millisecond)
+
+			task := &kubechainv1alpha1.Task{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName,
+					Namespace: "default",
+				},
+			}
+			_ = k8sClient.Delete(ctx, task)
+			time.Sleep(100 * time.Millisecond)
+
+			// Create test Agent
+			By("Creating a test Agent")
+			agent = &kubechainv1alpha1.Agent{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      agentName,
 					Namespace: "default",

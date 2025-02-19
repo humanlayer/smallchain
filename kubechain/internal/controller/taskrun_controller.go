@@ -6,6 +6,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -64,16 +65,11 @@ func (r *TaskRunReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 // getTask fetches the referenced Task
-func (r *TaskRunReconciler) getTask(ctx context.Context, taskRun *kubechainv1alpha1.TaskRun) (*kubechainv1alpha1.Task, error) {
+func (r *TaskRunReconciler) getTask(ctx context.Context, taskRun *kubechainv1alpha1.TaskRun, namespace string) (*kubechainv1alpha1.Task, error) {
 	task := &kubechainv1alpha1.Task{}
-	err := r.Get(ctx, client.ObjectKey{
-		Namespace: taskRun.Namespace,
-		Name:      taskRun.Spec.TaskRef.Name,
-	}, task)
-	if err != nil {
+	if err := r.Get(ctx, types.NamespacedName{Name: taskRun.Spec.TaskRef.Name, Namespace: namespace}, task); err != nil {
 		return nil, fmt.Errorf("failed to get Task %q: %w", taskRun.Spec.TaskRef.Name, err)
 	}
-
 	return task, nil
 }
 
@@ -136,13 +132,16 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	// Get referenced Task
-	task, err := r.getTask(ctx, &taskRun)
+	task, err := r.getTask(ctx, &taskRun, req.Namespace)
 	if err != nil {
-		logger.Error(err, "upstream task not found")
+		logger.Error(err, "Failed to get upstream task")
 		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseFailed
 		statusUpdate.Status.Error = err.Error()
-		now := metav1.Now()
-		statusUpdate.Status.CompletionTime = &now
+		if err := r.Status().Update(ctx, statusUpdate); err != nil {
+			logger.Error(err, "Unable to update TaskRun status")
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, nil
 	} else {
 		// Check if task is ready before proceeding
 		if !task.Status.Ready {
