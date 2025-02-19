@@ -31,6 +31,10 @@ type TaskStatus struct {
 	// Status provides additional information about the task's status
 	// +optional
 	Status string `json:"status,omitempty"`
+
+	// Output contains the result of the task execution
+	// +optional
+	Output string `json:"output,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -38,8 +42,8 @@ type TaskStatus struct {
 // +kubebuilder:printcolumn:name="Ready",type="boolean",JSONPath=".status.ready"
 // +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.status"
 // +kubebuilder:printcolumn:name="Agent",type="string",JSONPath=".spec.agentRef.name"
-// +kubebuilder:printcolumn:name="Preview",type="string",JSONPath=".spec.userMessage",priority=1
-// +kubebuilder:printcolumn:name="Answer",type="string",JSONPath=".status.answer",priority=1
+// +kubebuilder:printcolumn:name="Preview",type="string",JSONPath=".spec.userMessage"
+// +kubebuilder:printcolumn:name="Output",type="string",JSONPath=".status.output",priority=1
 // +kubebuilder:resource:scope=Namespaced
 
 // Task is the Schema for the tasks API

@@ -93,11 +93,11 @@ const (
 // +kubebuilder:printcolumn:name="Ready",type="boolean",JSONPath=".status.phase==\"Succeeded\""
 // +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.phase"
 // +kubebuilder:printcolumn:name="Task",type="string",JSONPath=".spec.taskRef.name"
-// +kubebuilder:printcolumn:name="Preview",type="string",JSONPath=".status.userMsgPreview",priority=1
-// +kubebuilder:printcolumn:name="Answer",type="string",JSONPath=".status.output",priority=1
+// +kubebuilder:printcolumn:name="Preview",type="string",JSONPath=".status.userMsgPreview"
+// +kubebuilder:printcolumn:name="Output",type="string",JSONPath=".status.output"
+// +kubebuilder:printcolumn:name="Error",type="string",JSONPath=".status.error",priority=1
 // +kubebuilder:printcolumn:name="Started",type="date",JSONPath=".status.startTime",priority=1
 // +kubebuilder:printcolumn:name="Completed",type="date",JSONPath=".status.completionTime",priority=1
-// +kubebuilder:printcolumn:name="Error",type="string",JSONPath=".status.error",priority=1
 // +kubebuilder:resource:scope=Namespaced
 
 // TaskRun is the Schema for the taskruns API

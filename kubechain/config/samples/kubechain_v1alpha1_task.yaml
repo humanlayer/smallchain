@@ -5,17 +5,5 @@ metadata:
 spec:
   agentRef:
     name: calculator-agent
-  userMessage: "What is 2 + 2?"
-  parameters:
-    showWork: true
----
-apiVersion: kubechain.humanlayer.dev/v1alpha1
-kind: Task
-metadata:
-  name: calculate-sum-2
-spec:
-  agentRef:
-    name: calculator-agent
-  userMessage: "What is 20 + 30?"
-  parameters:
-    showWork: true
+  message: "What is 2 + 2?"
+

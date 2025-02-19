@@ -1,10 +1,8 @@
 ## using the controller
 
-as of this writing, the controller is running locally in another terminal
+The controller is running in the local kind cluster in the default namespace.
 
-you can tell me to restart it and I will, wait for me to confirm its restarted
-
-NEVER USE `make run` to run the controller. ALWAYS just tell me to restart it and I will, wait for me to confirm its restarted
+You can use `make install` to rebuild the controller and push it to the local kind cluster.
 
 ## tests
 

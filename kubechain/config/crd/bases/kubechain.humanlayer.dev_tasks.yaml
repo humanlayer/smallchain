@@ -26,10 +26,9 @@ spec:
       type: string
     - jsonPath: .spec.userMessage
       name: Preview
-      priority: 1
       type: string
-    - jsonPath: .status.answer
-      name: Answer
+    - jsonPath: .status.output
+      name: Output
       priority: 1
       type: string
     name: v1alpha1
@@ -84,6 +83,9 @@ spec:
           status:
             description: TaskStatus defines the observed state of Task
             properties:
+              output:
+                description: Output contains the result of the task execution
+                type: string
               ready:
                 description: Ready indicates if the task is ready to be executed
                 type: boolean
