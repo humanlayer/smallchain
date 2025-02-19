@@ -74,17 +74,23 @@ type TaskRunStatus struct {
 }
 
 // TaskRunPhase represents the phase of a TaskRun
-// +kubebuilder:validation:Enum=Pending;Running;Succeeded;Failed
+// +kubebuilder:validation:Enum=Pending;ReadyForLLM;SendContextWindowToLLM;ToolCallsPending;FinalAnswer;ErrorBackoff;Failed
 type TaskRunPhase string
 
 const (
 	// TaskRunPhasePending indicates the TaskRun is pending execution
 	TaskRunPhasePending TaskRunPhase = "Pending"
-	// TaskRunPhaseRunning indicates the TaskRun is currently executing
-	TaskRunPhaseRunning TaskRunPhase = "Running"
-	// TaskRunPhaseSucceeded indicates the TaskRun completed successfully
-	TaskRunPhaseSucceeded TaskRunPhase = "Succeeded"
-	// TaskRunPhaseFailed indicates the TaskRun failed
+	// TaskRunPhaseReadyForLLM indicates the TaskRun is ready for context to be sent to LLM
+	TaskRunPhaseReadyForLLM TaskRunPhase = "ReadyForLLM"
+	// TaskRunPhaseSendContextWindowToLLM indicates the TaskRun is sending context to LLM
+	TaskRunPhaseSendContextWindowToLLM TaskRunPhase = "SendContextWindowToLLM"
+	// TaskRunPhaseToolCallsPending indicates the TaskRun has pending tool calls
+	TaskRunPhaseToolCallsPending TaskRunPhase = "ToolCallsPending"
+	// TaskRunPhaseFinalAnswer indicates the TaskRun has received final answer
+	TaskRunPhaseFinalAnswer TaskRunPhase = "FinalAnswer"
+	// TaskRunPhaseErrorBackoff indicates the TaskRun has failed and is in error backoff
+	TaskRunPhaseErrorBackoff TaskRunPhase = "ErrorBackoff"
+	// TaskRunPhaseFailed indicates the TaskRun has failed
 	TaskRunPhaseFailed TaskRunPhase = "Failed"
 )
 

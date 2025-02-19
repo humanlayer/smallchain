@@ -14,6 +14,14 @@ type TaskSpec struct {
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinLength=1
 	Message string `json:"message"`
+
+	// Goal is the goal of the task
+	// +optional
+	Goal string `json:"goal,omitempty"`
+
+	// EverythingThatHappenedSoFar is a list of all the things that have happened so far
+	// +optional
+	EverythingThatHappenedSoFar []string `json:"everythingThatHappenedSoFar,omitempty"`
 }
 
 // TaskStatus defines the observed state of Task

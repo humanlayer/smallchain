@@ -32,7 +32,7 @@ func (r *TaskReconciler) validateAgent(ctx context.Context, task *kubechainv1alp
 	}
 
 	if !agent.Status.Ready {
-		return fmt.Errorf("Agent %q is not ready", task.Spec.AgentRef.Name)
+		return fmt.Errorf("agent %q is not ready", task.Spec.AgentRef.Name)
 	}
 
 	return nil

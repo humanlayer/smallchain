@@ -1,8 +1,14 @@
+_this is a knowledge file for codebuff and other coding agents, with instructions and guidelines for working on this project if you are a human reading this, some of this may not apply to you_
+
 ## using the controller
 
 The controller is running in the local kind cluster in the default namespace. The cluster is called `kubechain-example-cluster`.
 
 You can use `make deploy-local-kind` to rebuild the controller and push it to the local kind cluster.
+
+## progress tracking
+
+BEFORE every change, update resume-kubechain-operator.md with your recent progress and whats next
 
 ## tests
 
@@ -47,7 +53,6 @@ kubectl get llm,tool,agent,task,taskrun
 - TaskRun phases progress through:
   1. Pending (initial state)
   2. SendContextWindowToLLM (locks the resource)
-  3. LLMResponseReceived
   4. ToolCallsPending
   5. FinalAnswer
 

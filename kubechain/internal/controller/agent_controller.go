@@ -51,7 +51,7 @@ func (r *AgentReconciler) validateTools(ctx context.Context, agent *kubechainv1a
 		}
 
 		if !tool.Status.Ready {
-			return validTools, fmt.Errorf("Tool %q is not ready", toolRef.Name)
+			return validTools, fmt.Errorf("tool %q is not ready", toolRef.Name)
 		}
 
 		validTools = append(validTools, toolRef.Name)
@@ -90,7 +90,7 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 			statusUpdate.Status.ValidTools = validTools
 		} else {
 			statusUpdate.Status.Ready = true
-			statusUpdate.Status.Status = "All dependencies validated successfully"
+			statusUpdate.Status.Status = "Ready"
 			statusUpdate.Status.ValidTools = validTools
 		}
 	}

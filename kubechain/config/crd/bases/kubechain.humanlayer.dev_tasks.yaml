@@ -67,6 +67,15 @@ spec:
                 required:
                 - name
                 type: object
+              everythingThatHappenedSoFar:
+                description: EverythingThatHappenedSoFar is a list of all the things
+                  that have happened so far
+                items:
+                  type: string
+                type: array
+              goal:
+                description: Goal is the goal of the task
+                type: string
               message:
                 description: Message is the input prompt or request for the task
                 minLength: 1

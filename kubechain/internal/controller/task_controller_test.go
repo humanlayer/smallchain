@@ -64,7 +64,7 @@ var _ = Describe("Task Controller", func() {
 
 			// Mark Agent as ready
 			agent.Status.Ready = true
-			agent.Status.Status = "Ready for testing"
+			agent.Status.Status = "Ready"
 			Expect(k8sClient.Status().Update(ctx, agent)).To(Succeed())
 		})
 

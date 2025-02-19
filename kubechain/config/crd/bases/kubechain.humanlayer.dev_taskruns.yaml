@@ -145,8 +145,11 @@ spec:
                 description: Phase indicates the current phase of the TaskRun
                 enum:
                 - Pending
-                - Running
-                - Succeeded
+                - ReadyForLLM
+                - SendContextWindowToLLM
+                - ToolCallsPending
+                - FinalAnswer
+                - ErrorBackoff
                 - Failed
                 type: string
               startTime:
