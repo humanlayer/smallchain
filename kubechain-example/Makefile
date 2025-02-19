@@ -66,7 +66,6 @@ prometheus-up:
 	helm repo update
 	helm upgrade --install prometheus prometheus-community/prometheus \
 		--values prometheus/values.yaml
-	kubectl get servicemonitor -o name | xargs -I {} kubectl patch {} --type=merge -p '{"metadata":{"labels":{"release":"prometheus"}}}'
 
 prometheus-down:
 	@echo "Deleting Prometheus from cluster..."
@@ -109,7 +108,7 @@ loki-down:
 	@echo "Deleting Loki from cluster..."
 	helm delete loki
 
-otel-stack: otel-up prometheus-up grafana-up tempo-up loki-up
+otel-stack: prometheus-up otel-up grafana-up tempo-up loki-up
 otel-stack-down: otel-down prometheus-down grafana-down tempo-down loki-down
 
 otel-access:

@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -36,10 +37,27 @@ type LLMReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-// +kubebuilder:rbac:groups=kubechain.humanlayer.dev,resources=llms,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=kubechain.humanlayer.dev,resources=llms/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=kubechain.humanlayer.dev,resources=llms/finalizers,verbs=update
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+func (r *LLMReconciler) validateOpenAIKey(apiKey string) error {
+	req, err := http.NewRequest("GET", "https://api.openai.com/v1/models", nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to make request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("invalid API key (status code: %d)", resp.StatusCode)
+	}
+
+	return nil
+}
 
 func (r *LLMReconciler) validateSecret(ctx context.Context, llm *kubechainv1alpha1.LLM) error {
 	secret := &corev1.Secret{}
@@ -52,8 +70,15 @@ func (r *LLMReconciler) validateSecret(ctx context.Context, llm *kubechainv1alph
 	}
 
 	key := llm.Spec.APIKeyFrom.SecretKeyRef.Key
-	if _, exists := secret.Data[key]; !exists {
+	apiKey, exists := secret.Data[key]
+	if !exists {
 		return fmt.Errorf("key %q not found in secret", key)
+	}
+
+	if llm.Spec.Provider == "openai" {
+		if err := r.validateOpenAIKey(string(apiKey)); err != nil {
+			return fmt.Errorf("OpenAI API key validation failed: %w", err)
+		}
 	}
 
 	return nil
@@ -63,16 +88,17 @@ func (r *LLMReconciler) validateSecret(ctx context.Context, llm *kubechainv1alph
 // move the current state of the cluster closer to the desired state.
 func (r *LLMReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
-	log.Info("Starting reconciliation", "namespacedName", req.NamespacedName)
 
 	// Fetch the LLM instance
 	var llm kubechainv1alpha1.LLM
 	if err := r.Get(ctx, req.NamespacedName, &llm); err != nil {
-		log.Error(err, "Unable to fetch LLM")
+		// We'll ignore not-found errors, since they can't be fixed by an immediate
+		// requeue (we'll need to wait for a new notification), and we can get them
+		// on deleted requests.
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	log.Info("Found LLM resource", "provider", llm.Spec.Provider)
+	log.Info("Starting reconciliation", "namespacedName", req.NamespacedName, "provider", llm.Spec.Provider)
 
 	// Create a copy for status update
 	statusUpdate := llm.DeepCopy()
@@ -81,10 +107,14 @@ func (r *LLMReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	if err := r.validateSecret(ctx, &llm); err != nil {
 		log.Error(err, "Secret validation failed")
 		statusUpdate.Status.Ready = false
-		statusUpdate.Status.Message = err.Error()
+		statusUpdate.Status.Status = err.Error()
 	} else {
 		statusUpdate.Status.Ready = true
-		statusUpdate.Status.Message = "Secret validated successfully"
+		if llm.Spec.Provider == "openai" {
+			statusUpdate.Status.Status = "OpenAI API key validated successfully"
+		} else {
+			statusUpdate.Status.Status = "Secret validated successfully"
+		}
 	}
 
 	// Update status using SubResource client
@@ -96,7 +126,7 @@ func (r *LLMReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	log.Info("Successfully reconciled LLM",
 		"provider", llm.Spec.Provider,
 		"ready", statusUpdate.Status.Ready,
-		"message", statusUpdate.Status.Message)
+		"status", statusUpdate.Status.Status)
 	return ctrl.Result{}, nil
 }
 

@@ -5,17 +5,9 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
-  - ""
-  resources:
-  - secrets
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
   - kubechain.humanlayer.dev
   resources:
-  - llms
+  - agents
   verbs:
   - create
   - delete
@@ -27,13 +19,63 @@ rules:
 - apiGroups:
   - kubechain.humanlayer.dev
   resources:
-  - llms/finalizers
+  - agents/status
   verbs:
+  - get
+  - patch
   - update
 - apiGroups:
   - kubechain.humanlayer.dev
   resources:
-  - llms/status
+  - llms
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - kubechain.humanlayer.dev
+  resources:
+  - tools
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - kubechain.humanlayer.dev
+  resources:
+  - tasks
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - kubechain.humanlayer.dev
+  resources:
+  - tasks/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - kubechain.humanlayer.dev
+  resources:
+  - taskruns
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - kubechain.humanlayer.dev
+  resources:
+  - taskruns/status
   verbs:
   - get
   - patch

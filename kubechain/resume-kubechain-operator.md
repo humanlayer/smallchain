@@ -1,44 +1,52 @@
-# Current State
+# Progress
 
 ## Completed
-- Initialized Kubebuilder project with correct domain (humanlayer.dev)
-- Implemented LLM CRD with:
-  - Proper group name (kubechain.humanlayer.dev)
-  - Kubernetes-native secret reference (apiKeyFrom.secretKeyRef)
-  - Validation for required fields and value ranges
-  - Status subresource
-  - Custom columns (Provider, Ready)
-  - Working controller with status updates
-  - Proper logging
+
+1. LLM Custom Resource
+   - API types with validation
+   - Controller with OpenAI API key validation
+   - Unit tests with good coverage
+   - Sample manifests
+
+2. Tool Custom Resource
+   - API types with function and delegation support
+   - Basic controller with ready state
+   - Unit tests with good coverage
+   - Sample manifests for function and delegation tools
+
+3. Agent Custom Resource
+   - API types with LLM and Tool references
+   - Controller with dependency validation
+   - Unit tests verifying dependency validation
+   - Sample manifests
+
+4. Task and TaskRun Custom Resources
+   - API types defined
+   - Basic controllers implemented
+   - Sample manifests created
+   - Dependency validation for Task-Agent relationships
 
 ## Next Steps
-1. Implement Tool CRD
-   - Define schema for different tool types (builtin, container, delegate)
-   - Add validation for tool arguments using JSON schema
-   - Implement controller with proper status handling
 
-2. Implement ToolSet CRD
-   - Define schema for tool collections
-   - Add validation for tool references
-   - Implement controller for managing tool sets
+1. Implement TaskRun Controller
+   - Watch for new TaskRuns
+   - Send messages to the LLM
+   - Track the context window in the taskrun status
+   - Track execution status and output
+   - Handle errors and retries
 
-3. Implement Agent CRD
-   - Define schema with LLM and ToolSet references
-   - Add system prompt configuration
-   - Implement controller with dependency validation
+2. Implement TaskRunToolCall
+   - Update the TaskRun controller to generate TaskRunToolCall resources when the LLM response has tool calls
+   - Update the TaskRunToolCall controller to execute the tool call and update the TaskRun with the tool call response
 
-4. Implement Task and TaskRun CRDs
-   - Define schema for task definitions and runs
-   - Add support for context window management
-   - Implement async operation handling
-   - Add support for tool call tracking
+3. Integration Testing
+   - End-to-end test with LLM, Tool, Agent, Task, and TaskRun
+   - Test error cases and recovery
+   - Test concurrent task execution
 
-5. Add OpenTelemetry Integration
-   - Add tracing to controllers
-   - Implement metrics collection
-   - Set up proper span relationships
-
-6. Implement UI Components
-   - Create task viewer
-   - Add trace visualization
-   - Implement task management interface
+4. Future Enhancements
+   - Add support for more LLM providers
+   - Implement more built-in tools
+   - Add task scheduling and queuing
+   - Support for task dependencies
+   - Add metrics and monitoring

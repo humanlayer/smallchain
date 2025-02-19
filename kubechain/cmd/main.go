@@ -209,7 +209,38 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "LLM")
 		os.Exit(1)
 	}
-	// +kubebuilder:scaffold:builder
+
+	if err = (&controller.ToolReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Tool")
+		os.Exit(1)
+	}
+
+	if err = (&controller.AgentReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Agent")
+		os.Exit(1)
+	}
+
+	if err = (&controller.TaskReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Task")
+		os.Exit(1)
+	}
+
+	if err = (&controller.TaskRunReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "TaskRun")
+		os.Exit(1)
+	}
 
 	if metricsCertWatcher != nil {
 		setupLog.Info("Adding metrics certificate watcher to manager")

@@ -71,9 +71,8 @@ extraEnvs:
     valueFrom:
       fieldRef:
         fieldPath: status.podIP
-
-serviceMonitor:
-  enabled: true
-  namespace: default
-  interval: 30s
-  scrapeTimeout: 10s
+# serviceMonitor:
+#   enabled: true
+#   namespace: default
+#   interval: 30s
+#   scrapeTimeout: 10s

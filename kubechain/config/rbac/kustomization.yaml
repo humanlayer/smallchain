@@ -25,4 +25,3 @@ resources:
 - llm_admin_role.yaml
 - llm_editor_role.yaml
 - llm_viewer_role.yaml
-

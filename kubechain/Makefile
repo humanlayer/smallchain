@@ -90,6 +90,10 @@ lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes
 lint-config: golangci-lint ## Verify golangci-lint linter configuration
 	$(GOLANGCI_LINT) config verify
 
+.PHONY: ask-dex
+ask-dex: ## Ask Dex a question about the project
+	cd hack/ask-dex && bun ask-dex.js $(filter-out $@,$(MAKECMDGOALS))
+
 ##@ Build
 
 .PHONY: build

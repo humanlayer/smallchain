@@ -18,14 +18,16 @@ package controller
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
+	"os"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"k8s.io/apimachinery/pkg/api/errors"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
 )
@@ -33,48 +35,82 @@ import (
 var _ = Describe("LLM Controller", func() {
 	Context("When reconciling a resource", func() {
 		const resourceName = "test-resource"
+		const secretName = "test-secret"
+		const secretKey = "api-key"
 
 		ctx := context.Background()
+		var mockOpenAIServer *httptest.Server
 
 		typeNamespacedName := types.NamespacedName{
 			Name:      resourceName,
 			Namespace: "default",
 		}
-		llm := &kubechainv1alpha1.LLM{}
 
 		BeforeEach(func() {
-			By("creating the custom resource for the Kind LLM")
-			err := k8sClient.Get(ctx, typeNamespacedName, llm)
-			if err != nil && errors.IsNotFound(err) {
-				resource := &kubechainv1alpha1.LLM{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      resourceName,
-						Namespace: "default",
-					},
-					Spec: kubechainv1alpha1.LLMSpec{
-						Provider: "openai",
-						APIKeyFrom: kubechainv1alpha1.APIKeySource{
-							SecretKeyRef: kubechainv1alpha1.SecretKeyRef{
-								Name: "test-secret",
-								Key:  "api-key",
-							},
-						},
-					},
+			// Set up mock OpenAI server for local testing when no API key is available
+			mockOpenAIServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Header.Get("Authorization") == "Bearer valid-key" {
+					w.WriteHeader(http.StatusOK)
+				} else {
+					w.WriteHeader(http.StatusUnauthorized)
 				}
-				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
-			}
+			}))
 		})
 
 		AfterEach(func() {
-			resource := &kubechainv1alpha1.LLM{}
-			err := k8sClient.Get(ctx, typeNamespacedName, resource)
-			Expect(err).NotTo(HaveOccurred())
+			mockOpenAIServer.Close()
+
+			By("Cleanup the test secret")
+			secret := &corev1.Secret{}
+			err := k8sClient.Get(ctx, types.NamespacedName{Name: secretName, Namespace: "default"}, secret)
+			if err == nil {
+				Expect(k8sClient.Delete(ctx, secret)).To(Succeed())
+			}
 
 			By("Cleanup the specific resource instance LLM")
-			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+			resource := &kubechainv1alpha1.LLM{}
+			err = k8sClient.Get(ctx, typeNamespacedName, resource)
+			if err == nil {
+				Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+			}
 		})
 
-		It("should successfully reconcile the resource", func() {
+		It("should successfully validate OpenAI API key", func() {
+			apiKey := os.Getenv("OPENAI_API_KEY")
+			if apiKey == "" {
+				Skip("Skipping OpenAI API key validation test - OPENAI_API_KEY not set")
+			}
+
+			By("creating the test secret with real API key")
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      secretName,
+					Namespace: "default",
+				},
+				Data: map[string][]byte{
+					secretKey: []byte(apiKey),
+				},
+			}
+			Expect(k8sClient.Create(ctx, secret)).To(Succeed())
+
+			By("creating the custom resource for the Kind LLM")
+			resource := &kubechainv1alpha1.LLM{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName,
+					Namespace: "default",
+				},
+				Spec: kubechainv1alpha1.LLMSpec{
+					Provider: "openai",
+					APIKeyFrom: kubechainv1alpha1.APIKeySource{
+						SecretKeyRef: kubechainv1alpha1.SecretKeyRef{
+							Name: secretName,
+							Key:  secretKey,
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+
 			By("Reconciling the created resource")
 			controllerReconciler := &LLMReconciler{
 				Client: k8sClient,
@@ -90,8 +126,96 @@ var _ = Describe("LLM Controller", func() {
 			updatedLLM := &kubechainv1alpha1.LLM{}
 			err = k8sClient.Get(ctx, typeNamespacedName, updatedLLM)
 			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedLLM.Status.Ready).To(BeTrue())
+			Expect(updatedLLM.Status.Status).To(Equal("OpenAI API key validated successfully"))
+		})
+
+		It("should fail reconciliation with invalid API key", func() {
+			By("Creating a secret with invalid API key")
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      secretName,
+					Namespace: "default",
+				},
+				Data: map[string][]byte{
+					secretKey: []byte("invalid-key"),
+				},
+			}
+			Expect(k8sClient.Create(ctx, secret)).To(Succeed())
+
+			By("creating the custom resource for the Kind LLM")
+			resource := &kubechainv1alpha1.LLM{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName,
+					Namespace: "default",
+				},
+				Spec: kubechainv1alpha1.LLMSpec{
+					Provider: "openai",
+					APIKeyFrom: kubechainv1alpha1.APIKeySource{
+						SecretKeyRef: kubechainv1alpha1.SecretKeyRef{
+							Name: secretName,
+							Key:  secretKey,
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+
+			By("Reconciling the resource")
+			controllerReconciler := &LLMReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Checking the resource status")
+			updatedLLM := &kubechainv1alpha1.LLM{}
+			err = k8sClient.Get(ctx, typeNamespacedName, updatedLLM)
+			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedLLM.Status.Ready).To(BeFalse())
-			Expect(updatedLLM.Status.Message).To(ContainSubstring("failed to get secret"))
+			Expect(updatedLLM.Status.Status).To(ContainSubstring("OpenAI API key validation failed"))
+		})
+
+		It("should fail reconciliation with non-existent secret", func() {
+			By("Creating the LLM resource with non-existent secret")
+			resource := &kubechainv1alpha1.LLM{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName,
+					Namespace: "default",
+				},
+				Spec: kubechainv1alpha1.LLMSpec{
+					Provider: "openai",
+					APIKeyFrom: kubechainv1alpha1.APIKeySource{
+						SecretKeyRef: kubechainv1alpha1.SecretKeyRef{
+							Name: "nonexistent-secret",
+							Key:  secretKey,
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+
+			By("Reconciling the resource")
+			controllerReconciler := &LLMReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Checking the resource status")
+			updatedLLM := &kubechainv1alpha1.LLM{}
+			err = k8sClient.Get(ctx, typeNamespacedName, updatedLLM)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedLLM.Status.Ready).To(BeFalse())
+			Expect(updatedLLM.Status.Status).To(ContainSubstring("failed to get secret"))
 		})
 	})
 })
