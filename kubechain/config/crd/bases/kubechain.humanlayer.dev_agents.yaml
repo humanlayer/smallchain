@@ -20,6 +20,9 @@ spec:
       type: boolean
     - jsonPath: .status.status
       name: Status
+      type: string
+    - jsonPath: .status.statusDetail
+      name: Detail
       priority: 1
       type: string
     name: v1alpha1
@@ -87,7 +90,13 @@ spec:
                   Tools) are valid and ready
                 type: boolean
               status:
-                description: Status provides additional information about the agent's
+                description: Status indicates the current status of the agent
+                enum:
+                - Ready
+                - Error
+                type: string
+              statusDetail:
+                description: StatusDetail provides additional details about the current
                   status
                 type: string
               validTools:

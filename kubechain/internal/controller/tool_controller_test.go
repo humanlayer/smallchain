@@ -2,11 +2,14 @@ package controller
 
 import (
 	"context"
+	"strings"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
@@ -53,9 +56,11 @@ var _ = Describe("Tool Controller", func() {
 			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 
 			By("Reconciling the created resource")
+			eventRecorder := record.NewFakeRecorder(10)
 			controllerReconciler := &ToolReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+				Client:   k8sClient,
+				Scheme:   k8sClient.Scheme(),
+				recorder: eventRecorder,
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
@@ -68,6 +73,18 @@ var _ = Describe("Tool Controller", func() {
 			err = k8sClient.Get(ctx, typeNamespacedName, updatedTool)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedTool.Status.Ready).To(BeTrue())
+			Expect(updatedTool.Status.Status).To(Equal("Ready"))
+			Expect(updatedTool.Status.StatusDetail).To(Equal("Tool validation successful"))
+
+			By("checking that a success event was created")
+			Eventually(func() bool {
+				select {
+				case event := <-eventRecorder.Events:
+					return strings.Contains(event, "ValidationSucceeded")
+				default:
+					return false
+				}
+			}, 5*time.Second, 100*time.Millisecond).Should(BeTrue(), "Expected to find success event")
 		})
 	})
 })

@@ -2,12 +2,14 @@ package controller
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
@@ -65,6 +67,7 @@ var _ = Describe("Task Controller", func() {
 			// Mark Agent as ready
 			agent.Status.Ready = true
 			agent.Status.Status = "Ready"
+			agent.Status.StatusDetail = "Ready for testing"
 			Expect(k8sClient.Status().Update(ctx, agent)).To(Succeed())
 		})
 
@@ -102,9 +105,11 @@ var _ = Describe("Task Controller", func() {
 			Expect(k8sClient.Create(ctx, task)).To(Succeed())
 
 			By("reconciling the task")
+			eventRecorder := record.NewFakeRecorder(10)
 			reconciler := &TaskReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+				Client:   k8sClient,
+				Scheme:   k8sClient.Scheme(),
+				recorder: eventRecorder,
 			}
 
 			_, err := reconciler.Reconcile(ctx, reconcile.Request{
@@ -117,7 +122,28 @@ var _ = Describe("Task Controller", func() {
 			err = k8sClient.Get(ctx, typeNamespacedName, updatedTask)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedTask.Status.Ready).To(BeTrue())
-			Expect(updatedTask.Status.Status).To(Equal("Task Run Created"))
+			Expect(updatedTask.Status.Status).To(Equal("Ready"))
+			Expect(updatedTask.Status.StatusDetail).To(Equal("Task Run Created"))
+
+			By("checking that TaskRun creation event was created")
+			Eventually(func() bool {
+				select {
+				case event := <-eventRecorder.Events:
+					return strings.Contains(event, "TaskRunCreated")
+				default:
+					return false
+				}
+			}, 5*time.Second, 100*time.Millisecond).Should(BeTrue(), "Expected to find TaskRun creation event")
+
+			By("checking that validation success event was created")
+			Eventually(func() bool {
+				select {
+				case event := <-eventRecorder.Events:
+					return strings.Contains(event, "ValidationSucceeded")
+				default:
+					return false
+				}
+			}, 5*time.Second, 100*time.Millisecond).Should(BeTrue(), "Expected to find validation success event")
 		})
 
 		It("should fail validation with non-existent agent", func() {
@@ -137,9 +163,11 @@ var _ = Describe("Task Controller", func() {
 			Expect(k8sClient.Create(ctx, task)).To(Succeed())
 
 			By("reconciling the task")
+			eventRecorder := record.NewFakeRecorder(10)
 			reconciler := &TaskReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+				Client:   k8sClient,
+				Scheme:   k8sClient.Scheme(),
+				recorder: eventRecorder,
 			}
 
 			_, err := reconciler.Reconcile(ctx, reconcile.Request{
@@ -153,7 +181,18 @@ var _ = Describe("Task Controller", func() {
 			err = k8sClient.Get(ctx, typeNamespacedName, updatedTask)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedTask.Status.Ready).To(BeFalse())
-			Expect(updatedTask.Status.Status).To(ContainSubstring(`"nonexistent-agent" not found`))
+			Expect(updatedTask.Status.Status).To(Equal("Error"))
+			Expect(updatedTask.Status.StatusDetail).To(ContainSubstring(`"nonexistent-agent" not found`))
+
+			By("checking that a failure event was created")
+			Eventually(func() bool {
+				select {
+				case event := <-eventRecorder.Events:
+					return strings.Contains(event, "ValidationFailed")
+				default:
+					return false
+				}
+			}, 5*time.Second, 100*time.Millisecond).Should(BeTrue(), "Expected to find failure event")
 		})
 	})
 })

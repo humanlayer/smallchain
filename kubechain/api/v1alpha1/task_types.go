@@ -29,9 +29,12 @@ type TaskStatus struct {
 	// Ready indicates if the task is ready to be executed
 	Ready bool `json:"ready,omitempty"`
 
-	// Status provides additional information about the task's status
-	// +optional
+	// Status indicates the current status of the task
+	// +kubebuilder:validation:Enum=Ready;Error
 	Status string `json:"status,omitempty"`
+
+	// StatusDetail provides additional details about the current status
+	StatusDetail string `json:"statusDetail,omitempty"`
 
 	// Output contains the result of the task execution
 	// +optional
@@ -41,9 +44,10 @@ type TaskStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Ready",type="boolean",JSONPath=".status.ready"
-// +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.status",priority=1
+// +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.status"
+// +kubebuilder:printcolumn:name="Detail",type="string",JSONPath=".status.statusDetail",priority=1
 // +kubebuilder:printcolumn:name="Agent",type="string",JSONPath=".spec.agentRef.name"
-// +kubebuilder:printcolumn:name="Preview",type="string",JSONPath=".spec.message"
+// +kubebuilder:printcolumn:name="Message",type="string",JSONPath=".spec.message"
 // +kubebuilder:printcolumn:name="Output",type="string",JSONPath=".status.output",priority=1
 // +kubebuilder:resource:scope=Namespaced
 

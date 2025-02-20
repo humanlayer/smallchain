@@ -15,9 +15,16 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .status.phase=="Succeeded"
+    - jsonPath: .status.ready
       name: Ready
       type: boolean
+    - jsonPath: .status.status
+      name: Status
+      type: string
+    - jsonPath: .status.statusDetail
+      name: Detail
+      priority: 1
+      type: string
     - jsonPath: .status.phase
       name: Phase
       type: string
@@ -158,6 +165,16 @@ spec:
               startTime:
                 description: StartTime is when the TaskRun started
                 format: date-time
+                type: string
+              status:
+                description: Status indicates the current status of the taskrun
+                enum:
+                - Ready
+                - Error
+                type: string
+              statusDetail:
+                description: StatusDetail provides additional details about the current
+                  status
                 type: string
               userMsgPreview:
                 description: UserMsgPreview stores the first 50 characters of the

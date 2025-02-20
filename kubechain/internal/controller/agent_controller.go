@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -15,7 +17,8 @@ import (
 // AgentReconciler reconciles a Agent object
 type AgentReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme   *runtime.Scheme
+	recorder record.EventRecorder
 }
 
 // validateLLM checks if the referenced LLM exists and is ready
@@ -78,32 +81,38 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	if err := r.validateLLM(ctx, &agent); err != nil {
 		logger.Error(err, "LLM validation failed")
 		statusUpdate.Status.Ready = false
-		statusUpdate.Status.Status = err.Error()
-		statusUpdate.Status.ValidTools = nil
+		statusUpdate.Status.Status = "Error"
+		statusUpdate.Status.StatusDetail = err.Error()
+		r.recorder.Event(&agent, corev1.EventTypeWarning, "ValidationFailed", err.Error())
 		if err := r.Status().Update(ctx, statusUpdate); err != nil {
 			logger.Error(err, "Failed to update Agent status")
 			return ctrl.Result{}, fmt.Errorf("failed to update agent status: %v", err)
 		}
 		return ctrl.Result{}, err // requeue
-	} else {
-		// Validate Tool references
-		validTools, err := r.validateTools(ctx, &agent)
-		if err != nil {
-			logger.Error(err, "Tool validation failed")
-			statusUpdate.Status.Ready = false
-			statusUpdate.Status.Status = err.Error()
-			statusUpdate.Status.ValidTools = validTools
-			if updateErr := r.Status().Update(ctx, statusUpdate); updateErr != nil {
-				logger.Error(updateErr, "Failed to update Agent status")
-				return ctrl.Result{}, fmt.Errorf("failed to update agent status: %v", err)
-			}
-			return ctrl.Result{}, err // requeue
-		} else {
-			statusUpdate.Status.Ready = true
-			statusUpdate.Status.Status = "Ready"
-			statusUpdate.Status.ValidTools = validTools
-		}
 	}
+
+	// Validate Tool references
+	validTools, err := r.validateTools(ctx, &agent)
+	if err != nil {
+		logger.Error(err, "Tool validation failed")
+		statusUpdate.Status.Ready = false
+		statusUpdate.Status.Status = "Error"
+		statusUpdate.Status.StatusDetail = err.Error()
+		statusUpdate.Status.ValidTools = validTools
+		r.recorder.Event(&agent, corev1.EventTypeWarning, "ValidationFailed", err.Error())
+		if updateErr := r.Status().Update(ctx, statusUpdate); updateErr != nil {
+			logger.Error(updateErr, "Failed to update Agent status")
+			return ctrl.Result{}, fmt.Errorf("failed to update agent status: %v", err)
+		}
+		return ctrl.Result{}, err // requeue
+	}
+
+	// All validations passed
+	statusUpdate.Status.Ready = true
+	statusUpdate.Status.Status = "Ready"
+	statusUpdate.Status.StatusDetail = "All dependencies validated successfully"
+	statusUpdate.Status.ValidTools = validTools
+	r.recorder.Event(&agent, corev1.EventTypeNormal, "ValidationSucceeded", "All dependencies validated successfully")
 
 	// Update status
 	if err := r.Status().Update(ctx, statusUpdate); err != nil {
@@ -114,12 +123,14 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	logger.Info("Successfully reconciled agent",
 		"name", agent.Name,
 		"ready", statusUpdate.Status.Ready,
+		"status", statusUpdate.Status.Status,
 		"validTools", statusUpdate.Status.ValidTools)
 	return ctrl.Result{}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *AgentReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	r.recorder = mgr.GetEventRecorderFor("agent-controller")
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&kubechainv1alpha1.Agent{}).
 		Complete(r)

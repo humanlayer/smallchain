@@ -48,6 +48,13 @@ type TaskRunStatus struct {
 	// +optional
 	Ready bool `json:"ready,omitempty"`
 
+	// Status indicates the current status of the taskrun
+	// +kubebuilder:validation:Enum=Ready;Error
+	Status string `json:"status,omitempty"`
+
+	// StatusDetail provides additional details about the current status
+	StatusDetail string `json:"statusDetail,omitempty"`
+
 	// StartTime is when the TaskRun started
 	// +optional
 	StartTime *metav1.Time `json:"startTime,omitempty"`
@@ -100,7 +107,9 @@ const (
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:name="Ready",type="boolean",JSONPath=".status.phase==\"Succeeded\""
+// +kubebuilder:printcolumn:name="Ready",type="boolean",JSONPath=".status.ready"
+// +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.status"
+// +kubebuilder:printcolumn:name="Detail",type="string",JSONPath=".status.statusDetail",priority=1
 // +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase"
 // +kubebuilder:printcolumn:name="Task",type="string",JSONPath=".spec.taskRef.name"
 // +kubebuilder:printcolumn:name="Preview",type="string",JSONPath=".status.userMsgPreview"

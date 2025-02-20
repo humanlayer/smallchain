@@ -50,14 +50,23 @@ type BuiltinToolSpec struct {
 
 // ToolStatus defines the observed state of Tool
 type ToolStatus struct {
-	// Ready indicates if the tool has been validated and is ready for use.
+	// Ready indicates if the tool is ready to be used
 	Ready bool `json:"ready,omitempty"`
+
+	// Status indicates the current status of the tool
+	// +kubebuilder:validation:Enum=Ready;Error
+	Status string `json:"status,omitempty"`
+
+	// StatusDetail provides additional details about the current status
+	StatusDetail string `json:"statusDetail,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:name="Type",type="string",JSONPath=".spec.toolType"
 // +kubebuilder:printcolumn:name="Ready",type="boolean",JSONPath=".status.ready"
+// +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.status"
+// +kubebuilder:printcolumn:name="Detail",type="string",JSONPath=".status.statusDetail",priority=1
+// +kubebuilder:resource:scope=Namespaced
 
 // Tool is the Schema for the tools API
 type Tool struct {

@@ -20,13 +20,16 @@ spec:
       type: boolean
     - jsonPath: .status.status
       name: Status
+      type: string
+    - jsonPath: .status.statusDetail
+      name: Detail
       priority: 1
       type: string
     - jsonPath: .spec.agentRef.name
       name: Agent
       type: string
     - jsonPath: .spec.message
-      name: Preview
+      name: Message
       type: string
     - jsonPath: .status.output
       name: Output
@@ -95,7 +98,13 @@ spec:
                 description: Ready indicates if the task is ready to be executed
                 type: boolean
               status:
-                description: Status provides additional information about the task's
+                description: Status indicates the current status of the task
+                enum:
+                - Ready
+                - Error
+                type: string
+              statusDetail:
+                description: StatusDetail provides additional details about the current
                   status
                 type: string
             type: object

@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -17,7 +19,8 @@ import (
 // TaskReconciler reconciles a Task object
 type TaskReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme   *runtime.Scheme
+	recorder record.EventRecorder
 }
 
 // validateAgent checks if the referenced agent exists and is ready
@@ -56,58 +59,63 @@ func (r *TaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	if err := r.validateAgent(ctx, &task); err != nil {
 		logger.Error(err, "Agent validation failed")
 		statusUpdate.Status.Ready = false
-		statusUpdate.Status.Status = err.Error()
+		statusUpdate.Status.Status = "Error"
+		statusUpdate.Status.StatusDetail = err.Error()
+		r.recorder.Event(&task, corev1.EventTypeWarning, "ValidationFailed", err.Error())
 		if updateErr := r.Status().Update(ctx, statusUpdate); updateErr != nil {
 			logger.Error(updateErr, "Failed to update Task status")
 			return ctrl.Result{}, fmt.Errorf("failed to update task status: %v", err)
 		}
 		return ctrl.Result{}, err // requeue
-	} else {
-		statusUpdate.Status.Ready = true
-		statusUpdate.Status.Status = "Task Run Created"
+	}
 
-		// Check if we need to create a TaskRun
-		taskRunList := &kubechainv1alpha1.TaskRunList{}
-		if err := r.List(ctx, taskRunList, client.InNamespace(task.Namespace), client.MatchingLabels{
-			"kubechain.humanlayer.dev/task": task.Name,
-		}); err != nil {
-			logger.Error(err, "Failed to list TaskRuns")
+	// Check if we need to create a TaskRun
+	taskRunList := &kubechainv1alpha1.TaskRunList{}
+	if err := r.List(ctx, taskRunList, client.InNamespace(task.Namespace), client.MatchingLabels{
+		"kubechain.humanlayer.dev/task": task.Name,
+	}); err != nil {
+		logger.Error(err, "Failed to list TaskRuns")
+		return ctrl.Result{}, err
+	}
+
+	if len(taskRunList.Items) == 0 {
+		// Create a new TaskRun
+		taskRun := &kubechainv1alpha1.TaskRun{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      task.Name + "-1",
+				Namespace: task.Namespace,
+				Labels: map[string]string{
+					"kubechain.humanlayer.dev/task": task.Name,
+				},
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						APIVersion: kubechainv1alpha1.GroupVersion.String(),
+						Kind:       "Task",
+						Name:       task.Name,
+						UID:        task.UID,
+						Controller: pointer.Bool(true),
+					},
+				},
+			},
+			Spec: kubechainv1alpha1.TaskRunSpec{
+				TaskRef: kubechainv1alpha1.LocalObjectReference{
+					Name: task.Name,
+				},
+			},
+		}
+
+		if err := r.Create(ctx, taskRun); err != nil {
+			logger.Error(err, "Failed to create TaskRun")
 			return ctrl.Result{}, err
 		}
-
-		if len(taskRunList.Items) == 0 {
-			// Create a new TaskRun
-			taskRun := &kubechainv1alpha1.TaskRun{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      task.Name + "-1",
-					Namespace: task.Namespace,
-					Labels: map[string]string{
-						"kubechain.humanlayer.dev/task": task.Name,
-					},
-					OwnerReferences: []metav1.OwnerReference{
-						{
-							APIVersion: kubechainv1alpha1.GroupVersion.String(),
-							Kind:       "Task",
-							Name:       task.Name,
-							UID:        task.UID,
-							Controller: pointer.Bool(true),
-						},
-					},
-				},
-				Spec: kubechainv1alpha1.TaskRunSpec{
-					TaskRef: kubechainv1alpha1.LocalObjectReference{
-						Name: task.Name,
-					},
-				},
-			}
-
-			if err := r.Create(ctx, taskRun); err != nil {
-				logger.Error(err, "Failed to create TaskRun")
-				return ctrl.Result{}, err
-			}
-			logger.Info("Created TaskRun", "name", taskRun.Name)
-		}
+		logger.Info("Created TaskRun", "name", taskRun.Name)
+		r.recorder.Event(&task, corev1.EventTypeNormal, "TaskRunCreated", fmt.Sprintf("Created TaskRun %s", taskRun.Name))
 	}
+
+	statusUpdate.Status.Ready = true
+	statusUpdate.Status.Status = "Ready"
+	statusUpdate.Status.StatusDetail = "Task Run Created"
+	r.recorder.Event(&task, corev1.EventTypeNormal, "ValidationSucceeded", "Task validation successful")
 
 	// Update status
 	if err := r.Status().Update(ctx, statusUpdate); err != nil {
@@ -123,6 +131,7 @@ func (r *TaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *TaskReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	r.recorder = mgr.GetEventRecorderFor("task-controller")
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&kubechainv1alpha1.Task{}).
 		Complete(r)

@@ -3,10 +3,14 @@ FROM docker.io/golang:1.24 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 
+ENV GOCACHE=/root/.cache/go-build
+ENV GOMODCACHE=/go/pkg/mod
+
 WORKDIR /workspace
 # Copy the Go Modules manifests
 COPY go.mod go.mod
 COPY go.sum go.sum
+
 
 # Cache the go modules and build cache
 RUN --mount=type=cache,target=/go/pkg/mod \

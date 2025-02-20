@@ -3,7 +3,9 @@ package controller
 import (
 	"context"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -14,7 +16,8 @@ import (
 // ToolReconciler reconciles a Tool object
 type ToolReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme   *runtime.Scheme
+	recorder record.EventRecorder
 }
 
 // Reconcile fetches a Tool resource, validates required fields, and marks it ready.
@@ -33,6 +36,9 @@ func (r *ToolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 
 	// For now, all tools are marked as ready
 	statusUpdate.Status.Ready = true
+	statusUpdate.Status.Status = "Ready"
+	statusUpdate.Status.StatusDetail = "Tool validation successful"
+	r.recorder.Event(&tool, corev1.EventTypeNormal, "ValidationSucceeded", "Tool validation successful")
 
 	// Update the status subresource.
 	if err := r.Status().Update(ctx, statusUpdate); err != nil {
@@ -46,6 +52,7 @@ func (r *ToolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *ToolReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	r.recorder = mgr.GetEventRecorderFor("tool-controller")
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&kubechainv1alpha1.Tool{}).
 		Complete(r)

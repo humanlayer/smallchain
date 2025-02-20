@@ -59,15 +59,23 @@ kubectl get llm,tool,agent,task,taskrun
 ## Status Pattern
 
 Resources follow a consistent status pattern:
+- Ready: Boolean indicating if resource is ready
 - Status: Enum with values "Ready" or "Error"
 - StatusDetail: Detailed message about the current status
+- Events: Emit events for validation success/failure and significant state changes
 
 Example:
 ```yaml
 status:
+  ready: true
   status: Ready
   statusDetail: "OpenAI API key validated successfully"
 ```
+
+Events:
+- ValidationSucceeded: When resource validation passes
+- ValidationFailed: When resource validation fails
+- ResourceCreated: When child resources are created (e.g. TaskRunCreated)
 
 ## Application archicecture
 

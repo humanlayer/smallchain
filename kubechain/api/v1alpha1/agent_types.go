@@ -33,9 +33,12 @@ type AgentStatus struct {
 	// Ready indicates if the agent's dependencies (LLM and Tools) are valid and ready
 	Ready bool `json:"ready,omitempty"`
 
-	// Status provides additional information about the agent's status
-	// +optional
+	// Status indicates the current status of the agent
+	// +kubebuilder:validation:Enum=Ready;Error
 	Status string `json:"status,omitempty"`
+
+	// StatusDetail provides additional details about the current status
+	StatusDetail string `json:"statusDetail,omitempty"`
 
 	// ValidTools is the list of tools that were successfully validated
 	// +optional
@@ -45,7 +48,8 @@ type AgentStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Ready",type="boolean",JSONPath=".status.ready"
-// +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.status",priority=1
+// +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.status"
+// +kubebuilder:printcolumn:name="Detail",type="string",JSONPath=".status.statusDetail",priority=1
 // +kubebuilder:resource:scope=Namespaced
 
 // Agent is the Schema for the agents API
