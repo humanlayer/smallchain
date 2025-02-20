@@ -106,6 +106,18 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{Requeue: true}, nil
 	}
 
+	if statusUpdate.Status.Phase == kubechainv1alpha1.TaskRunPhaseReadyForLLM {
+		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseSendContextWindowToLLM
+		if err := r.Status().Update(ctx, statusUpdate); err != nil {
+			logger.Error(err, "Unable to update TaskRun status")
+			return ctrl.Result{}, err
+		}
+
+		logger.Error(nil, "NOT IMPLEMENTED - SendContextWindowToLLM")
+
+		return ctrl.Result{Requeue: true}, nil
+	}
+
 	logger.Info("Successfully reconciled taskrun",
 		"name", taskRun.Name,
 		"phase", statusUpdate.Status.Phase)

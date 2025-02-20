@@ -23,6 +23,9 @@ spec:
       type: boolean
     - jsonPath: .status.status
       name: Status
+      type: string
+    - jsonPath: .status.statusDetail
+      name: Detail
       priority: 1
       type: string
     name: v1alpha1
@@ -93,11 +96,17 @@ spec:
             description: LLMStatus defines the observed state of LLM
             properties:
               ready:
-                description: Ready indicates if the external dependency (e.g. secret)
-                  has been validated.
+                description: Ready indicates if the LLM is ready to be used
                 type: boolean
               status:
-                description: Status provides additional information about the status
+                description: Status indicates the current status of the LLM
+                enum:
+                - Ready
+                - Error
+                type: string
+              statusDetail:
+                description: StatusDetail provides additional details about the current
+                  status
                 type: string
             type: object
         type: object

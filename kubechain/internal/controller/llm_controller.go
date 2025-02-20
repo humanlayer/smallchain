@@ -24,6 +24,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -34,7 +35,8 @@ import (
 // LLMReconciler reconciles a LLM object
 type LLMReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme   *runtime.Scheme
+	recorder record.EventRecorder
 }
 
 func (r *LLMReconciler) validateOpenAIKey(apiKey string) error {
@@ -92,9 +94,6 @@ func (r *LLMReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	// Fetch the LLM instance
 	var llm kubechainv1alpha1.LLM
 	if err := r.Get(ctx, req.NamespacedName, &llm); err != nil {
-		// We'll ignore not-found errors, since they can't be fixed by an immediate
-		// requeue (we'll need to wait for a new notification), and we can get them
-		// on deleted requests.
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
@@ -107,14 +106,18 @@ func (r *LLMReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	if err := r.validateSecret(ctx, &llm); err != nil {
 		log.Error(err, "Secret validation failed")
 		statusUpdate.Status.Ready = false
-		statusUpdate.Status.Status = err.Error()
+		statusUpdate.Status.Status = "Error"
+		statusUpdate.Status.StatusDetail = err.Error()
+		r.recorder.Event(&llm, corev1.EventTypeWarning, "ValidationFailed", err.Error())
 	} else {
 		statusUpdate.Status.Ready = true
+		statusUpdate.Status.Status = "Ready"
 		if llm.Spec.Provider == "openai" {
-			statusUpdate.Status.Status = "OpenAI API key validated successfully"
+			statusUpdate.Status.StatusDetail = "OpenAI API key validated successfully"
 		} else {
-			statusUpdate.Status.Status = "Secret validated successfully"
+			statusUpdate.Status.StatusDetail = "Secret validated successfully"
 		}
+		r.recorder.Event(&llm, corev1.EventTypeNormal, "ValidationSucceeded", statusUpdate.Status.StatusDetail)
 	}
 
 	// Update status using SubResource client
@@ -126,12 +129,14 @@ func (r *LLMReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	log.Info("Successfully reconciled LLM",
 		"provider", llm.Spec.Provider,
 		"ready", statusUpdate.Status.Ready,
-		"status", statusUpdate.Status.Status)
+		"status", statusUpdate.Status.Status,
+		"statusDetail", statusUpdate.Status.StatusDetail)
 	return ctrl.Result{}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *LLMReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	r.recorder = mgr.GetEventRecorderFor("llm-controller")
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&kubechainv1alpha1.LLM{}).
 		Named("llm").

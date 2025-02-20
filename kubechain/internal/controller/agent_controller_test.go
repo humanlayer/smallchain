@@ -45,8 +45,8 @@ var _ = Describe("Agent Controller", func() {
 			Expect(k8sClient.Create(ctx, llm)).To(Succeed())
 
 			// Mark LLM as ready
-			llm.Status.Ready = true
-			llm.Status.Status = "Ready for testing"
+			llm.Status.Status = "Ready"
+			llm.Status.StatusDetail = "Ready for testing"
 			Expect(k8sClient.Status().Update(ctx, llm)).To(Succeed())
 
 			// Create a test Tool

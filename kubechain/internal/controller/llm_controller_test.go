@@ -21,12 +21,15 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
@@ -112,9 +115,11 @@ var _ = Describe("LLM Controller", func() {
 			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 
 			By("Reconciling the created resource")
+			eventRecorder := record.NewFakeRecorder(10)
 			controllerReconciler := &LLMReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+				Client:   k8sClient,
+				Scheme:   k8sClient.Scheme(),
+				recorder: eventRecorder,
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
@@ -127,7 +132,18 @@ var _ = Describe("LLM Controller", func() {
 			err = k8sClient.Get(ctx, typeNamespacedName, updatedLLM)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedLLM.Status.Ready).To(BeTrue())
-			Expect(updatedLLM.Status.Status).To(Equal("OpenAI API key validated successfully"))
+			Expect(updatedLLM.Status.Status).To(Equal("Ready"))
+			Expect(updatedLLM.Status.StatusDetail).To(Equal("OpenAI API key validated successfully"))
+
+			By("checking that a success event was created")
+			Eventually(func() bool {
+				select {
+				case event := <-eventRecorder.Events:
+					return strings.Contains(event, "ValidationSucceeded")
+				default:
+					return false
+				}
+			}, 5*time.Second, 100*time.Millisecond).Should(BeTrue(), "Expected to find success event")
 		})
 
 		It("should fail reconciliation with invalid API key", func() {
@@ -162,9 +178,11 @@ var _ = Describe("LLM Controller", func() {
 			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 
 			By("Reconciling the resource")
+			eventRecorder := record.NewFakeRecorder(10)
 			controllerReconciler := &LLMReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+				Client:   k8sClient,
+				Scheme:   k8sClient.Scheme(),
+				recorder: eventRecorder,
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
@@ -177,7 +195,18 @@ var _ = Describe("LLM Controller", func() {
 			err = k8sClient.Get(ctx, typeNamespacedName, updatedLLM)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedLLM.Status.Ready).To(BeFalse())
-			Expect(updatedLLM.Status.Status).To(ContainSubstring("OpenAI API key validation failed"))
+			Expect(updatedLLM.Status.Status).To(Equal("Error"))
+			Expect(updatedLLM.Status.StatusDetail).To(ContainSubstring("OpenAI API key validation failed"))
+
+			By("checking that a failure event was created")
+			Eventually(func() bool {
+				select {
+				case event := <-eventRecorder.Events:
+					return strings.Contains(event, "ValidationFailed")
+				default:
+					return false
+				}
+			}, 5*time.Second, 100*time.Millisecond).Should(BeTrue(), "Expected to find failure event")
 		})
 
 		It("should fail reconciliation with non-existent secret", func() {
@@ -200,9 +229,11 @@ var _ = Describe("LLM Controller", func() {
 			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 
 			By("Reconciling the resource")
+			eventRecorder := record.NewFakeRecorder(10)
 			controllerReconciler := &LLMReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+				Client:   k8sClient,
+				Scheme:   k8sClient.Scheme(),
+				recorder: eventRecorder,
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
@@ -215,7 +246,18 @@ var _ = Describe("LLM Controller", func() {
 			err = k8sClient.Get(ctx, typeNamespacedName, updatedLLM)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedLLM.Status.Ready).To(BeFalse())
-			Expect(updatedLLM.Status.Status).To(ContainSubstring("failed to get secret"))
+			Expect(updatedLLM.Status.Status).To(Equal("Error"))
+			Expect(updatedLLM.Status.StatusDetail).To(ContainSubstring("failed to get secret"))
+
+			By("checking that a failure event was created")
+			Eventually(func() bool {
+				select {
+				case event := <-eventRecorder.Events:
+					return strings.Contains(event, "ValidationFailed")
+				default:
+					return false
+				}
+			}, 5*time.Second, 100*time.Millisecond).Should(BeTrue(), "Expected to find failure event")
 		})
 	})
 })

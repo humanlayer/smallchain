@@ -29,7 +29,7 @@ func (r *AgentReconciler) validateLLM(ctx context.Context, agent *kubechainv1alp
 		return fmt.Errorf("failed to get LLM %q: %w", agent.Spec.LLMRef.Name, err)
 	}
 
-	if !llm.Status.Ready {
+	if llm.Status.Status != "Ready" {
 		return fmt.Errorf("LLM %q is not ready", agent.Spec.LLMRef.Name)
 	}
 

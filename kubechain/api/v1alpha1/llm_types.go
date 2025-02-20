@@ -3,15 +3,10 @@ Copyright 2025.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
-
-
-	// Status provides additional information about the status
-	// +optional
-	Status string `json:"status,omitempty"`
-
-// +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.status"
 You may obtain a copy of the License at
+
     http://www.apache.org/licenses/LICENSE-2.0
+
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -64,19 +59,23 @@ type LLMSpec struct {
 
 // LLMStatus defines the observed state of LLM
 type LLMStatus struct {
-	// Ready indicates if the external dependency (e.g. secret) has been validated.
+	// Ready indicates if the LLM is ready to be used
 	Ready bool `json:"ready,omitempty"`
 
-	// Status provides additional information about the status
-	// +optional
+	// Status indicates the current status of the LLM
+	// +kubebuilder:validation:Enum=Ready;Error
 	Status string `json:"status,omitempty"`
+
+	// StatusDetail provides additional details about the current status
+	StatusDetail string `json:"statusDetail,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Provider",type="string",JSONPath=".spec.provider"
 // +kubebuilder:printcolumn:name="Ready",type="boolean",JSONPath=".status.ready"
-// +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.status",priority=1
+// +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.status"
+// +kubebuilder:printcolumn:name="Detail",type="string",JSONPath=".status.statusDetail",priority=1
 // +kubebuilder:resource:scope=Namespaced
 
 // LLM is the Schema for the llms API

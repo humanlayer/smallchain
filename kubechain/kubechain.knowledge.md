@@ -53,8 +53,21 @@ kubectl get llm,tool,agent,task,taskrun
 - TaskRun phases progress through:
   1. Pending (initial state)
   2. SendContextWindowToLLM (locks the resource)
-  4. ToolCallsPending
-  5. FinalAnswer
+  3. ToolCallsPending
+  4. FinalAnswer
+
+## Status Pattern
+
+Resources follow a consistent status pattern:
+- Status: Enum with values "Ready" or "Error"
+- StatusDetail: Detailed message about the current status
+
+Example:
+```yaml
+status:
+  status: Ready
+  statusDetail: "OpenAI API key validated successfully"
+```
 
 ## Application archicecture
 
@@ -361,3 +374,10 @@ status:
     - phase: Pending
       transitionTime: 2024-01-01T00:00:00Z
 ```
+
+## Build Optimizations
+
+Docker builds use BuildKit caching:
+- Enable with DOCKER_BUILDKIT=1
+- Cache Go module downloads with `--mount=type=cache,target=/go/pkg/mod`
+- Cache Go build cache with `--mount=type=cache,target=/root/.cache/go-build`
