@@ -44,6 +44,10 @@ type TaskRunStatus struct {
 	// +optional
 	Phase TaskRunPhase `json:"phase,omitempty"`
 
+	// Ready indicates if the TaskRun is ready to be executed
+	// +optional
+	Ready bool `json:"ready,omitempty"`
+
 	// StartTime is when the TaskRun started
 	// +optional
 	StartTime *metav1.Time `json:"startTime,omitempty"`

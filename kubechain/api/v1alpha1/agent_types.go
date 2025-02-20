@@ -45,7 +45,7 @@ type AgentStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Ready",type="boolean",JSONPath=".status.ready"
-// +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.status"
+// +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.status",priority=1
 // +kubebuilder:resource:scope=Namespaced
 
 // Agent is the Schema for the agents API

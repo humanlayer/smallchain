@@ -152,6 +152,9 @@ spec:
                 - ErrorBackoff
                 - Failed
                 type: string
+              ready:
+                description: Ready indicates if the TaskRun is ready to be executed
+                type: boolean
               startTime:
                 description: StartTime is when the TaskRun started
                 format: date-time

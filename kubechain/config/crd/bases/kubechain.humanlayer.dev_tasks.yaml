@@ -20,6 +20,7 @@ spec:
       type: boolean
     - jsonPath: .status.status
       name: Status
+      priority: 1
       type: string
     - jsonPath: .spec.agentRef.name
       name: Agent

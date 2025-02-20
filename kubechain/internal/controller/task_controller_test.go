@@ -117,7 +117,7 @@ var _ = Describe("Task Controller", func() {
 			err = k8sClient.Get(ctx, typeNamespacedName, updatedTask)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedTask.Status.Ready).To(BeTrue())
-			Expect(updatedTask.Status.Status).To(Equal("Agent validated successfully"))
+			Expect(updatedTask.Status.Status).To(Equal("Task Run Created"))
 		})
 
 		It("should fail validation with non-existent agent", func() {
@@ -145,14 +145,15 @@ var _ = Describe("Task Controller", func() {
 			_, err := reconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
 			})
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring(`"nonexistent-agent" not found`))
 
 			By("checking the task status")
 			updatedTask := &kubechainv1alpha1.Task{}
 			err = k8sClient.Get(ctx, typeNamespacedName, updatedTask)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedTask.Status.Ready).To(BeFalse())
-			Expect(updatedTask.Status.Status).To(ContainSubstring("failed to get Agent"))
+			Expect(updatedTask.Status.Status).To(ContainSubstring(`"nonexistent-agent" not found`))
 		})
 	})
 })

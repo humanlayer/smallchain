@@ -57,9 +57,14 @@ func (r *TaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		logger.Error(err, "Agent validation failed")
 		statusUpdate.Status.Ready = false
 		statusUpdate.Status.Status = err.Error()
+		if updateErr := r.Status().Update(ctx, statusUpdate); updateErr != nil {
+			logger.Error(updateErr, "Failed to update Task status")
+			return ctrl.Result{}, fmt.Errorf("failed to update task status: %v", err)
+		}
+		return ctrl.Result{}, err // requeue
 	} else {
 		statusUpdate.Status.Ready = true
-		statusUpdate.Status.Status = "Agent validated successfully"
+		statusUpdate.Status.Status = "Task Run Created"
 
 		// Check if we need to create a TaskRun
 		taskRunList := &kubechainv1alpha1.TaskRunList{}

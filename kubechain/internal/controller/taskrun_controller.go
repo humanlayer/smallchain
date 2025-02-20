@@ -12,12 +12,16 @@ import (
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
 	"github.com/pkg/errors"
+	"k8s.io/api/core/v1"
+	"k8s.io/client-go/tools/record"
 )
 
 // TaskRunReconciler reconciles a TaskRun object
 type TaskRunReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	recorder ctrl.EventRecorder
+	recorder record.EventRecorder
 }
 
 // getTask fetches the referenced Task
@@ -66,6 +70,15 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhasePending
 		now := metav1.Now()
 		statusUpdate.Status.StartTime = &now
+
+		// Update status immediately to ensure Pending state is visible
+		if err := r.Status().Update(ctx, statusUpdate); err != nil {
+			logger.Error(err, "Unable to update TaskRun status")
+			return ctrl.Result{}, err
+		}
+
+		// Requeue to continue processing
+		return ctrl.Result{Requeue: true}, nil
 	}
 
 	// Get referenced Task
@@ -74,8 +87,12 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		logger.Error(err, "Task validation failed")
 		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseFailed
 		statusUpdate.Status.Error = err.Error()
+		statusUpdate.Status.Ready = false
 		now := metav1.Now()
 		statusUpdate.Status.CompletionTime = &now
+
+		// Record failure event
+		r.recorder.Event(&taskRun, corev1.EventTypeWarning, "TaskValidationFailed", err.Error())
 
 		if updateErr := r.Status().Update(ctx, statusUpdate); updateErr != nil {
 			logger.Error(updateErr, "Failed to update TaskRun status")
@@ -155,6 +172,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 				statusUpdate.Status.MessageCount = len(statusUpdate.Status.ContextWindow)
 				statusUpdate.Status.Output = "The result of 20 + 30 is 50"
 				statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseFinalAnswer
+				statusUpdate.Status.Ready = true
 				now := metav1.Now()
 				statusUpdate.Status.CompletionTime = &now
 			}
@@ -175,6 +193,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *TaskRunReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	r.recorder = mgr.GetEventRecorderFor("taskrun-controller")
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&kubechainv1alpha1.TaskRun{}).
 		Complete(r)

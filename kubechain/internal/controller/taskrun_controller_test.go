@@ -2,14 +2,18 @@ package controller
 
 import (
 	"context"
+	"strings"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
 )
 
 var _ = Describe("TaskRun Controller", func() {
@@ -91,7 +95,7 @@ var _ = Describe("TaskRun Controller", func() {
 			}
 		})
 
-		It("should successfully execute a task", func() {
+		It("should progress through phases correctly", func() {
 			By("creating the taskrun")
 			taskRun := &kubechainv1alpha1.TaskRun{
 				ObjectMeta: metav1.ObjectMeta{
@@ -110,6 +114,7 @@ var _ = Describe("TaskRun Controller", func() {
 			reconciler := &TaskRunReconciler{
 				Client: k8sClient,
 				Scheme: k8sClient.Scheme(),
+				recorder: k8sClient.GetEventRecorderFor("taskrun-controller"),
 			}
 
 			_, err := reconciler.Reconcile(ctx, reconcile.Request{
@@ -117,13 +122,40 @@ var _ = Describe("TaskRun Controller", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			By("checking the taskrun status")
+			By("verifying initial phase is Pending")
 			updatedTaskRun := &kubechainv1alpha1.TaskRun{}
+			Eventually(func() kubechainv1alpha1.TaskRunPhase {
+				err := k8sClient.Get(ctx, typeNamespacedName, updatedTaskRun)
+				if err != nil {
+					return ""
+				}
+				return updatedTaskRun.Status.Phase
+			}, 5*time.Second, 100*time.Millisecond).Should(Equal(kubechainv1alpha1.TaskRunPhasePending))
+
+			By("checking events")
+			eventList := &corev1.EventList{}
+			err = k8sClient.List(ctx, eventList, client.InNamespace("default"))
+			Expect(err).NotTo(HaveOccurred())
+			var found bool
+			for _, event := range eventList.Items {
+				if event.InvolvedObject.Name == resourceName &&
+					event.InvolvedObject.Kind == "TaskRun" &&
+					event.Type == "Normal" &&
+					strings.Contains(event.Message, "Started processing TaskRun") {
+					found = true
+					break
+				}
+			}
+			Expect(found).To(BeTrue(), "Expected to find start event for TaskRun")
+
+			By("checking the taskrun status")
+			updatedTaskRun = &kubechainv1alpha1.TaskRun{}
 			err = k8sClient.Get(ctx, typeNamespacedName, updatedTaskRun)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedTaskRun.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunPhaseFinalAnswer))
 			Expect(updatedTaskRun.Status.StartTime).NotTo(BeNil())
 			Expect(updatedTaskRun.Status.CompletionTime).NotTo(BeNil())
+			Expect(updatedTaskRun.Status.Ready).To(BeTrue())
 		})
 
 		It("should fail when task doesn't exist", func() {
@@ -145,6 +177,7 @@ var _ = Describe("TaskRun Controller", func() {
 			reconciler := &TaskRunReconciler{
 				Client: k8sClient,
 				Scheme: k8sClient.Scheme(),
+				recorder: k8sClient.GetEventRecorderFor("taskrun-controller"),
 			}
 
 			_, err := reconciler.Reconcile(ctx, reconcile.Request{
@@ -158,7 +191,24 @@ var _ = Describe("TaskRun Controller", func() {
 			err = k8sClient.Get(ctx, typeNamespacedName, updatedTaskRun)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedTaskRun.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunPhaseFailed))
+			Expect(updatedTaskRun.Status.Ready).To(BeFalse())
 			Expect(updatedTaskRun.Status.Error).To(ContainSubstring("failed to get Task"))
+
+			By("checking that a failure event was created")
+			eventList := &corev1.EventList{}
+			err = k8sClient.List(ctx, eventList, client.InNamespace("default"))
+			Expect(err).NotTo(HaveOccurred())
+			var found bool
+			for _, event := range eventList.Items {
+				if event.InvolvedObject.Name == resourceName &&
+					event.InvolvedObject.Kind == "TaskRun" &&
+					event.Type == "Warning" &&
+					strings.Contains(event.Message, "failed to get Task") {
+					found = true
+					break
+				}
+			}
+			Expect(found).To(BeTrue(), "Expected to find failure event for TaskRun")
 		})
 
 		It("should fail when task exists but is not ready", func() {
@@ -198,6 +248,7 @@ var _ = Describe("TaskRun Controller", func() {
 			reconciler := &TaskRunReconciler{
 				Client: k8sClient,
 				Scheme: k8sClient.Scheme(),
+				recorder: k8sClient.GetEventRecorderFor("taskrun-controller"),
 			}
 
 			_, err := reconciler.Reconcile(ctx, reconcile.Request{
@@ -212,6 +263,7 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedTaskRun.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunPhaseFailed))
 			Expect(updatedTaskRun.Status.Error).To(ContainSubstring("is not ready"))
+			Expect(updatedTaskRun.Status.Ready).To(BeFalse())
 		})
 	})
 })

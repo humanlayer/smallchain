@@ -23,6 +23,7 @@ spec:
       type: boolean
     - jsonPath: .status.status
       name: Status
+      priority: 1
       type: string
     name: v1alpha1
     schema:
