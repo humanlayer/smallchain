@@ -55,6 +55,13 @@ func (r *TaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	// Create a copy for status update
 	statusUpdate := task.DeepCopy()
 
+	// Initialize status if not set
+	if statusUpdate.Status.Status == "" {
+		statusUpdate.Status.Status = "Pending"
+		statusUpdate.Status.StatusDetail = "Validating agent reference"
+		r.recorder.Event(&task, corev1.EventTypeNormal, "Initializing", "Starting validation")
+	}
+
 	// Validate agent reference
 	if err := r.validateAgent(ctx, &task); err != nil {
 		logger.Error(err, "Agent validation failed")

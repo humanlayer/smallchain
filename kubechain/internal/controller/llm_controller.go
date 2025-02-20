@@ -102,6 +102,13 @@ func (r *LLMReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	// Create a copy for status update
 	statusUpdate := llm.DeepCopy()
 
+	// Initialize status if not set
+	if statusUpdate.Status.Status == "" {
+		statusUpdate.Status.Status = "Pending"
+		statusUpdate.Status.StatusDetail = "Validating configuration"
+		r.recorder.Event(&llm, corev1.EventTypeNormal, "Initializing", "Starting validation")
+	}
+
 	// Validate secret
 	if err := r.validateSecret(ctx, &llm); err != nil {
 		log.Error(err, "Secret validation failed")

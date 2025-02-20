@@ -34,6 +34,13 @@ func (r *ToolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	// Create a copy for status update
 	statusUpdate := tool.DeepCopy()
 
+	// Initialize status if not set
+	if statusUpdate.Status.Status == "" {
+		statusUpdate.Status.Status = "Pending"
+		statusUpdate.Status.StatusDetail = "Validating configuration"
+		r.recorder.Event(&tool, corev1.EventTypeNormal, "Initializing", "Starting validation")
+	}
+
 	// For now, all tools are marked as ready
 	statusUpdate.Status.Ready = true
 	statusUpdate.Status.Status = "Ready"

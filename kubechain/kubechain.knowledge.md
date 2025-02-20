@@ -1,5 +1,29 @@
 _this is a knowledge file for codebuff and other coding agents, with instructions and guidelines for working on this project if you are a human reading this, some of this may not apply to you_
 
+## Status Pattern
+
+Resources follow a consistent status pattern:
+- Ready: Boolean indicating if resource is ready
+- Status: Enum with values "Ready" or "Error" or "Pending"
+- StatusDetail: Detailed message about the current status
+- Events: Emit events for validation success/failure and significant state changes
+
+Example:
+```yaml
+status:
+  ready: true
+  status: Ready
+  statusDetail: "OpenAI API key validated successfully"
+```
+
+Events:
+- ValidationSucceeded: When resource validation passes
+- ValidationFailed: When resource validation fails
+- ResourceCreated: When child resources are created (e.g. TaskRunCreated)
+
+New resources start in Pending state while validating dependencies.
+Use Pending (not Error) when upstream dependencies exist but aren't ready.
+
 ## using the controller
 
 The controller is running in the local kind cluster in the default namespace. The cluster is called `kubechain-example-cluster`.
@@ -55,27 +79,6 @@ kubectl get llm,tool,agent,task,taskrun
   2. SendContextWindowToLLM (locks the resource)
   3. ToolCallsPending
   4. FinalAnswer
-
-## Status Pattern
-
-Resources follow a consistent status pattern:
-- Ready: Boolean indicating if resource is ready
-- Status: Enum with values "Ready" or "Error"
-- StatusDetail: Detailed message about the current status
-- Events: Emit events for validation success/failure and significant state changes
-
-Example:
-```yaml
-status:
-  ready: true
-  status: Ready
-  statusDetail: "OpenAI API key validated successfully"
-```
-
-Events:
-- ValidationSucceeded: When resource validation passes
-- ValidationFailed: When resource validation fails
-- ResourceCreated: When child resources are created (e.g. TaskRunCreated)
 
 ## Application archicecture
 
@@ -381,6 +384,23 @@ status:
   phaseHistory:
     - phase: Pending
       transitionTime: 2024-01-01T00:00:00Z
+```
+
+## Testing Patterns
+
+### Mocking External Services
+- Use interfaces to abstract external service clients
+- Inject client factories into controllers for easy mocking
+- Mock clients should be simple and return predictable responses
+- Example:
+```go
+type Client interface {
+  DoSomething() error
+}
+
+type Controller struct {
+  newClient func() Client  // factory function for easy mocking
+}
 ```
 
 ## Build Optimizations

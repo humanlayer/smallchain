@@ -49,7 +49,7 @@ type TaskRunStatus struct {
 	Ready bool `json:"ready,omitempty"`
 
 	// Status indicates the current status of the taskrun
-	// +kubebuilder:validation:Enum=Ready;Error
+	// +kubebuilder:validation:Enum=Ready;Error;Pending
 	Status string `json:"status,omitempty"`
 
 	// StatusDetail provides additional details about the current status

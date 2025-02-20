@@ -171,6 +171,7 @@ spec:
                 enum:
                 - Ready
                 - Error
+                - Pending
                 type: string
               statusDetail:
                 description: StatusDetail provides additional details about the current

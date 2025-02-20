@@ -54,7 +54,7 @@ type ToolStatus struct {
 	Ready bool `json:"ready,omitempty"`
 
 	// Status indicates the current status of the tool
-	// +kubebuilder:validation:Enum=Ready;Error
+	// +kubebuilder:validation:Enum=Ready;Error;Pending
 	Status string `json:"status,omitempty"`
 
 	// StatusDetail provides additional details about the current status

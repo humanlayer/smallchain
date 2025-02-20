@@ -77,15 +77,26 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	// Create a copy for status update
 	statusUpdate := agent.DeepCopy()
 
+	// Initialize status if not set
+	if statusUpdate.Status.Status == "" {
+		statusUpdate.Status.Status = "Pending"
+		statusUpdate.Status.StatusDetail = "Validating dependencies"
+		r.recorder.Event(&agent, corev1.EventTypeNormal, "Initializing", "Starting validation")
+	}
+
+	// Initialize empty valid tools slice
+	validTools := make([]string, 0)
+
 	// Validate LLM reference
 	if err := r.validateLLM(ctx, &agent); err != nil {
 		logger.Error(err, "LLM validation failed")
 		statusUpdate.Status.Ready = false
 		statusUpdate.Status.Status = "Error"
 		statusUpdate.Status.StatusDetail = err.Error()
+		statusUpdate.Status.ValidTools = validTools
 		r.recorder.Event(&agent, corev1.EventTypeWarning, "ValidationFailed", err.Error())
-		if err := r.Status().Update(ctx, statusUpdate); err != nil {
-			logger.Error(err, "Failed to update Agent status")
+		if updateErr := r.Status().Update(ctx, statusUpdate); updateErr != nil {
+			logger.Error(updateErr, "Failed to update Agent status")
 			return ctrl.Result{}, fmt.Errorf("failed to update agent status: %v", err)
 		}
 		return ctrl.Result{}, err // requeue
