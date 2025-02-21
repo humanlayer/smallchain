@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
@@ -530,8 +531,7 @@ var _ = Describe("TaskRun Controller", func() {
 					Namespace: "default",
 				},
 			})
-			Expect(err).To(HaveOccurred()) // We expect an error because tool calls are not implemented yet
-			Expect(err.Error()).To(Equal("ToolCalls not implemented"))
+			Expect(err).NotTo(HaveOccurred())
 
 			By("checking that the taskrun status was updated correctly")
 			err = k8sClient.Get(ctx, types.NamespacedName{Name: taskRunName, Namespace: "default"}, updatedTaskRun)
@@ -541,6 +541,15 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(updatedTaskRun.Status.ContextWindow[2].ToolCalls).To(HaveLen(1))
 			Expect(updatedTaskRun.Status.ContextWindow[2].ToolCalls[0].Function.Name).To(Equal("add"))
 			Expect(updatedTaskRun.Status.ContextWindow[2].ToolCalls[0].Function.Arguments).To(Equal(`{"a": 1, "b": 2}`))
+
+			By("checking that a TaskRunToolCall was created")
+			var taskRunToolCalls kubechainv1alpha1.TaskRunToolCallList
+			err = k8sClient.List(ctx, &taskRunToolCalls, client.InNamespace("default"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(taskRunToolCalls.Items).To(HaveLen(1))
+			trtc := taskRunToolCalls.Items[0]
+			Expect(trtc.Spec.ToolRef.Name).To(Equal("add"))
+			Expect(trtc.Spec.Arguments).To(Equal(`{"a": 1, "b": 2}`))
 		})
 	})
 })

@@ -62,6 +62,20 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// Create a copy for status update
 	statusUpdate := taskRun.DeepCopy()
 
+	// Initialize status if not set
+	if statusUpdate.Status.Phase == "" {
+		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhasePending
+		statusUpdate.Status.Status = "Pending"
+		statusUpdate.Status.StatusDetail = "Initializing"
+		statusUpdate.Status.StartTime = &metav1.Time{Time: time.Now()}
+		if err := r.Status().Update(ctx, statusUpdate); err != nil {
+			logger.Error(err, "Failed to update initial status")
+			return ctrl.Result{}, err
+		}
+		// Requeue so we pick up the updated status
+		return ctrl.Result{Requeue: true}, nil
+	}
+
 	// Get parent Task
 	task, err := r.getTask(ctx, &taskRun)
 	if err != nil {
@@ -127,8 +141,8 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{RequeueAfter: time.Second * 5}, nil
 	}
 
-	// Initialize phase if not set
-	if statusUpdate.Status.Phase == "" {
+	// deps validated, ready to build context window
+	if statusUpdate.Status.Phase == kubechainv1alpha1.TaskRunPhasePending {
 		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseReadyForLLM
 		statusUpdate.Status.Ready = true
 		statusUpdate.Status.ContextWindow = []kubechainv1alpha1.Message{
@@ -317,11 +331,12 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 					Namespace: statusUpdate.Namespace,
 					OwnerReferences: []metav1.OwnerReference{
 						{
-							APIVersion: statusUpdate.APIVersion,
-							Kind:       statusUpdate.Kind, // Should be "TaskRun"
-							Name:       statusUpdate.Name,
-							UID:        statusUpdate.UID,
-							Controller: pointer.BoolPtr(true),
+							APIVersion:         kubechainv1alpha1.GroupVersion.String(),
+							Kind:               "TaskRun",
+							Name:               statusUpdate.Name,
+							UID:                statusUpdate.UID,
+							Controller:         pointer.BoolPtr(true),
+							BlockOwnerDeletion: pointer.BoolPtr(true),
 						},
 					},
 				},
