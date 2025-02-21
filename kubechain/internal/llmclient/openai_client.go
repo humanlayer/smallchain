@@ -33,10 +33,11 @@ func (c *realOpenAIClient) SendRequest(ctx context.Context, systemPrompt string,
 			openai.UserMessage(userMessage),
 		}),
 		Model: openai.F(openai.ChatModelGPT4o),
+		Tools: openai.F(tools),
 	}
 
-	// Only add tools if non-nil
-	if tools != nil {
+	// Only add tools if non-empty
+	if len(tools) > 0 {
 		params.Tools = openai.F(tools)
 	}
 
@@ -54,13 +55,19 @@ func (c *realOpenAIClient) SendRequest(ctx context.Context, systemPrompt string,
 
 // MockOpenAIClient for testing
 type MockOpenAIClient struct {
-	Response *openai.ChatCompletionMessage
-	Error    error
+	Response      *openai.ChatCompletionMessage
+	Error         error
+	ValidateTools func(tools []openai.ChatCompletionToolParam) error
 }
 
 func (m *MockOpenAIClient) SendRequest(ctx context.Context, systemPrompt string, userMessage string, tools []openai.ChatCompletionToolParam) (*openai.ChatCompletionMessage, error) {
 	if m.Error != nil {
 		return nil, m.Error
+	}
+	if m.ValidateTools != nil {
+		if err := m.ValidateTools(tools); err != nil {
+			return nil, err
+		}
 	}
 	if m.Response == nil {
 		return &openai.ChatCompletionMessage{

@@ -40,8 +40,8 @@ func (r *AgentReconciler) validateLLM(ctx context.Context, agent *kubechainv1alp
 }
 
 // validateTools checks if all referenced tools exist and are ready
-func (r *AgentReconciler) validateTools(ctx context.Context, agent *kubechainv1alpha1.Agent) ([]string, error) {
-	validTools := make([]string, 0, len(agent.Spec.Tools))
+func (r *AgentReconciler) validateTools(ctx context.Context, agent *kubechainv1alpha1.Agent) ([]kubechainv1alpha1.ResolvedTool, error) {
+	validTools := make([]kubechainv1alpha1.ResolvedTool, 0, len(agent.Spec.Tools))
 
 	for _, toolRef := range agent.Spec.Tools {
 		tool := &kubechainv1alpha1.Tool{}
@@ -57,7 +57,10 @@ func (r *AgentReconciler) validateTools(ctx context.Context, agent *kubechainv1a
 			return validTools, fmt.Errorf("tool %q is not ready", toolRef.Name)
 		}
 
-		validTools = append(validTools, toolRef.Name)
+		validTools = append(validTools, kubechainv1alpha1.ResolvedTool{
+			Kind: "Tool",
+			Name: toolRef.Name,
+		})
 	}
 
 	return validTools, nil
@@ -85,7 +88,7 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	}
 
 	// Initialize empty valid tools slice
-	validTools := make([]string, 0)
+	validTools := make([]kubechainv1alpha1.ResolvedTool, 0)
 
 	// Validate LLM reference
 	if err := r.validateLLM(ctx, &agent); err != nil {

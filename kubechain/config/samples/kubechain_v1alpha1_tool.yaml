@@ -6,7 +6,7 @@ spec:
   toolType: function
   name: add
   description: Add two numbers
-  arguments:
+  parameters:
     type: object
     properties:
       a:

@@ -56,10 +56,6 @@ spec:
                   name:
                     type: string
                 type: object
-              arguments:
-                description: Arguments defines the JSON schema for the tool's arguments.
-                type: object
-                x-kubernetes-preserve-unknown-fields: true
               description:
                 description: Description provides a description of the tool.
                 type: string
@@ -71,7 +67,12 @@ spec:
                     properties:
                       name:
                         description: Name is the identifier of the builtin function
-                          to run.
+                          to run. Today, supports simple math operations
+                        enum:
+                        - add
+                        - subtract
+                        - multiply
+                        - divide
                         type: string
                     type: object
                 type: object
@@ -79,6 +80,10 @@ spec:
                 description: Name is used for inline/function tools (optional if the
                   object name is used).
                 type: string
+              parameters:
+                description: Parameters defines the JSON schema for the tool's parameters.
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
               toolType:
                 description: ToolType represents the type of tool; e.g. "function",
                   "delegateToAgent", etc.

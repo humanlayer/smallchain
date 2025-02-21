@@ -2,6 +2,8 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -11,6 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
+	"github.com/openai/openai-go"
 )
 
 // ToolReconciler reconciles a Tool object
@@ -41,7 +44,23 @@ func (r *ToolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		r.recorder.Event(&tool, corev1.EventTypeNormal, "Initializing", "Starting validation")
 	}
 
-	// For now, all tools are marked as ready
+	// Validate Parameters JSON if present
+	if tool.Spec.Parameters.Raw != nil {
+		var params openai.FunctionParameters
+		if err := json.Unmarshal(tool.Spec.Parameters.Raw, &params); err != nil {
+			statusUpdate.Status.Ready = false
+			statusUpdate.Status.Status = "Error"
+			statusUpdate.Status.StatusDetail = fmt.Sprintf("Invalid Parameters JSON: %v", err)
+			r.recorder.Event(&tool, corev1.EventTypeWarning, "ValidationFailed", fmt.Sprintf("Invalid Parameters JSON: %v", err))
+			if err := r.Status().Update(ctx, statusUpdate); err != nil {
+				logger.Error(err, "Unable to update Tool status")
+				return ctrl.Result{}, err
+			}
+			return ctrl.Result{}, err
+		}
+	}
+
+	// All validations passed
 	statusUpdate.Status.Ready = true
 	statusUpdate.Status.Status = "Ready"
 	statusUpdate.Status.StatusDetail = "Tool validation successful"

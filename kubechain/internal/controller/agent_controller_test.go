@@ -133,7 +133,10 @@ var _ = Describe("Agent Controller", func() {
 			Expect(updatedAgent.Status.Ready).To(BeTrue())
 			Expect(updatedAgent.Status.Status).To(Equal("Ready"))
 			Expect(updatedAgent.Status.StatusDetail).To(Equal("All dependencies validated successfully"))
-			Expect(updatedAgent.Status.ValidTools).To(ContainElement(toolName))
+			Expect(updatedAgent.Status.ValidTools).To(ContainElement(kubechainv1alpha1.ResolvedTool{
+				Kind: "Tool",
+				Name: toolName,
+			}))
 
 			By("checking that a success event was created")
 			Eventually(func() bool {

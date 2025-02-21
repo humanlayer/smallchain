@@ -2,8 +2,8 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -16,6 +16,7 @@ import (
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
 	"github.com/openai/openai-go"
 
+	"github.com/humanlayer/smallchain/kubechain/internal/adapters"
 	"github.com/humanlayer/smallchain/kubechain/internal/llmclient"
 )
 
@@ -80,9 +81,43 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		logger.Info("Task exists but is not ready", "task", task.Name)
 		statusUpdate.Status.Ready = false
 		statusUpdate.Status.Status = "Pending"
+		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhasePending
 		statusUpdate.Status.StatusDetail = fmt.Sprintf("Waiting for task %q to become ready", task.Name)
 		statusUpdate.Status.Error = "" // Clear previous error
 		r.recorder.Event(&taskRun, corev1.EventTypeNormal, "Waiting", fmt.Sprintf("Waiting for task %q to become ready", task.Name))
+		if err := r.Status().Update(ctx, statusUpdate); err != nil {
+			logger.Error(err, "Failed to update TaskRun status")
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{RequeueAfter: time.Second * 5}, nil
+	}
+
+	// Get the Agent referenced by the Task
+	var agent kubechainv1alpha1.Agent
+	if err := r.Get(ctx, client.ObjectKey{Namespace: task.Namespace, Name: task.Spec.AgentRef.Name}, &agent); err != nil {
+		logger.Error(err, "Failed to get Agent")
+		statusUpdate.Status.Ready = false
+		statusUpdate.Status.Status = "Pending"
+		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhasePending
+		statusUpdate.Status.StatusDetail = "Waiting for Agent to exist"
+		statusUpdate.Status.Error = "" // Clear previous error
+		r.recorder.Event(&taskRun, corev1.EventTypeNormal, "Waiting", "Waiting for Agent to exist")
+		if updateErr := r.Status().Update(ctx, statusUpdate); updateErr != nil {
+			logger.Error(updateErr, "Failed to update TaskRun status")
+			return ctrl.Result{}, updateErr
+		}
+		return ctrl.Result{RequeueAfter: time.Second * 5}, nil
+	}
+
+	// Check if agent is ready
+	if !agent.Status.Ready {
+		logger.Info("Agent exists but is not ready", "agent", agent.Name)
+		statusUpdate.Status.Ready = false
+		statusUpdate.Status.Status = "Pending"
+		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhasePending
+		statusUpdate.Status.StatusDetail = fmt.Sprintf("Waiting for agent %q to become ready", agent.Name)
+		statusUpdate.Status.Error = "" // Clear previous error
+		r.recorder.Event(&taskRun, corev1.EventTypeNormal, "Waiting", fmt.Sprintf("Waiting for agent %q to become ready", agent.Name))
 		if err := r.Status().Update(ctx, statusUpdate); err != nil {
 			logger.Error(err, "Failed to update TaskRun status")
 			return ctrl.Result{}, err
@@ -94,6 +129,16 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if statusUpdate.Status.Phase == "" {
 		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseReadyForLLM
 		statusUpdate.Status.Ready = true
+		statusUpdate.Status.ContextWindow = []kubechainv1alpha1.Message{
+			{
+				Role:    "system",
+				Content: agent.Spec.System,
+			},
+			{
+				Role:    "user",
+				Content: task.Spec.Message,
+			},
+		}
 		statusUpdate.Status.Status = "Ready"
 		statusUpdate.Status.StatusDetail = "Ready to send to LLM"
 		statusUpdate.Status.Error = "" // Clear any previous error
@@ -109,22 +154,6 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if taskRun.Status.Phase != kubechainv1alpha1.TaskRunPhaseReadyForLLM {
 		logger.Info("TaskRun not ready for LLM", "phase", taskRun.Status.Phase)
 		return ctrl.Result{}, nil
-	}
-
-	// Get the Agent referenced by the Task
-	var agent kubechainv1alpha1.Agent
-	if err := r.Get(ctx, client.ObjectKey{Namespace: task.Namespace, Name: task.Spec.AgentRef.Name}, &agent); err != nil {
-		logger.Error(err, "Failed to get Agent")
-		statusUpdate.Status.Ready = false
-		statusUpdate.Status.Status = "Error"
-		statusUpdate.Status.StatusDetail = "Failed to get Agent: " + err.Error()
-		statusUpdate.Status.Error = err.Error()
-		r.recorder.Event(&taskRun, corev1.EventTypeWarning, "AgentFetchFailed", err.Error())
-		if updateErr := r.Status().Update(ctx, statusUpdate); updateErr != nil {
-			logger.Error(updateErr, "Failed to update TaskRun status")
-			return ctrl.Result{}, updateErr
-		}
-		return ctrl.Result{}, err
 	}
 
 	// Get the LLM referenced by the Agent
@@ -193,18 +222,43 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 
-	// Build the prompt using Agent's system prompt, validated tools, and Task's user message.
-	prompt := agent.Spec.System
-	if len(agent.Status.ValidTools) > 0 {
-		prompt += "\nTools: " + strings.Join(agent.Status.ValidTools, ", ")
-	}
-	prompt += "\nUser: " + task.Spec.Message
-
 	var tools []openai.ChatCompletionToolParam
-	// todo generate tools from agents referenced Tool objects
+	// Get the tools from the agent's ValidTools
+	for _, toolName := range agent.Status.ValidTools {
+		tool := &kubechainv1alpha1.Tool{}
+		err := r.Get(ctx, client.ObjectKey{
+			Namespace: agent.Namespace,
+			Name:      toolName.Name,
+		}, tool)
+		if err != nil {
+			logger.Error(err, "Failed to get Tool", "tool", toolName)
+			continue
+		}
+
+		// Convert the tool's arguments to a JSON schema
+		toolParam := openai.ChatCompletionToolParam{
+			Type: openai.F(openai.ChatCompletionToolTypeFunction),
+			Function: openai.F(openai.FunctionDefinitionParam{
+				Name:        openai.F(tool.Name),
+				Description: openai.F(tool.Spec.Description),
+			}),
+		}
+
+		// If the tool has arguments defined, add them to the function definition
+		if tool.Spec.Parameters.Raw != nil {
+			var parameters openai.FunctionParameters
+			if err := json.Unmarshal(tool.Spec.Parameters.Raw, &parameters); err != nil {
+				logger.Error(err, "Failed to unmarshal tool arguments", "tool", toolName)
+				continue
+			}
+			toolParam.Function.Value.Parameters = openai.F(parameters)
+		}
+
+		tools = append(tools, toolParam)
+	}
 
 	// Send the prompt to the LLM using the OpenAI client.
-	output, err := llmClient.SendRequest(ctx, prompt, task.Spec.Message, tools)
+	output, err := llmClient.SendRequest(ctx, agent.Spec.System, task.Spec.Message, tools)
 	if err != nil {
 		logger.Error(err, "LLM request failed")
 		statusUpdate.Status.Ready = false
@@ -220,21 +274,74 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	if output.Content != "" {
-		// final answer
-		// Update the TaskRun's response and progress it to the next phase.
+		// final answer branch
 		statusUpdate.Status.Output = output.Content
 		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseFinalAnswer
 		statusUpdate.Status.Ready = true
+		statusUpdate.Status.ContextWindow = append(statusUpdate.Status.ContextWindow, kubechainv1alpha1.Message{
+			Role:    "assistant",
+			Content: output.Content,
+		})
 		statusUpdate.Status.Status = "Ready"
-		statusUpdate.Status.StatusDetail = "LLM response received"
+		statusUpdate.Status.StatusDetail = "LLM final response received"
 		statusUpdate.Status.Error = ""
 		r.recorder.Event(&taskRun, corev1.EventTypeNormal, "LLMFinalAnswer", "LLM response received successfully")
 	} else {
-		// tool call
-		// todo - create TaskRunToolCall object for each tool call
-	}
+		// tool call branch: create TaskRunToolCall objects for each tool call returned by the LLM.
+		statusUpdate.Status.Output = ""
+		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseToolCallsPending
+		statusUpdate.Status.ContextWindow = append(statusUpdate.Status.ContextWindow, kubechainv1alpha1.Message{
+			Role:      "assistant",
+			ToolCalls: adapters.CastOpenAIToolCallsToKubechain(output.ToolCalls),
+		})
+		statusUpdate.Status.Ready = true
+		statusUpdate.Status.Status = "Ready"
+		statusUpdate.Status.StatusDetail = "LLM response received, tool calls pending"
+		statusUpdate.Status.Error = ""
 
-	// Update status
+		// Update the parent's status before creating tool call objects.
+		if err := r.Status().Update(ctx, statusUpdate); err != nil {
+			logger.Error(err, "Unable to update TaskRun status")
+			return ctrl.Result{}, err
+		}
+
+		// For each tool call, create a new TaskRunToolCall.
+		// Using the parent's details from statusUpdate.
+		for i, tc := range output.ToolCalls {
+			newName := fmt.Sprintf("%s-toolcall-%02d", statusUpdate.Name, i+1)
+			newTRTC := &kubechainv1alpha1.TaskRunToolCall{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      newName,
+					Namespace: statusUpdate.Namespace,
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							APIVersion: statusUpdate.APIVersion,
+							Kind:       statusUpdate.Kind, // Should be "TaskRun"
+							Name:       statusUpdate.Name,
+							UID:        statusUpdate.UID,
+							Controller: pointer.BoolPtr(true),
+						},
+					},
+				},
+				Spec: kubechainv1alpha1.TaskRunToolCallSpec{
+					TaskRunRef: kubechainv1alpha1.LocalObjectReference{
+						Name: statusUpdate.Name,
+					},
+					ToolRef: kubechainv1alpha1.LocalObjectReference{
+						Name: tc.Function.Name,
+					},
+					Arguments: tc.Function.Arguments,
+				},
+			}
+			if err := r.Client.Create(ctx, newTRTC); err != nil {
+				logger.Error(err, "Failed to create TaskRunToolCall", "name", newName)
+				return ctrl.Result{}, err
+			}
+			logger.Info("Created TaskRunToolCall", "name", newName)
+			r.recorder.Event(&taskRun, corev1.EventTypeNormal, "ToolCallCreated", "Created TaskRunToolCall "+newName)
+		}
+	}
+	// Update status for either branch.
 	if err := r.Status().Update(ctx, statusUpdate); err != nil {
 		logger.Error(err, "Unable to update TaskRun status")
 		return ctrl.Result{}, err

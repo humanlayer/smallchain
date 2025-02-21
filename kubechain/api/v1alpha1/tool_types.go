@@ -17,10 +17,10 @@ type ToolSpec struct {
 	// Description provides a description of the tool.
 	Description string `json:"description,omitempty"`
 
-	// Arguments defines the JSON schema for the tool's arguments.
+	// Parameters defines the JSON schema for the tool's parameters.
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +kubebuilder:validation:Type=object
-	Arguments runtime.RawExtension `json:"arguments,omitempty"`
+	Parameters runtime.RawExtension `json:"parameters,omitempty"`
 
 	// Execute defines how the tool should be executed.
 	Execute ToolExecute `json:"execute,omitempty"`
@@ -44,7 +44,8 @@ type ToolExecute struct {
 
 // BuiltinToolSpec defines the parameters for executing a builtin tool.
 type BuiltinToolSpec struct {
-	// Name is the identifier of the builtin function to run.
+	// Name is the identifier of the builtin function to run. Today, supports simple math operations
+	// +kubebuilder:validation:Enum=add;subtract;multiply;divide
 	Name string `json:"name,omitempty"`
 }
 

@@ -8,6 +8,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -46,6 +47,20 @@ var _ = Describe("Tool Controller", func() {
 					ToolType:    "function",
 					Name:        "add",
 					Description: "Add two numbers",
+					Parameters: runtime.RawExtension{
+						Raw: []byte(`{
+							"type": "object",
+							"properties": {
+								"a": {
+									"type": "number"
+								},
+								"b": {
+									"type": "number"
+								}
+							},
+							"required": ["a", "b"]
+						}`),
+					},
 					Execute: kubechainv1alpha1.ToolExecute{
 						Builtin: &kubechainv1alpha1.BuiltinToolSpec{
 							Name: "add",

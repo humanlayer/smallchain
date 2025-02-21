@@ -25,6 +25,17 @@ type TaskRunToolCallStatus struct {
 	// +optional
 	Phase TaskRunToolCallPhase `json:"phase,omitempty"`
 
+	// Ready indicates if the tool call is ready to be executed
+	// +optional
+	Ready bool `json:"ready,omitempty"`
+
+	// Status indicates the current status of the tool call
+	// +kubebuilder:validation:Enum=Ready;Error;Pending
+	Status string `json:"status,omitempty"`
+
+	// StatusDetail provides additional details about the current status
+	StatusDetail string `json:"statusDetail,omitempty"`
+
 	// Result contains the result of the tool call if completed
 	// +optional
 	Result string `json:"result,omitempty"`

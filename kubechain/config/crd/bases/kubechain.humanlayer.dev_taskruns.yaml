@@ -74,8 +74,30 @@ spec:
           spec:
             description: TaskRunSpec defines the desired state of TaskRun
             properties:
+              agentRef:
+                description: AgentRef is used when the TaskRun is created for a tool
+                  call delegation.
+                properties:
+                  name:
+                    description: Name of the referent
+                    minLength: 1
+                    type: string
+                required:
+                - name
+                type: object
               taskRef:
                 description: TaskRef references the task to run
+                properties:
+                  name:
+                    description: Name of the referent
+                    minLength: 1
+                    type: string
+                required:
+                - name
+                type: object
+              taskRunToolCallRef:
+                description: TaskRunToolCallRef is used when the TaskRun is created
+                  for a tool call delegation.
                 properties:
                   name:
                     description: Name of the referent
@@ -105,11 +127,12 @@ spec:
                       type: string
                     role:
                       description: Role is the role of the message sender (system,
-                        user, assistant)
+                        user, assistant, tool)
                       enum:
                       - system
                       - user
                       - assistant
+                      - tool
                       type: string
                     toolCalls:
                       description: ToolCalls contains any tool calls requested by
@@ -117,20 +140,33 @@ spec:
                       items:
                         description: ToolCall represents a request to call a tool
                         properties:
-                          arguments:
-                            description: Arguments contains the arguments for the
-                              tool call
+                          function:
+                            description: Function contains the details of the function
+                              to call
+                            properties:
+                              arguments:
+                                description: Arguments contains the arguments to pass
+                                  to the function in JSON format
+                                type: string
+                              name:
+                                description: Name is the name of the function to call
+                                type: string
+                            required:
+                            - arguments
+                            - name
+                            type: object
+                          id:
+                            description: ID is the unique identifier for this tool
+                              call
                             type: string
-                          name:
-                            description: Name is the name of the tool to call
-                            type: string
-                          result:
-                            description: Result contains the result of the tool call
-                              if completed
+                          type:
+                            description: Type indicates the type of tool call. Currently
+                              only "function" is supported.
                             type: string
                         required:
-                        - arguments
-                        - name
+                        - function
+                        - id
+                        - type
                         type: object
                       type: array
                   required:

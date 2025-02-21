@@ -9,12 +9,20 @@ type TaskRunSpec struct {
 	// TaskRef references the task to run
 	// +kubebuilder:validation:Required
 	TaskRef LocalObjectReference `json:"taskRef"`
+
+	// TaskRunToolCallRef is used when the TaskRun is created for a tool call delegation.
+	// +optional
+	TaskRunToolCallRef *LocalObjectReference `json:"taskRunToolCallRef,omitempty"`
+
+	// AgentRef is used when the TaskRun is created for a tool call delegation.
+	// +optional
+	AgentRef *LocalObjectReference `json:"agentRef,omitempty"`
 }
 
 // Message represents a single message in the conversation
 type Message struct {
-	// Role is the role of the message sender (system, user, assistant)
-	// +kubebuilder:validation:Enum=system;user;assistant
+	// Role is the role of the message sender (system, user, assistant, tool)
+	// +kubebuilder:validation:Enum=system;user;assistant;tool
 	Role string `json:"role"`
 
 	// Content is the message content
@@ -27,15 +35,23 @@ type Message struct {
 
 // ToolCall represents a request to call a tool
 type ToolCall struct {
-	// Name is the name of the tool to call
+	// ID is the unique identifier for this tool call
+	ID string `json:"id"`
+
+	// Function contains the details of the function to call
+	Function ToolCallFunction `json:"function"`
+
+	// Type indicates the type of tool call. Currently only "function" is supported.
+	Type string `json:"type"`
+}
+
+// ToolCallFunction contains the function details for a tool call
+type ToolCallFunction struct {
+	// Name is the name of the function to call
 	Name string `json:"name"`
 
-	// Arguments contains the arguments for the tool call
+	// Arguments contains the arguments to pass to the function in JSON format
 	Arguments string `json:"arguments"`
-
-	// Result contains the result of the tool call if completed
-	// +optional
-	Result string `json:"result,omitempty"`
 }
 
 // TaskRunStatus defines the observed state of TaskRun

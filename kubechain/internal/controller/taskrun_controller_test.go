@@ -9,12 +9,14 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
 	"github.com/humanlayer/smallchain/kubechain/internal/llmclient"
+	"github.com/openai/openai-go"
 )
 
 var _ = Describe("TaskRun Controller", func() {
@@ -68,6 +70,37 @@ var _ = Describe("TaskRun Controller", func() {
 			llm.Status.StatusDetail = "Ready for testing"
 			Expect(k8sClient.Status().Update(ctx, llm)).To(Succeed())
 
+			tool := &kubechainv1alpha1.Tool{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "add",
+					Namespace: "default",
+				},
+				Spec: kubechainv1alpha1.ToolSpec{
+					Name:        "add",
+					Description: "add two numbers",
+					Execute: kubechainv1alpha1.ToolExecute{
+						Builtin: &kubechainv1alpha1.BuiltinToolSpec{
+							Name: "add",
+						},
+					},
+					Parameters: runtime.RawExtension{
+						Raw: []byte(`{
+							"type": "object",
+							"properties": {
+								"a": {
+									"type": "number"
+								},
+								"b": {
+									"type": "number"
+								}
+							},
+							"required": ["a", "b"]
+						}`),
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, tool)).To(Succeed())
+
 			// Create a test Agent
 			agent := &kubechainv1alpha1.Agent{
 				ObjectMeta: metav1.ObjectMeta{
@@ -78,7 +111,12 @@ var _ = Describe("TaskRun Controller", func() {
 					LLMRef: kubechainv1alpha1.LocalObjectReference{
 						Name: "test-llm",
 					},
-					System: "Test agent",
+					System: "you are a testing assistant",
+					Tools: []kubechainv1alpha1.LocalObjectReference{
+						{
+							Name: "add",
+						},
+					},
 				},
 			}
 			Expect(k8sClient.Create(ctx, agent)).To(Succeed())
@@ -87,6 +125,12 @@ var _ = Describe("TaskRun Controller", func() {
 			agent.Status.Ready = true
 			agent.Status.Status = "Ready"
 			agent.Status.StatusDetail = "Ready for testing"
+			agent.Status.ValidTools = []kubechainv1alpha1.ResolvedTool{
+				{
+					Kind: "Tool",
+					Name: "add",
+				},
+			}
 			Expect(k8sClient.Status().Update(ctx, agent)).To(Succeed())
 
 			// Create a test Task
@@ -99,7 +143,7 @@ var _ = Describe("TaskRun Controller", func() {
 					AgentRef: kubechainv1alpha1.LocalObjectReference{
 						Name: agentName,
 					},
-					Message: "Test input",
+					Message: "what is 2 + 2?",
 				},
 			}
 			Expect(k8sClient.Create(ctx, task)).To(Succeed())
@@ -126,6 +170,13 @@ var _ = Describe("TaskRun Controller", func() {
 			err = k8sClient.Get(ctx, types.NamespacedName{Name: "test-llm", Namespace: "default"}, llm)
 			if err == nil {
 				Expect(k8sClient.Delete(ctx, llm)).To(Succeed())
+			}
+
+			By("Cleanup the test Tool")
+			tool := &kubechainv1alpha1.Tool{}
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: "add", Namespace: "default"}, tool)
+			if err == nil {
+				Expect(k8sClient.Delete(ctx, tool)).To(Succeed())
 			}
 
 			By("Cleanup the test Agent")
@@ -219,7 +270,7 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedTaskRun.Status.Ready).To(BeTrue())
 			Expect(updatedTaskRun.Status.Status).To(Equal("Ready"))
-			Expect(updatedTaskRun.Status.StatusDetail).To(Equal("LLM response received"))
+			Expect(updatedTaskRun.Status.StatusDetail).To(Equal("LLM final response received"))
 			Expect(updatedTaskRun.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunPhaseFinalAnswer))
 
 			By("checking that LLM final answer event was created")
@@ -391,6 +442,105 @@ var _ = Describe("TaskRun Controller", func() {
 					return false
 				}
 			}, 5*time.Second, 100*time.Millisecond).Should(BeTrue(), "Expected to find waiting event")
+		})
+
+		It("should pass tools correctly to OpenAI and handle tool calls", func() {
+			By("creating the taskrun")
+			taskRun := &kubechainv1alpha1.TaskRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      taskRunName,
+					Namespace: "default",
+				},
+				Spec: kubechainv1alpha1.TaskRunSpec{
+					TaskRef: kubechainv1alpha1.LocalObjectReference{
+						Name: taskName,
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, taskRun)).To(Succeed())
+
+			By("creating a mock OpenAI client that validates tools and returns tool calls")
+			mockClient := &llmclient.MockOpenAIClient{
+				Response: &openai.ChatCompletionMessage{
+					ToolCalls: []openai.ChatCompletionMessageToolCall{
+						{
+							ID:   "call_123",
+							Type: openai.ChatCompletionMessageToolCallTypeFunction,
+							Function: openai.ChatCompletionMessageToolCallFunction{
+								Name:      "add",
+								Arguments: `{"a": 1, "b": 2}`,
+							},
+						},
+					},
+				},
+				ValidateTools: func(tools []openai.ChatCompletionToolParam) error {
+					Expect(tools).To(HaveLen(1))
+					Expect(tools[0].Type.Value).To(Equal(openai.ChatCompletionToolTypeFunction))
+					Expect(tools[0].Function.Value.Name.Value).To(Equal("add"))
+					Expect(tools[0].Function.Value.Description.Value).To(Equal("add two numbers"))
+					// Verify parameters were passed correctly
+					Expect(tools[0].Function.Value.Parameters.Value).To(Equal(openai.FunctionParameters{
+						"type": "object",
+						"properties": map[string]interface{}{
+							"a": map[string]interface{}{
+								"type": "number",
+							},
+							"b": map[string]interface{}{
+								"type": "number",
+							},
+						},
+						"required": []interface{}{"a", "b"},
+					}))
+					return nil
+				},
+			}
+
+			By("reconciling the taskrun")
+			eventRecorder := record.NewFakeRecorder(10)
+			reconciler := &TaskRunReconciler{
+				Client:   k8sClient,
+				Scheme:   k8sClient.Scheme(),
+				recorder: eventRecorder,
+				newLLMClient: func(apiKey string) (llmclient.OpenAIClient, error) {
+					return mockClient, nil
+				},
+			}
+
+			// First reconciliation - should set ReadyForLLM phase
+			_, err := reconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      taskRunName,
+					Namespace: "default",
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("checking initial taskrun status")
+			updatedTaskRun := &kubechainv1alpha1.TaskRun{}
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: taskRunName, Namespace: "default"}, updatedTaskRun)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedTaskRun.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunPhaseReadyForLLM))
+			Expect(updatedTaskRun.Status.ContextWindow).To(HaveLen(2)) // System + User message
+
+			By("reconciling the taskrun again")
+			// Second reconciliation - should send to LLM and get tool calls
+			_, err = reconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      taskRunName,
+					Namespace: "default",
+				},
+			})
+			Expect(err).To(HaveOccurred()) // We expect an error because tool calls are not implemented yet
+			Expect(err.Error()).To(Equal("ToolCalls not implemented"))
+
+			By("checking that the taskrun status was updated correctly")
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: taskRunName, Namespace: "default"}, updatedTaskRun)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedTaskRun.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunPhaseToolCallsPending))
+			Expect(updatedTaskRun.Status.ContextWindow).To(HaveLen(3)) // System + User message + Assistant message with tool calls
+			Expect(updatedTaskRun.Status.ContextWindow[2].ToolCalls).To(HaveLen(1))
+			Expect(updatedTaskRun.Status.ContextWindow[2].ToolCalls[0].Function.Name).To(Equal("add"))
+			Expect(updatedTaskRun.Status.ContextWindow[2].ToolCalls[0].Function.Arguments).To(Equal(`{"a": 1, "b": 2}`))
 		})
 	})
 })

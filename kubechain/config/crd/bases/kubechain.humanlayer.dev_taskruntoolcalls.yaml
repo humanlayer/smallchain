@@ -107,12 +107,26 @@ spec:
                 - Succeeded
                 - Failed
                 type: string
+              ready:
+                description: Ready indicates if the tool call is ready to be executed
+                type: boolean
               result:
                 description: Result contains the result of the tool call if completed
                 type: string
               startTime:
                 description: StartTime is when the tool call started
                 format: date-time
+                type: string
+              status:
+                description: Status indicates the current status of the tool call
+                enum:
+                - Ready
+                - Error
+                - Pending
+                type: string
+              statusDetail:
+                description: StatusDetail provides additional details about the current
+                  status
                 type: string
             type: object
         type: object

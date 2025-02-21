@@ -42,7 +42,17 @@ type AgentStatus struct {
 
 	// ValidTools is the list of tools that were successfully validated
 	// +optional
-	ValidTools []string `json:"validTools,omitempty"`
+	ValidTools []ResolvedTool `json:"validTools,omitempty"`
+}
+
+type ResolvedTool struct {
+	// +kubebuilder:validation:Enum=Tool;ToolSet
+	// +kubebuilder:validation:Required
+	Kind string `json:"kind"`
+
+	// Name of the tool
+	// +kubebuilder:validation:Required
+	Name string `json:"name"`
 }
 
 // +kubebuilder:object:root=true
