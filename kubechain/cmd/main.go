@@ -39,7 +39,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
-	"github.com/humanlayer/smallchain/kubechain/internal/controller"
+	agentcontroller "github.com/humanlayer/smallchain/kubechain/internal/controller/agent"
+	llmcontroller "github.com/humanlayer/smallchain/kubechain/internal/controller/llm"
+	taskcontroller "github.com/humanlayer/smallchain/kubechain/internal/controller/task"
+	taskruncontroller "github.com/humanlayer/smallchain/kubechain/internal/controller/taskrun"
+	taskruntoolcallcontroller "github.com/humanlayer/smallchain/kubechain/internal/controller/taskruntoolcall"
+	toolcontroller "github.com/humanlayer/smallchain/kubechain/internal/controller/tool"
 	"github.com/humanlayer/smallchain/kubechain/internal/otel"
 	// +kubebuilder:scaffold:imports
 )
@@ -219,7 +224,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controller.LLMReconciler{
+	if err = (&llmcontroller.LLMReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
@@ -227,7 +232,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controller.ToolReconciler{
+	if err = (&toolcontroller.ToolReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
@@ -235,7 +240,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controller.AgentReconciler{
+	if err = (&agentcontroller.AgentReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
@@ -243,7 +248,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controller.TaskReconciler{
+	if err = (&taskcontroller.TaskReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
@@ -251,11 +256,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controller.TaskRunReconciler{
+	if err = (&taskruncontroller.TaskRunReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "TaskRun")
+		os.Exit(1)
+	}
+
+	if err = (&taskruntoolcallcontroller.TaskRunToolCallReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "TaskRunToolCall")
 		os.Exit(1)
 	}
 
