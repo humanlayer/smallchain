@@ -137,12 +137,11 @@ spec:
                       - assistant
                       - tool
                       type: string
-                    tool_call_id:
-                      description: |-
-                        for role tool
-                        ToolCallID is the unique identifier for this tool call
+                    toolCallId:
+                      description: ToolCallID is the unique identifier for this tool
+                        call
                       type: string
-                    tool_calls:
+                    toolCalls:
                       description: ToolCalls contains any tool calls requested by
                         this message
                       items:

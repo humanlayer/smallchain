@@ -2,7 +2,6 @@ package controller
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -16,9 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
-	"github.com/openai/openai-go"
 
-	"github.com/humanlayer/smallchain/kubechain/internal/adapters"
 	"github.com/humanlayer/smallchain/kubechain/internal/llmclient"
 )
 
@@ -27,7 +24,7 @@ type TaskRunReconciler struct {
 	client.Client
 	Scheme       *runtime.Scheme
 	recorder     record.EventRecorder
-	newLLMClient func(apiKey string) (llmclient.RawOpenAIClient, error)
+	newLLMClient func(apiKey string) (llmclient.OpenAIClient, error)
 }
 
 // getTask fetches the parent Task for this TaskRun
@@ -246,7 +243,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 
-	var tools []openai.ChatCompletionToolParam
+	var tools []llmclient.Tool
 	// Get the tools from the agent's ValidTools
 	for _, toolName := range agent.Status.ValidTools {
 		tool := &kubechainv1alpha1.Tool{}
@@ -258,31 +255,13 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			logger.Error(err, "Failed to get Tool", "tool", toolName)
 			continue
 		}
+		toolParam := llmclient.FromKubechainTool(*tool)
 
-		// Convert the tool's arguments to a JSON schema
-		toolParam := openai.ChatCompletionToolParam{
-			Type: openai.F(openai.ChatCompletionToolTypeFunction),
-			Function: openai.F(openai.FunctionDefinitionParam{
-				Name:        openai.F(tool.Spec.Name),
-				Description: openai.F(tool.Spec.Description),
-			}),
-		}
-
-		// If the tool has arguments defined, add them to the function definition
-		if tool.Spec.Parameters.Raw != nil {
-			var parameters openai.FunctionParameters
-			if err := json.Unmarshal(tool.Spec.Parameters.Raw, &parameters); err != nil {
-				logger.Error(err, "Failed to unmarshal tool arguments", "tool", toolName)
-				continue
-			}
-			toolParam.Function.Value.Parameters = openai.F(parameters)
-		}
-
-		tools = append(tools, toolParam)
+		tools = append(tools, *toolParam)
 	}
 
 	// Send the prompt to the LLM using the OpenAI client.
-	output, err := llmClient.SendRequest(ctx, agent.Spec.System, task.Spec.Message, tools)
+	output, err := llmClient.SendRequest(ctx, taskRun.Status.ContextWindow, tools)
 	if err != nil {
 		logger.Error(err, "LLM request failed")
 		statusUpdate.Status.Ready = false
@@ -298,15 +277,13 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 
+	statusUpdate.Status.ContextWindow = append(statusUpdate.Status.ContextWindow, *output)
+
 	if output.Content != "" {
 		// final answer branch
 		statusUpdate.Status.Output = output.Content
 		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseFinalAnswer
 		statusUpdate.Status.Ready = true
-		statusUpdate.Status.ContextWindow = append(statusUpdate.Status.ContextWindow, kubechainv1alpha1.Message{
-			Role:    "assistant",
-			Content: output.Content,
-		})
 		statusUpdate.Status.Status = "Ready"
 		statusUpdate.Status.StatusDetail = "LLM final response received"
 		statusUpdate.Status.Error = ""
@@ -315,10 +292,6 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		// tool call branch: create TaskRunToolCall objects for each tool call returned by the LLM.
 		statusUpdate.Status.Output = ""
 		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseToolCallsPending
-		statusUpdate.Status.ContextWindow = append(statusUpdate.Status.ContextWindow, kubechainv1alpha1.Message{
-			Role:      "assistant",
-			ToolCalls: adapters.CastOpenAIToolCallsToKubechain(output.ToolCalls),
-		})
 		statusUpdate.Status.Ready = true
 		statusUpdate.Status.Status = "Ready"
 		statusUpdate.Status.StatusDetail = "LLM response received, tool calls pending"
@@ -393,7 +366,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 func (r *TaskRunReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.recorder = mgr.GetEventRecorderFor("taskrun-controller")
 	if r.newLLMClient == nil {
-		r.newLLMClient = llmclient.NewOpenAIClient
+		r.newLLMClient = llmclient.NewRawOpenAIClient
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&kubechainv1alpha1.TaskRun{}).

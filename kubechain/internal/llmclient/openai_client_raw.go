@@ -12,7 +12,7 @@ import (
 )
 
 // OpenAIClient interface for mocking in tests
-type RawOpenAIClient interface {
+type OpenAIClient interface {
 	SendRequest(ctx context.Context, messages []v1alpha1.Message, tools []Tool) (*v1alpha1.Message, error)
 }
 
@@ -126,8 +126,8 @@ type chatCompletionResponse struct {
 	} `json:"choices"`
 }
 
-// NewRawOpenAIClient creates a new OpenAI client
-func NewRawOpenAIClient(apiKey string) (RawOpenAIClient, error) {
+// NewOpenAIClient creates a new OpenAI client
+func NewRawOpenAIClient(apiKey string) (OpenAIClient, error) {
 	return &rawOpenAIClient{apiKey: apiKey}, nil
 }
 
