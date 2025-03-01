@@ -144,7 +144,7 @@ var _ = Describe("TaskRun Controller", func() {
 					AgentRef: kubechainv1alpha1.LocalObjectReference{
 						Name: agentName,
 					},
-					Message: "what is 2 + 2?",
+					Message: "What state is San Francisco in?",
 				},
 			}
 			Expect(k8sClient.Create(ctx, task)).To(Succeed())
@@ -202,7 +202,7 @@ var _ = Describe("TaskRun Controller", func() {
 			}
 		})
 
-		It("should progress through phases correctly", func() {
+		It("should progress through the taskrun lifecycle for a simple task with no tools", func() {
 			By("creating the taskrun")
 			taskRun := &kubechainv1alpha1.TaskRun{
 				ObjectMeta: metav1.ObjectMeta{
@@ -218,13 +218,20 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(k8sClient.Create(ctx, taskRun)).To(Succeed())
 
 			By("reconciling the taskrun")
+			mockClient := &llmclient.MockRawOpenAIClient{
+				Response: &llmclient.Message{
+					Role:    "assistant",
+					Content: "San Francisco is in California",
+				},
+			}
+
 			eventRecorder := record.NewFakeRecorder(10)
 			reconciler := &TaskRunReconciler{
 				Client:   k8sClient,
 				Scheme:   k8sClient.Scheme(),
 				recorder: eventRecorder,
-				newLLMClient: func(apiKey string) (llmclient.OpenAIClient, error) {
-					return &llmclient.MockOpenAIClient{}, nil
+				newLLMClient: func(apiKey string) (llmclient.RawOpenAIClient, error) {
+					return mockClient, nil
 				},
 			}
 
@@ -266,7 +273,7 @@ var _ = Describe("TaskRun Controller", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			By("checking final taskrun status")
+			By("checking post-LLM taskrun status")
 			err = k8sClient.Get(ctx, types.NamespacedName{Name: taskRunName, Namespace: "default"}, updatedTaskRun)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedTaskRun.Status.Ready).To(BeTrue())
@@ -274,7 +281,7 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(updatedTaskRun.Status.StatusDetail).To(Equal("LLM final response received"))
 			Expect(updatedTaskRun.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunPhaseFinalAnswer))
 
-			By("checking that LLM final answer event was created")
+			By("checking that LLM event was created")
 			Eventually(func() bool {
 				select {
 				case event := <-eventRecorder.Events:

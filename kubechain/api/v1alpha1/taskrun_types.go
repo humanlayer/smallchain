@@ -31,6 +31,16 @@ type Message struct {
 	// ToolCalls contains any tool calls requested by this message
 	// +optional
 	ToolCalls []ToolCall `json:"toolCalls,omitempty"`
+
+	// for role tool
+
+	// ToolCallID is the unique identifier for this tool call
+	// +optional
+	ToolCallID string `json:"toolCallId,omitempty"`
+
+	// Name is the name of the tool call
+	// +optional
+	Name string `json:"name,omitempty"`
 }
 
 // ToolCall represents a request to call a tool

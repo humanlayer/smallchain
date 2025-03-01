@@ -125,6 +125,9 @@ spec:
                     content:
                       description: Content is the message content
                       type: string
+                    name:
+                      description: Name is the name of the tool call
+                      type: string
                     role:
                       description: Role is the role of the message sender (system,
                         user, assistant, tool)
@@ -134,7 +137,12 @@ spec:
                       - assistant
                       - tool
                       type: string
-                    toolCalls:
+                    tool_call_id:
+                      description: |-
+                        for role tool
+                        ToolCallID is the unique identifier for this tool call
+                      type: string
+                    tool_calls:
                       description: ToolCalls contains any tool calls requested by
                         this message
                       items:

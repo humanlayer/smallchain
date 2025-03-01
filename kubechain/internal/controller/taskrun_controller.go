@@ -27,7 +27,7 @@ type TaskRunReconciler struct {
 	client.Client
 	Scheme       *runtime.Scheme
 	recorder     record.EventRecorder
-	newLLMClient func(apiKey string) (llmclient.OpenAIClient, error)
+	newLLMClient func(apiKey string) (llmclient.RawOpenAIClient, error)
 }
 
 // getTask fetches the parent Task for this TaskRun
