@@ -10,7 +10,7 @@ import (
 
 // OpenAIClient interface for mocking in tests
 type OpenAIClient interface {
-	SendRequest(ctx context.Context, systemPrompt string, userMessage string, tools []openai.ChatCompletionToolParam) (*openai.ChatCompletionMessage, error)
+	SendRequest(ctx context.Context, messages []openai.ChatCompletionMessageParamUnion, tools []openai.ChatCompletionToolParam) (*openai.ChatCompletionMessage, error)
 }
 
 type realOpenAIClient struct {
@@ -26,14 +26,11 @@ func NewOpenAIClient(apiKey string) (OpenAIClient, error) {
 	return &realOpenAIClient{openai: client}, nil
 }
 
-func (c *realOpenAIClient) SendRequest(ctx context.Context, systemPrompt string, userMessage string, tools []openai.ChatCompletionToolParam) (*openai.ChatCompletionMessage, error) {
+func (c *realOpenAIClient) SendRequest(ctx context.Context, messages []openai.ChatCompletionMessageParamUnion, tools []openai.ChatCompletionToolParam) (*openai.ChatCompletionMessage, error) {
 	params := openai.ChatCompletionNewParams{
-		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
-			openai.SystemMessage(systemPrompt),
-			openai.UserMessage(userMessage),
-		}),
-		Model: openai.F(openai.ChatModelGPT4o),
-		Tools: openai.F(tools),
+		Messages: openai.F(messages),
+		Model:    openai.F(openai.ChatModelGPT4o),
+		Tools:    openai.F(tools),
 	}
 
 	// Only add tools if non-empty

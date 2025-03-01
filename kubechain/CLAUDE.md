@@ -33,8 +33,51 @@ KubeChain is a Kubernetes Operator that orchestrates AI agents in a distributed 
 - **Task**: User requests targeting an agent with input and metadata
 - **TaskRun**: Execution instance with conversation context, tool calls, and results
 
+## Resource Status Pattern
+Resources follow a consistent status pattern:
+- Ready: Boolean indicating if resource is ready
+- Status: Enum with values "Ready", "Error", or "Pending"
+- StatusDetail: Detailed message about the current status
+- Events: Emit events for validation success/failure and significant state changes
+
+Events:
+- ValidationSucceeded: When resource validation passes
+- ValidationFailed: When resource validation fails
+- ResourceCreated: When child resources are created (e.g. TaskRunCreated)
+
 ## TaskRun Phase Progression
-Pending → ReadyForLLM → ToolCallsPending/FinalAnswer
+TaskRun phases progress through:
+1. Pending (initial state)
+2. SendContextWindowToLLM (locks the resource)
+3. ToolCallsPending
+4. FinalAnswer
+
+## Testing Patterns
+- Use interfaces to abstract external service clients
+- Inject client factories into controllers for easy mocking
+- Mock clients should return predictable responses
+- Example:
+```go
+type Client interface {
+  DoSomething() error
+}
+
+type Controller struct {
+  newClient func() Client  // factory function for easy mocking
+}
+```
+
+## Build Optimizations
+Docker builds use BuildKit caching:
+- Enable with DOCKER_BUILDKIT=1
+- Cache Go module downloads with `--mount=type=cache,target=/go/pkg/mod`
+- Cache Go build cache with `--mount=type=cache,target=/root/.cache/go-build`
+
+## Development Guidelines
+- ALWAYS update resume-kubechain-operator.md with progress and next steps before making changes
+- NEVER run the `kind` CLI directly
+- DO NOT try to port-forward to Grafana or check the OTEL stack directly
+- DO NOT use `cat <<EOF` to generate files, edit files directly instead
 
 ## Current Development Status
 - TaskRun controller can send messages to LLM
