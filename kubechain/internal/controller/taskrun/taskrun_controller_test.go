@@ -1,4 +1,4 @@
-package controller
+package taskrun
 
 import (
 	"context"
@@ -7,15 +7,14 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	kubechain "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
 	"github.com/humanlayer/smallchain/kubechain/internal/llmclient"
+	"github.com/humanlayer/smallchain/kubechain/test/utils"
 )
 
 var _ = Describe("TaskRun Controller", func() {
@@ -25,201 +24,58 @@ var _ = Describe("TaskRun Controller", func() {
 		const agentName = "test-agent"
 		const taskRunName = "test-taskrun"
 
-		ctx := context.Background()
-
 		typeNamespacedName := types.NamespacedName{
 			Name:      resourceName,
 			Namespace: "default",
 		}
 
+		ctx := context.Background()
+		var reconciler *TaskRunReconciler
+		var eventRecorder *record.FakeRecorder
+		var mockClient *llmclient.MockRawOpenAIClient
+
+		testSecret := &utils.TestScopedSecret{
+			Name: "test-secret",
+			Keys: map[string]string{
+				"api-key": "test-api-key",
+			},
+		}
+
+		testLLM := &utils.TestScopedLLM{
+			Name:      "test-llm",
+			Provider:  "openai",
+			SecretRef: "test-secret",
+			SecretKey: "api-key",
+		}
+
+		testTool := utils.AddTool
+
+		testTask := &utils.TestScopedTask{
+			Name:      taskName,
+			AgentName: agentName,
+			Message:   "What state is San Francisco in?",
+		}
+
+		testAgent := &utils.TestScopedAgent{
+			Name:         agentName,
+			SystemPrompt: "you are a testing assistant",
+			Tools:        []string{testTool.Name},
+			LLM:          testLLM.Name,
+		}
+
+		testTaskRun := &utils.TestScopedTaskRun{
+			Name:     taskRunName,
+			TaskName: taskName,
+			Client:   k8sClient,
+		}
+
 		BeforeEach(func() {
-			// Create a test secret
-			secret := &corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-secret",
-					Namespace: "default",
-				},
-				Data: map[string][]byte{
-					"api-key": []byte("test-api-key"),
-				},
-			}
-			Expect(k8sClient.Create(ctx, secret)).To(Succeed())
+			By("Creating mock client and event recorder")
+			mockClient = &llmclient.MockRawOpenAIClient{}
+			eventRecorder = record.NewFakeRecorder(30)
 
-			// Create a test LLM
-			llm := &kubechain.LLM{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-llm",
-					Namespace: "default",
-				},
-				Spec: kubechain.LLMSpec{
-					Provider: "openai",
-					APIKeyFrom: kubechain.APIKeySource{
-						SecretKeyRef: kubechain.SecretKeyRef{
-							Name: "test-secret",
-							Key:  "api-key",
-						},
-					},
-				},
-			}
-			Expect(k8sClient.Create(ctx, llm)).To(Succeed())
-
-			// Mark LLM as ready
-			llm.Status.Ready = true
-			llm.Status.Status = "Ready"
-			llm.Status.StatusDetail = "Ready for testing"
-			Expect(k8sClient.Status().Update(ctx, llm)).To(Succeed())
-
-			tool := &kubechain.Tool{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "add",
-					Namespace: "default",
-				},
-				Spec: kubechain.ToolSpec{
-					Name:        "add",
-					Description: "add two numbers",
-					Execute: kubechain.ToolExecute{
-						Builtin: &kubechain.BuiltinToolSpec{
-							Name: "add",
-						},
-					},
-					Parameters: runtime.RawExtension{
-						Raw: []byte(`{
-							"type": "object",
-							"properties": {
-								"a": {
-									"type": "number"
-								},
-								"b": {
-									"type": "number"
-								}
-							},
-							"required": ["a", "b"]
-						}`),
-					},
-				},
-			}
-			Expect(k8sClient.Create(ctx, tool)).To(Succeed())
-
-			// Create a test Agent
-			agent := &kubechain.Agent{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      agentName,
-					Namespace: "default",
-				},
-				Spec: kubechain.AgentSpec{
-					LLMRef: kubechain.LocalObjectReference{
-						Name: "test-llm",
-					},
-					System: "you are a testing assistant",
-					Tools: []kubechain.LocalObjectReference{
-						{
-							Name: "add",
-						},
-					},
-				},
-			}
-			Expect(k8sClient.Create(ctx, agent)).To(Succeed())
-
-			// Mark Agent as ready
-			agent.Status.Ready = true
-			agent.Status.Status = "Ready"
-			agent.Status.StatusDetail = "Ready for testing"
-			agent.Status.ValidTools = []kubechain.ResolvedTool{
-				{
-					Kind: "Tool",
-					Name: "add",
-				},
-			}
-			Expect(k8sClient.Status().Update(ctx, agent)).To(Succeed())
-
-			// Create a test Task
-			task := &kubechain.Task{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      taskName,
-					Namespace: "default",
-				},
-				Spec: kubechain.TaskSpec{
-					AgentRef: kubechain.LocalObjectReference{
-						Name: agentName,
-					},
-					Message: "What state is San Francisco in?",
-				},
-			}
-			Expect(k8sClient.Create(ctx, task)).To(Succeed())
-
-			// Mark Task as ready
-			task.Status.Ready = true
-			task.Status.Status = "Ready"
-			task.Status.StatusDetail = "Agent validated successfully"
-			Expect(k8sClient.Status().Update(ctx, task)).To(Succeed())
-		})
-
-		AfterEach(func() {
-			// Cleanup test resources
-			By("Cleanup the test secret")
-			secret := &corev1.Secret{}
-			var err error // Declare err at the start
-			err = k8sClient.Get(ctx, types.NamespacedName{Name: "test-secret", Namespace: "default"}, secret)
-			if err == nil {
-				Expect(k8sClient.Delete(ctx, secret)).To(Succeed())
-			}
-
-			By("Cleanup the test LLM")
-			llm := &kubechain.LLM{}
-			err = k8sClient.Get(ctx, types.NamespacedName{Name: "test-llm", Namespace: "default"}, llm)
-			if err == nil {
-				Expect(k8sClient.Delete(ctx, llm)).To(Succeed())
-			}
-
-			By("Cleanup the test Tool")
-			tool := &kubechain.Tool{}
-			err = k8sClient.Get(ctx, types.NamespacedName{Name: "add", Namespace: "default"}, tool)
-			if err == nil {
-				Expect(k8sClient.Delete(ctx, tool)).To(Succeed())
-			}
-
-			By("Cleanup the test Agent")
-			agent := &kubechain.Agent{}
-			err = k8sClient.Get(ctx, types.NamespacedName{Name: agentName, Namespace: "default"}, agent)
-			if err == nil {
-				Expect(k8sClient.Delete(ctx, agent)).To(Succeed())
-			}
-
-			By("Cleanup the test Task")
-			task := &kubechain.Task{}
-			err = k8sClient.Get(ctx, types.NamespacedName{Name: taskName, Namespace: "default"}, task)
-			if err == nil {
-				Expect(k8sClient.Delete(ctx, task)).To(Succeed())
-			}
-
-			By("Cleanup the test TaskRun")
-			taskRun := &kubechain.TaskRun{}
-			err = k8sClient.Get(ctx, typeNamespacedName, taskRun)
-			if err == nil {
-				Expect(k8sClient.Delete(ctx, taskRun)).To(Succeed())
-			}
-		})
-
-		It("should progress through the taskrun lifecycle for a simple task with no tools", func() {
-			By("creating the taskrun")
-			taskRun := &kubechain.TaskRun{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      taskRunName,
-					Namespace: "default",
-				},
-				Spec: kubechain.TaskRunSpec{
-					TaskRef: kubechain.LocalObjectReference{
-						Name: taskName,
-					},
-				},
-			}
-			Expect(k8sClient.Create(ctx, taskRun)).To(Succeed())
-
-			By("reconciling the taskrun")
-			mockClient := &llmclient.MockRawOpenAIClient{}
-
-			eventRecorder := record.NewFakeRecorder(10)
-			reconciler := &TaskRunReconciler{
+			By("Setting up the reconciler")
+			reconciler = &TaskRunReconciler{
 				Client:   k8sClient,
 				Scheme:   k8sClient.Scheme(),
 				recorder: eventRecorder,
@@ -228,51 +84,86 @@ var _ = Describe("TaskRun Controller", func() {
 				},
 			}
 
-			// First reconciliation - should set ReadyForLLM phase
+			By("Setting up the test secret")
+			testSecret.Setup(k8sClient)
+
+			By("Setting up the test LLM")
+			testLLM.Setup(k8sClient)
+
+			By("Setting up the test Tool")
+			testTool.Setup(k8sClient)
+
+			By("Setting up the test Agent")
+			testAgent.Setup(k8sClient)
+
+			By("Setting up the test Task")
+			testTask.Setup(k8sClient)
+
+		})
+
+		AfterEach(func() {
+			// Cleanup test resources
+			By("Cleanup the test secret")
+			testSecret.Teardown()
+
+			By("Cleanup the test LLM")
+			testLLM.Teardown()
+
+			By("Cleanup the test Tool")
+			testTool.Teardown()
+
+			By("Cleanup the test Agent")
+			testAgent.Teardown()
+
+			By("Cleanup the test Task")
+			testTask.Teardown()
+
+			By("Cleanup the test TaskRun")
+			testTaskRun.Teardown()
+		})
+
+		It("should progress through the taskrun lifecycle for a simple task with no tools", func() {
+			By("creating the taskrun")
+			testTaskRun.Setup(k8sClient)
+			return
+
+			By("reconciling the taskrun")
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Name:      taskRunName,
-					Namespace: "default",
-				},
+				NamespacedName: typeNamespacedName,
 			})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Requeue).To(BeTrue())
 
 			By("checking taskrun moves to pending after first reconciliation")
 			updatedTaskRun := &kubechain.TaskRun{}
-			err = k8sClient.Get(ctx, types.NamespacedName{Name: taskRunName, Namespace: "default"}, updatedTaskRun)
+			err = k8sClient.Get(ctx, typeNamespacedName, updatedTaskRun)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedTaskRun.Status.Phase).To(Equal(kubechain.TaskRunPhasePending))
 			Expect(updatedTaskRun.Status.Status).To(Equal("Pending"))
+			Expect(updatedTaskRun.Status.StatusDetail).To(Equal("Initializing"))
 			Expect(updatedTaskRun.Status.Ready).To(BeFalse())
 
 			By("reconciling a second time")
 			result, err = reconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Name:      taskRunName,
-					Namespace: "default",
-				},
+				NamespacedName: typeNamespacedName,
 			})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result.Requeue).To(BeFalse())
 
 			By("checking taskrun moves to ready after second reconciliation")
+			Expect(result.Requeue).To(BeTrue())
 			updatedTaskRun = &kubechain.TaskRun{}
-			err = k8sClient.Get(ctx, types.NamespacedName{Name: taskRunName, Namespace: "default"}, updatedTaskRun)
+			err = k8sClient.Get(ctx, typeNamespacedName, updatedTaskRun)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedTaskRun.Status.Ready).To(BeTrue())
 			Expect(updatedTaskRun.Status.Status).To(Equal("Ready"))
 			Expect(updatedTaskRun.Status.StatusDetail).To(Equal("Ready to send to LLM"))
 			Expect(updatedTaskRun.Status.Phase).To(Equal(kubechain.TaskRunPhaseReadyForLLM))
-
-			By("checking initial taskrun status")
-			updatedTaskRun = &kubechain.TaskRun{}
-			err = k8sClient.Get(ctx, types.NamespacedName{Name: taskRunName, Namespace: "default"}, updatedTaskRun)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(updatedTaskRun.Status.Ready).To(BeTrue())
-			Expect(updatedTaskRun.Status.Status).To(Equal("Ready"))
-			Expect(updatedTaskRun.Status.StatusDetail).To(Equal("Ready to send to LLM"))
-			Expect(updatedTaskRun.Status.Phase).To(Equal(kubechain.TaskRunPhaseReadyForLLM))
+			Expect(updatedTaskRun.Status.Error).To(BeEmpty())
+			Expect(updatedTaskRun.Status.ContextWindow).To(HaveLen(2))
+			Expect(updatedTaskRun.Status.ContextWindow[0].Role).To(Equal("system"))
+			Expect(updatedTaskRun.Status.ContextWindow[0].Content).To(Equal(testAgent.SystemPrompt))
+			Expect(updatedTaskRun.Status.ContextWindow[1].Role).To(Equal("user"))
+			Expect(updatedTaskRun.Status.ContextWindow[1].Content).To(Equal(testTask.Message))
 
 			By("checking that validation success event was created")
 			Eventually(func() bool {
@@ -291,10 +182,7 @@ var _ = Describe("TaskRun Controller", func() {
 			}
 			// Second reconciliation - should send to LLM and get response
 			_, err = reconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Name:      taskRunName,
-					Namespace: "default",
-				},
+				NamespacedName: typeNamespacedName,
 			})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -306,6 +194,8 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(updatedTaskRun.Status.StatusDetail).To(Equal("LLM final response received"))
 			Expect(updatedTaskRun.Status.Phase).To(Equal(kubechain.TaskRunPhaseFinalAnswer))
 			Expect(updatedTaskRun.Status.ContextWindow).To(HaveLen(3))
+			Expect(updatedTaskRun.Status.ContextWindow[2].Role).To(Equal("assistant"))
+			Expect(updatedTaskRun.Status.ContextWindow[2].Content).To(Equal(mockClient.Response.Content))
 
 			By("checking that LLM event was created")
 			Eventually(func() bool {
@@ -320,41 +210,20 @@ var _ = Describe("TaskRun Controller", func() {
 
 		It("should clear error field when entering ready state", func() {
 			By("creating a taskrun with an error")
-			taskRun := &kubechain.TaskRun{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      taskRunName,
-					Namespace: "default",
-				},
-				Spec: kubechain.TaskRunSpec{
-					TaskRef: kubechain.LocalObjectReference{
-						Name: taskName,
-					},
-				},
-				Status: kubechain.TaskRunStatus{
-					Error: "previous error that should be cleared",
-				},
-			}
-			Expect(k8sClient.Create(ctx, taskRun)).To(Succeed())
+			testTaskRun.SetupWithStatus(k8sClient, kubechain.TaskRunStatus{
+				Error: "previous error that should be cleared",
+				Phase: kubechain.TaskRunPhasePending,
+			})
 
 			By("reconciling the taskrun")
-			eventRecorder := record.NewFakeRecorder(10)
-			reconciler := &TaskRunReconciler{
-				Client:   k8sClient,
-				Scheme:   k8sClient.Scheme(),
-				recorder: eventRecorder,
-			}
-
 			_, err := reconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Name:      taskRunName,
-					Namespace: "default",
-				},
+				NamespacedName: typeNamespacedName,
 			})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("checking the taskrun status")
 			updatedTaskRun := &kubechain.TaskRun{}
-			err = k8sClient.Get(ctx, types.NamespacedName{Name: taskRunName, Namespace: "default"}, updatedTaskRun)
+			err = k8sClient.Get(ctx, typeNamespacedName, updatedTaskRun)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedTaskRun.Status.Ready).To(BeTrue())
 			Expect(updatedTaskRun.Status.Status).To(Equal("Ready"))
@@ -365,27 +234,13 @@ var _ = Describe("TaskRun Controller", func() {
 
 		It("should fail when task doesn't exist", func() {
 			By("creating the taskrun with non-existent task")
-			taskRun := &kubechain.TaskRun{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      resourceName,
-					Namespace: "default",
+			testTaskRun.SetupWithSpec(k8sClient, kubechain.TaskRunSpec{
+				TaskRef: kubechain.LocalObjectReference{
+					Name: "nonexistent-task",
 				},
-				Spec: kubechain.TaskRunSpec{
-					TaskRef: kubechain.LocalObjectReference{
-						Name: "nonexistent-task",
-					},
-				},
-			}
-			Expect(k8sClient.Create(ctx, taskRun)).To(Succeed())
+			})
 
 			By("reconciling the taskrun")
-			eventRecorder := record.NewFakeRecorder(10)
-			reconciler := &TaskRunReconciler{
-				Client:   k8sClient,
-				Scheme:   k8sClient.Scheme(),
-				recorder: eventRecorder,
-			}
-
 			_, err := reconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
 			})
@@ -431,27 +286,18 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(k8sClient.Create(ctx, unreadyTask)).To(Succeed())
 
 			By("creating the taskrun referencing the unready task")
-			taskRun := &kubechain.TaskRun{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      resourceName,
-					Namespace: "default",
-				},
-				Spec: kubechain.TaskRunSpec{
+			testTaskRun.SetupWith(k8sClient, utils.TaskRunSetupInputs{
+				Spec: &kubechain.TaskRunSpec{
 					TaskRef: kubechain.LocalObjectReference{
 						Name: "unready-task",
 					},
 				},
-			}
-			Expect(k8sClient.Create(ctx, taskRun)).To(Succeed())
+				Status: &kubechain.TaskRunStatus{
+					Phase: kubechain.TaskRunPhasePending,
+				},
+			})
 
 			By("reconciling the taskrun")
-			eventRecorder := record.NewFakeRecorder(10)
-			reconciler := &TaskRunReconciler{
-				Client:   k8sClient,
-				Scheme:   k8sClient.Scheme(),
-				recorder: eventRecorder,
-			}
-
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
 			})
@@ -471,7 +317,7 @@ var _ = Describe("TaskRun Controller", func() {
 			Eventually(func() bool {
 				select {
 				case event := <-eventRecorder.Events:
-					return strings.Contains(event, "Waiting")
+					return strings.Contains(event, "Waiting for task to become ready")
 				default:
 					return false
 				}

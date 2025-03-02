@@ -1,4 +1,4 @@
-package controller
+package taskrun
 
 import (
 	"context"
@@ -83,7 +83,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			logger.Error(updateErr, "Failed to update TaskRun status")
 			return ctrl.Result{}, fmt.Errorf("failed to update taskrun status: %v", err)
 		}
-		return ctrl.Result{}, err
+		return ctrl.Result{RequeueAfter: 5 * time.Second}, err
 	}
 
 	// Check if task exists but is not ready
@@ -135,6 +135,8 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 	}
 
+	statusUpdate.Status.Ready = true
+
 	// deps validated, ready to build context window
 	if statusUpdate.Status.Phase == kubechainv1alpha1.TaskRunPhasePending {
 		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseReadyForLLM
@@ -152,7 +154,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		statusUpdate.Status.Status = "Ready"
 		statusUpdate.Status.StatusDetail = "Ready to send to LLM"
 		statusUpdate.Status.Error = "" // Clear any previous error
-		r.recorder.Event(&taskRun, corev1.EventTypeNormal, "ValidationSucceeded", "Task validated successfully")
+		r.recorder.Event(&taskRun, corev1.EventTypeNormal, "ValidationSucceeded", "TaskRun validated successfully")
 		if err := r.Status().Update(ctx, statusUpdate); err != nil {
 			logger.Error(err, "Failed to update TaskRun status")
 			return ctrl.Result{}, err
@@ -161,6 +163,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	// Only proceed with LLM request if we're in ReadyForLLM phase
+	// todo move below logic into the if block, flip condititional, and handle awaitingToolCalls
 	if taskRun.Status.Phase != kubechainv1alpha1.TaskRunPhaseReadyForLLM {
 		logger.Info("TaskRun not ready for LLM", "phase", taskRun.Status.Phase)
 		return ctrl.Result{}, nil
