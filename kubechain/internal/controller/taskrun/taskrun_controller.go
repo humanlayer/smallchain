@@ -72,18 +72,18 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// Get parent Task
 	task, err := r.getTask(ctx, &taskRun)
 	if err != nil {
-		logger.Error(err, "Task validation failed")
+		logger.Error(err, "Task not found")
 		statusUpdate.Status.Ready = false
 		statusUpdate.Status.Status = "Error"
-		statusUpdate.Status.StatusDetail = fmt.Sprintf("Task validation failed: %v", err)
+		statusUpdate.Status.StatusDetail = fmt.Sprintf("Task not found: %v", err)
 		statusUpdate.Status.Error = err.Error()
 		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseFailed
-		r.recorder.Event(&taskRun, corev1.EventTypeWarning, "ValidationFailed", err.Error())
+		r.recorder.Event(&taskRun, corev1.EventTypeWarning, "TaskNotFound", err.Error())
 		if updateErr := r.Status().Update(ctx, statusUpdate); updateErr != nil {
 			logger.Error(updateErr, "Failed to update TaskRun status")
 			return ctrl.Result{}, fmt.Errorf("failed to update taskrun status: %v", err)
 		}
-		return ctrl.Result{RequeueAfter: 5 * time.Second}, err
+		return ctrl.Result{}, err
 	}
 
 	// Check if task exists but is not ready
