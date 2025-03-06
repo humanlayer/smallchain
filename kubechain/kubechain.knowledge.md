@@ -82,7 +82,453 @@ kubectl get llm,tool,agent,task,taskrun
 
 ## Application archicecture
 
-### Example Application
+### Example Application w/ no delegation
+
+```yaml
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: LLM
+metadata:
+  name: gpt-4o
+spec:
+  provider: openai
+  apiKeyFrom:
+    secretKeyRef:
+      name: openai
+      key: OPENAI_API_KEY
+  config:
+    model: gpt-4o
+```
+
+```yaml
+---
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: Agent
+metadata:
+  name: calculator-operator
+spec:
+  llmRef:
+    name: gpt-4o
+  systemPrompt: |
+    You are a calculator operator.
+    You are responsible for calculating the result of a mathematical expression.
+  tools:
+    - name: add
+```
+
+```yaml
+---
+# a single inline tool
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: Tool
+metadata:
+  name: add
+spec:
+  name: add
+  description: Add two numbers
+  arguments:
+    type: object
+    properties:
+      a:
+        type: number
+      b:
+        type: number
+    required:
+      - a
+      - b
+  execute:
+    builtin:
+      name: add
+```
+
+```yaml
+
+---
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: Task
+metadata:
+  name: add-task
+spec:
+  launchImmediately: true # causes a TaskRun to be created immediately
+  agentRef:
+    name: calculator-operator
+  input:
+    # message is required
+    message: What is the result of 25 + 17?
+```
+
+this makes a taskRun
+
+```yaml
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: TaskRun
+metadata:
+  name: add-task-run-01
+spec:
+  taskRef:
+    name: add-task
+```
+
+The resource progresses through
+
+```yaml
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: TaskRun
+status:
+  phase: Pending
+
+```
+
+```yaml
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: TaskRun
+status:
+  phase: ReadyToSendToLLM
+  contextWindow:
+    - role: system
+      content: "you are a calculator operator"
+    - role: user
+      content: "What is the result of 25 + 17?"
+```
+
+send it to the LLM and then
+
+* * * 
+
+```yaml
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: TaskRun
+status:
+  phase: ToolCallsPending
+  contextWindow:
+    - role: system
+      content: "you are a calculator operator"
+    - role: user
+      content: "What is the result of 25 + 17?"
+    - role: assistant
+      content: ""
+      toolCalls:
+        function:
+          name: add
+          arguments: '{"x": 25, "y": 17}'
+        type: function
+        tool_call_id: "kldjflsdkjflsdfsd"
+```
+
+```
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: TaskRunRunToolCall
+spec: ...
+status:
+  phase: pending
+```
+
+* * *
+
+```yaml
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: TaskRun
+status:
+  phase: ToolCallsPending
+  contextWindow:
+    - role: system
+      content: "you are a calculator operator"
+    - role: user
+      content: "What is the result of 25 + 17?"
+    - role: assistant
+      content: ""
+      toolCalls:
+        function:
+          name: add
+          arguments: '{"x": 25, "y": 17}'
+        type: function
+        tool_call_id: "kldjflsdkjflsdfsd"
+```
+
+```yaml
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: TaskRunRunToolCall
+spec: ...
+status:
+  phase: Successful
+  result: 42
+```
+
+* * *
+
+```yaml
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: TaskRun
+status:
+  phase: ReadyForLLM
+  contextWindow:
+    - role: system
+      content: "you are a calculator operator"
+    - role: user
+      content: "What is the result of 25 + 17?"
+    - role: assistant
+      content: ""
+      toolCalls:
+        function:
+          name: add
+          arguments: '{"x": 25, "y": 17}'
+        type: function
+        tool_call_id: "kldjflsdkjflsdfsd"
+    - role: tool
+      content: "42"
+```
+* * *
+
+```yaml
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: TaskRun
+status:
+  phase: ReadyForLLM
+  contextWindow:
+    - role: system
+      content: "you are a calculator operator"
+    - role: user
+      content: "What is the result of 25 + 17?"
+    - role: assistant
+      content: ""
+      toolCalls:
+        function:
+          name: add
+          arguments: '{"x": 25, "y": 17}'
+        type: function
+        tool_call_id: "kldjflsdkjflsdfsd"
+    - role: tool
+      content: "42"
+    - role: assistant
+      
+```
+
+### Example Application w/ human approval
+
+```yaml
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: LLM
+metadata:
+  name: gpt-4o
+spec:
+  provider: openai
+  apiKeyFrom:
+    secretKeyRef:
+      name: openai
+      key: OPENAI_API_KEY
+  config:
+    model: gpt-4o
+```
+
+```yaml
+---
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: Agent
+metadata:
+  name: calculator-operator
+spec:
+  llmRef:
+    name: gpt-4o
+  systemPrompt: |
+    You are a calculator operator.
+    You are responsible for calculating the result of a mathematical expression.
+  tools:
+    - name: add
+```
+
+```yaml
+# a single inline tool
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: ContactChannel
+metadata:
+  name: channel
+spec:
+  humanLayerAPIKeyFrom:
+    secretKeyRef:
+      name: hl-keys
+
+```
+
+```yaml
+---
+# a single inline tool
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: Tool
+metadata:
+  name: add
+spec:
+  name: add
+  requireApproval:
+    contactChannelRef:
+      name: channel
+  description: Add two numbers
+  arguments:
+    type: object
+    properties:
+      a:
+        type: number
+      b:
+        type: number
+    required:
+      - a
+      - b
+  execute:
+    builtin:
+      name: add
+```
+
+```yaml
+
+---
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: Task
+metadata:
+  name: add-task
+spec:
+  launchImmediately: true # causes a TaskRun to be created immediately
+  agentRef:
+    name: calculator-operator
+  input:
+    # message is required
+    message: What is the result of 25 + 17?
+```
+
+this makes a taskRun
+
+```yaml
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: TaskRun
+metadata:
+  name: add-task-run-01
+spec:
+  taskRef:
+    name: add-task
+```
+
+The resource progresses through
+
+```yaml
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: TaskRun
+status:
+  phase: Pending
+
+```
+
+```yaml
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: TaskRun
+status:
+  phase: ReadyToSendToLLM
+  contextWindow:
+    - role: system
+      content: "you are a calculator operator"
+    - role: user
+      content: "What is the result of 25 + 17?"
+```
+
+send it to the LLM and then
+
+* * * 
+
+```yaml
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: TaskRun
+status:
+  phase: ToolCallsPending
+  contextWindow:
+    - role: system
+      content: "you are a calculator operator"
+    - role: user
+      content: "What is the result of 25 + 17?"
+    - role: assistant
+      content: ""
+      toolCalls:
+        function:
+          name: add
+          arguments: '{"x": 25, "y": 17}'
+        type: function
+        tool_call_id: "kldjflsdkjflsdfsd"
+```
+
+the below is wrong
+
+```yaml
+    Tool Calls:
+      Function:
+        Arguments:  {"fn": "add two numbers. 27 + 15"}
+        Name:       humanlayer-function-call
+      Id:           call_NVaPOhrkGOplArdsJPQXF9mI
+      Type:         function
+```
+
+we then create a
+
+```yaml
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: TaskRunRunToolCall
+spec: ...
+status:
+  phase: pending
+```
+
+then
+
+```yaml
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: TaskRunRunToolCall
+spec:
+  toolRef:
+    name: add
+  arguments:
+    x: 25
+    y: 17
+status:
+  phase: Awaiting Approval
+```
+
+then if approved
+
+```yaml
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: TaskRunRunToolCall
+spec:
+  toolRef:
+    name: add
+  arguments:
+    x: 25
+    y: 17
+status:
+  phase: Succesful
+  result: 42
+```
+
+
+```yaml
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: TaskRun
+status:
+  phase: ReadyForLLM
+  contextWindow:
+    - role: system
+      content: "you are a calculator operator"
+    - role: user
+      content: "What is the result of 25 + 17?"
+    - role: assistant
+      content: ""
+      toolCalls:
+        function:
+          name: add
+          arguments: '{"x": 25, "y": 17}'
+        type: function
+        tool_call_id: "kldjflsdkjflsdfsd"
+    - role: tool
+      content: "42"
+    - role: assistant
+      
+```
+
+
+### Example Application w/ delegation
 
 ```yaml
 apiVersion: kubechain.humanlayer.dev/v1alpha1

@@ -36,6 +36,8 @@
     "express-http-proxy": "^2.1.1",
     "get-all-links": "^1.0.2",
     "jsdom": "^22.1.0",
-    "request": "^2.88.2"
+    "request": "^2.88.2",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.7"
   }
 }
