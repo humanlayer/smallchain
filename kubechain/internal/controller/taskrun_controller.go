@@ -164,12 +164,23 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if taskRun.Status.Phase == kubechainv1alpha1.TaskRunPhaseToolCallsPending {
 		// List all tool calls owned by this TaskRun
 		var toolCalls kubechainv1alpha1.TaskRunToolCallList
+
 		if err := r.List(ctx, &toolCalls,
 			client.InNamespace(req.Namespace),
 			client.MatchingFields{"spec.taskRunRef.name": taskRun.Name},
 		); err != nil {
 			logger.Error(err, "Failed to list TaskRunToolCalls")
 			return ctrl.Result{}, err
+		}
+
+		logger.Info("Found tool calls", "count", len(toolCalls.Items))
+		for i, tc := range toolCalls.Items {
+			logger.Info("Tool call details",
+				"index", i,
+				"name", tc.Name,
+				"tool", tc.Spec.ToolRef.Name,
+				"phase", tc.Status.Phase,
+				"result", tc.Status.Result)
 		}
 
 		allCompleted := true
@@ -277,6 +288,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	llmClient, err := r.newLLMClient(apiKey)
+	logger.Info("Created LLM client", "client", llmClient)
 	if err != nil {
 		logger.Error(err, "Failed to create OpenAI client")
 		statusUpdate.Status.Ready = false
@@ -293,7 +305,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 	var tools []openai.ChatCompletionToolParam
 	// Get the tools from the agent's ValidTools
-	for _, toolName := range agent.Status.ValidTools {
+	for _, toolName := range agent.Spec.Tools {
 		tool := &kubechainv1alpha1.Tool{}
 		err := r.Get(ctx, client.ObjectKey{
 			Namespace: agent.Namespace,
@@ -335,11 +347,6 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		"userMessage", task.Spec.Message,
 		"toolCount", len(tools))
 
-	for i, tool := range tools {
-		logger.Info("Tool being sent to LLM",
-			"index", i,
-			"name", *&tool.Type)
-	}
 	output, err := llmClient.SendRequest(ctx, agent.Spec.System, task.Spec.Message, tools)
 	if err != nil {
 		logger.Error(err, "LLM request failed")
@@ -367,17 +374,6 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			"arguments", tc.Function.Arguments)
 	}
 	logger.Info("LLM call completed", "taskrun", taskRun.Name, "output", output)
-
-	// Check if we need to restore the original message (if we added tool results)
-	if strings.Contains(task.Spec.Message, "The following tool calls have been executed") {
-		// Extract the original message (what comes before the tool results)
-		originalMessage := strings.Split(task.Spec.Message, "The following tool calls have been executed")[0]
-		task.Spec.Message = strings.TrimSpace(originalMessage)
-		if err := r.Update(ctx, task); err != nil {
-			logger.Error(err, "Failed to restore original task message")
-			// Continue processing even if this fails
-		}
-	}
 
 	if output.Content != "" {
 		// Final answer branch
