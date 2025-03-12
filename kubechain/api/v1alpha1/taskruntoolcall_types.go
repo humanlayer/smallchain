@@ -7,15 +7,12 @@ import (
 // TaskRunToolCallSpec defines the desired state of TaskRunToolCall
 type TaskRunToolCallSpec struct {
 	// TaskRunRef references the parent TaskRun
-	// +kubebuilder:validation:Required
 	TaskRunRef LocalObjectReference `json:"taskRunRef"`
 
 	// ToolRef references the tool to execute
-	// +kubebuilder:validation:Required
 	ToolRef LocalObjectReference `json:"toolRef"`
 
 	// Arguments contains the arguments for the tool call
-	// +kubebuilder:validation:Required
 	Arguments string `json:"arguments"`
 }
 
