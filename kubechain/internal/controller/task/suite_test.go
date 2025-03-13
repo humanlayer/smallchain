@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controller
+package task
 
 import (
 	"context"
@@ -56,6 +56,7 @@ var _ = BeforeSuite(func() {
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "config", "crd", "bases")},
 		ErrorIfCRDPathMissing: true,
+		BinaryAssetsDirectory: filepath.Join("..", "..", "bin", "k8s", "1.32.0-darwin-arm64"),
 	}
 
 	var err error

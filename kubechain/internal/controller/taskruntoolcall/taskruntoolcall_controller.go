@@ -1,4 +1,4 @@
-package controller
+package taskruntoolcall
 
 import (
 	"context"
@@ -68,10 +68,16 @@ func (r *TaskRunToolCallReconciler) updateTaskRunToolCall(ctx context.Context, w
 		return fmt.Errorf("failed to get TaskRunToolCall: %w", err)
 	}
 
+	logger.Info("Webhook received",
+		"runID", webhook.RunID,
+		"status", webhook.Status,
+		"approved", *webhook.Status.Approved,
+		"comment", webhook.Status.Comment)
+
 	if webhook.Status != nil && webhook.Status.Approved != nil {
 		// Update the TaskRunToolCall status with the webhook data
 		if *webhook.Status.Approved {
-			trtc.Status.Result = fmt.Sprintf("Approved: %s", *webhook.Status.Comment)
+			trtc.Status.Result = "Approved"
 			trtc.Status.Phase = kubechainv1alpha1.TaskRunToolCallPhaseSucceeded
 			trtc.Status.Status = "Ready"
 			trtc.Status.StatusDetail = "Tool executed successfully"
@@ -207,11 +213,11 @@ func (r *TaskRunToolCallReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, err
 	} else if toolType == "function" {
 		// Parse the arguments string as JSON
-		var args map[string]float64
+		var args map[string]interface{}
 		if err := json.Unmarshal([]byte(trtc.Spec.Arguments), &args); err != nil {
-			logger.Error(err, "Failed to parse arguments as numeric values")
+			logger.Error(err, "Failed to parse arguments")
 			trtc.Status.Status = "Error"
-			trtc.Status.StatusDetail = "Invalid arguments: expected numeric values"
+			trtc.Status.StatusDetail = "Invalid arguments JSON"
 			trtc.Status.Error = err.Error()
 			r.recorder.Event(&trtc, corev1.EventTypeWarning, "ExecutionFailed", err.Error())
 			if err := r.Status().Update(ctx, &trtc); err != nil {
@@ -223,59 +229,56 @@ func (r *TaskRunToolCallReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 		logger.Info("Tool call arguments", "toolName", tool.Name, "arguments", args)
 
-		// Try to convert arguments - be more flexible with parameter names and types
-		var a, b float64
-		var err error
-
-		// Check for different possible parameter names and formats
-		if aVal, ok := args["a"]; ok {
-			a, err = convertToFloat(aVal)
-		} else if aVal, ok := args["first"]; ok {
-			a, err = convertToFloat(aVal)
-		} else if aVal, ok := args["num1"]; ok {
-			a, err = convertToFloat(aVal)
-		} else if aVal, ok := args["x"]; ok {
-			a, err = convertToFloat(aVal)
-		} else {
-			err = fmt.Errorf("missing first number parameter")
-		}
-
-		if err != nil {
-			logger.Error(err, "Failed to parse first argument")
-			// Error handling...
-			return ctrl.Result{}, err
-		}
-
-		if bVal, ok := args["b"]; ok {
-			b, err = convertToFloat(bVal)
-		} else if bVal, ok := args["second"]; ok {
-			b, err = convertToFloat(bVal)
-		} else if bVal, ok := args["num2"]; ok {
-			b, err = convertToFloat(bVal)
-		} else if bVal, ok := args["y"]; ok {
-			b, err = convertToFloat(bVal)
-		} else {
-			err = fmt.Errorf("missing second number parameter")
-		}
-
-		if err != nil {
-			logger.Error(err, "Failed to parse second argument")
-			// Error handling...
-			return ctrl.Result{}, err
-		}
-
-		// Execute the appropriate function
-		functionName := tool.Spec.Execute.Builtin.Name
 		var res float64
-
-		switch functionName {
+		// Replace the problematic section with this corrected version
+		switch tool.Spec.Execute.Builtin.Name {
 		case "add":
+			a, err1 := convertToFloat(args["a"])
+			b, err2 := convertToFloat(args["b"])
+			if err1 != nil {
+				logger.Error(err1, "Failed to parse first argument")
+				return ctrl.Result{}, err1
+			}
+			if err2 != nil {
+				logger.Error(err2, "Failed to parse second argument")
+				return ctrl.Result{}, err2
+			}
 			res = a + b
 		case "subtract":
+			a, err1 := convertToFloat(args["a"])
+			b, err2 := convertToFloat(args["b"])
+			if err1 != nil {
+				logger.Error(err1, "Failed to parse first argument")
+				return ctrl.Result{}, err1
+			}
+			if err2 != nil {
+				logger.Error(err2, "Failed to parse second argument")
+				return ctrl.Result{}, err2
+			}
 			res = a - b
 		case "multiply":
+			a, err1 := convertToFloat(args["a"])
+			b, err2 := convertToFloat(args["b"])
+			if err1 != nil {
+				logger.Error(err1, "Failed to parse first argument")
+				return ctrl.Result{}, err1
+			}
+			if err2 != nil {
+				logger.Error(err2, "Failed to parse second argument")
+				return ctrl.Result{}, err2
+			}
 			res = a * b
 		case "divide":
+			a, err1 := convertToFloat(args["a"])
+			b, err2 := convertToFloat(args["b"])
+			if err1 != nil {
+				logger.Error(err1, "Failed to parse first argument")
+				return ctrl.Result{}, err1
+			}
+			if err2 != nil {
+				logger.Error(err2, "Failed to parse second argument")
+				return ctrl.Result{}, err2
+			}
 			if b == 0 {
 				err := fmt.Errorf("division by zero")
 				logger.Error(err, "Division by zero")
@@ -291,7 +294,7 @@ func (r *TaskRunToolCallReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			}
 			res = a / b
 		default:
-			err := fmt.Errorf("unsupported builtin function %q", functionName)
+			err := fmt.Errorf("unsupported builtin function %q", tool.Spec.Execute.Builtin.Name)
 			logger.Error(err, "Unsupported builtin")
 			trtc.Status.Status = "Error"
 			trtc.Status.StatusDetail = err.Error()
@@ -383,9 +386,8 @@ func (r *TaskRunToolCallReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			}
 			return ctrl.Result{}, err
 		}
-		// And modify it to:
+
 		if len(argsMap) == 0 && tool.Name == "humanlayer-function-call" {
-			// RegisterClient adds the HumanLayer client to the external API registry
 			humanlayer.RegisterClient()
 
 			// Create kwargs map first to ensure it's properly initialized
@@ -451,15 +453,13 @@ func (r *TaskRunToolCallReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		}
 
 		// Make the API call
-		result, err := externalClient.Call(ctx, trtc.Name, callID, functionSpec)
+		_, err = externalClient.Call(ctx, trtc.Name, callID, functionSpec)
 		if err != nil {
 			logger.Error(err, "External API call failed")
-			// Error handling...
 			return ctrl.Result{}, err
 		}
 
 		// Update TaskRunToolCall with the result
-		trtc.Status.Result = string(result)
 		trtc.Status.Phase = kubechainv1alpha1.TaskRunToolCallPhaseSucceeded
 		trtc.Status.Status = "Ready"
 		trtc.Status.StatusDetail = "Tool executed successfully"
