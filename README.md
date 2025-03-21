@@ -74,6 +74,23 @@ make deploy-operator
 
 This command will build the operator, create necessary CRDs, and deploy the KubeChain components to your cluster.
 
+<details>
+<summary>With the kubechain cli</summary>
+
+You can install with brew:
+
+```bash
+brew install humanlayer/tap/kubechain
+```
+
+Or you can install with go:
+
+```bash
+kubechain deploy operator
+```
+
+</details>
+
 ### Creating Your First Agent
 
 1. **Define an LLM resource**
@@ -95,27 +112,64 @@ EOF
 
    Check the created LLM:
    
-   ```bash
-   kubectl get llm
-   ```
+```bash
+kubectl get llm
+```
    
    Output:
-   ```
-   NAME     PROVIDER   READY   STATUS
-   gpt-4o   openai     true    Ready
-   ```
+```
+NAME     PROVIDER   READY   STATUS
+gpt-4o   openai     true    Ready
+```
    
-   For more detailed information:
+<details>
+<summary>Using `-o wide` and `describe`</summary>
    
-   ```bash
-   kubectl get llm -o wide
-   ```
+```bash
+kubectl get llm -o wide
+```
    
    Output:
-   ```
-   NAME     PROVIDER   READY   STATUS   DETAIL
-   gpt-4o   openai     true    Ready    OpenAI API key validated successfully
-   ```
+```
+NAME     PROVIDER   READY   STATUS   DETAIL
+gpt-4o   openai     true    Ready    OpenAI API key validated successfully
+```
+
+```bash
+kubectl describe llm
+```
+
+Output:
+
+```
+Name:         gpt-4o
+Namespace:    default
+Labels:       <none>
+Annotations:  <none>
+API Version:  kubechain.humanlayer.dev/v1alpha1
+Kind:         LLM
+Metadata:
+  Creation Timestamp:  2025-03-21T20:18:17Z
+  Generation:          2
+  Resource Version:    1682222
+  UID:                 973098fb-2b8d-46b3-be49-81592e0b8f4e
+Spec:
+  API Key From:
+    Secret Key Ref:
+      Key:   OPENAI_API_KEY
+      Name:  openai
+  Provider:  openai
+Status:
+  Ready:          true
+  Status:         Ready
+  Status Detail:  OpenAI API key validated successfully
+Events:
+  Type    Reason               Age                 From            Message
+  ----    ------               ----                ----            -------
+  Normal  ValidationSucceeded  32m (x3 over 136m)  llm-controller  OpenAI API key validated successfully
+```
+
+</details>
 
 2. **Create an Agent resource**
 
@@ -141,11 +195,12 @@ kubectl get agent
    
    Output:
 ```
-NAME           LLM      READY   STATUS
-my-assistant   gpt-4o   true    Ready
+NAME           READY   STATUS
+my-assistant   true    Ready
 ```
    
-   For more detailed information:
+<details>
+<summary>Using `-o wide` and `describe`</summary>
    
 ```bash
 kubectl get agent -o wide
@@ -153,131 +208,258 @@ kubectl get agent -o wide
    
    Output:
 ```
-NAME          READY   STATUS   DETAIL
-my-assistant  true    Ready    All dependencies validated successfully
+NAME           READY   STATUS   DETAIL
+my-assistant   true    Ready    All dependencies validated successfully
 ```
+
+```bash
+kubectl describe agent
+```
+
+Output:
+
+```
+Name:         my-assistant
+Namespace:    default
+Labels:       <none>
+Annotations:  <none>
+API Version:  kubechain.humanlayer.dev/v1alpha1
+Kind:         Agent
+Metadata:
+  Creation Timestamp:  2025-03-21T22:06:27Z
+  Generation:          1
+  Resource Version:    1682754
+  UID:                 e389b3e5-c718-4abd-aa72-d4fc82c9b992
+Spec:
+  Llm Ref:
+    Name:  gpt-4o
+  System:  You are a helpful assistant. Your job is to help the user with their tasks.
+
+Status:
+  Ready:          true
+  Status:         Ready
+  Status Detail:  All dependencies validated successfully
+Events:
+  Type    Reason               Age                From              Message
+  ----    ------               ----               ----              -------
+  Normal  Initializing         64m                agent-controller  Starting validation
+  Normal  ValidationSucceeded  64m (x2 over 64m)  agent-controller  All dependencies validated successfully
+```
+
+</details>
 
 ### Running Your First Task
 
 1. **Create a Task resource**
 
-   ```bash
-   cat <<EOF | kubectl apply -f -
-   apiVersion: kubechain.humanlayer.dev/v1alpha1
-   kind: Task
-   metadata:
-     name: hello-world-task
-   spec:
-     agent: my-assistant
-     userMessage: "Say hello to the world using the echo tool"
-   EOF
-   ```
+```bash
+cat <<EOF | kubectl apply -f -
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: Task
+metadata:
+  name: hello-world-task
+spec:
+  agentRef:
+    name: my-assistant
+  message: "What is the capital of the moon?"
+EOF
+```
 
    Check the created Task:
    
-   ```bash
-   kubectl get task
-   ```
+```bash
+kubectl get task
+```
    
    Output:
-   ```
-   NAME               AGENT          READY   STATUS
-   hello-world-task   my-assistant   true    Ready
-   ```
+
+```
+NAME               READY   STATUS   AGENT          MESSAGE
+hello-world-task   true    Ready    my-assistant   What is the capital of the moon?
+```
    
-   For more detailed information:
+<details>
+<summary>Using `-o wide` and `describe`</summary>
    
-   ```bash
-   kubectl get task -o wide
-   ```
-
-2. **Create a TaskRun to execute the task**
-
-   ```bash
-   cat <<EOF | kubectl apply -f -
-   apiVersion: kubechain.humanlayer.dev/v1alpha1
-   kind: TaskRun
-   metadata:
-     name: hello-world-run
-   spec:
-     task: hello-world-task
-   EOF
-   ```
-
-### Monitoring Resources
-
-Monitor the progress of your TaskRun:
-
 ```bash
-kubectl get taskrun
+kubectl get task -o wide
 ```
 
 Output:
-```
-NAME              TASK               PHASE      AGE
-hello-world-run   hello-world-task   Running    30s
-```
-
-After completion:
 
 ```
-NAME              TASK               PHASE         AGE
-hello-world-run   hello-world-task   FinalAnswer   2m
+NAME               READY   STATUS   DETAIL             AGENT          MESSAGE                            OUTPUT
+hello-world-task   true    Ready    Task Run Created   my-assistant   What is the capital of the moon?
 ```
-
-For more detailed information:
 
 ```bash
-kubectl get taskrun -o wide
+kubectl describe task
 ```
 
-View the detailed output:
+Output:
+
+```
+ame:         hello-world-task
+Namespace:    default
+Labels:       <none>
+Annotations:  <none>
+API Version:  kubechain.humanlayer.dev/v1alpha1
+Kind:         Task
+Metadata:
+  Creation Timestamp:  2025-03-21T22:14:09Z
+  Generation:          1
+  Resource Version:    1683590
+  UID:                 8d0c7d4a-88db-4005-b212-a2c3a6956af3
+Spec:
+  Agent Ref:
+    Name:   my-assistant
+  Message:  What is the capital of the moon?
+Status:
+  Ready:          true
+  Status:         Ready
+  Status Detail:  Task Run Created
+Events:
+  Type    Reason               Age                From             Message
+  ----    ------               ----               ----             -------
+  Normal  Initializing         56m                task-controller  Starting validation
+  Normal  TaskRunCreated       56m                task-controller  Created TaskRun hello-world-task-1
+```
+
+</details>
+
+By default, creating a task will create an initial TaskRun to execute the task.
+
+For now, our task run should complete quickly and return a FinalAnswer.
 
 ```bash
-kubectl get taskrun hello-world-run -o yaml
+kubectl get taskrun 
 ```
 
-Sample output:
-```yaml
-apiVersion: kubechain.humanlayer.dev/v1alpha1
-kind: TaskRun
-metadata:
-  name: hello-world-run
-  namespace: default
-spec:
-  task: hello-world-task
-status:
-  completionTime: "2023-10-20T14:30:45Z"
-  messages:
-    - role: system
-      content: You are a helpful assistant. Your job is to help the user with their tasks.
-        You have access to a tool called simple-echo-tool that can echo messages back.
-    - role: user
-      content: Say hello to the world using the echo tool
-    - role: assistant
-      content: I'll help you say hello to the world using the echo tool.
-      toolCalls:
-        - id: call_01
-          type: function
-          function:
-            name: simple-echo-tool
-            arguments: '{"message":"Hello, World!"}'
-    - role: tool
-      toolCallId: call_01
-      content: 'Echo: Hello, World!'
-    - role: assistant
-      content: I've used the echo tool to say hello to the world. The response was "Echo: Hello, World!"
-  phase: FinalAnswer
-  startTime: "2023-10-20T14:30:30Z"
+Output:
+
+```
+NAME                 READY   STATUS   PHASE         TASK               PREVIEW   OUTPUT
+hello-world-task-1   true    Ready    FinalAnswer   hello-world-task             The Moon does not have a capital. It is a natural satellite of Earth and lacks any governmental structure or human habitation that would necessitate a capital city.
 ```
 
-Describe the TaskRun to see events and detailed status:
+### Inspecting the TaskRun more closely
+
+We saw above how you can get the status of a taskrun with `kubectl get taskrun`.
+
+For more detailed information, like to see the full context window, you can use:
 
 ```bash
-kubectl describe taskrun hello-world-run
+kubectl describe taskrun 
 ```
+
+```
+Name:         hello-world-task-1
+Namespace:    default
+Labels:       kubechain.humanlayer.dev/task=hello-world-task
+Annotations:  <none>
+API Version:  kubechain.humanlayer.dev/v1alpha1
+Kind:         TaskRun
+Metadata:
+  Creation Timestamp:  2025-03-21T22:14:09Z
+  Generation:          1
+  Owner References:
+    API Version:     kubechain.humanlayer.dev/v1alpha1
+    Controller:      true
+    Kind:            Task
+    Name:            hello-world-task
+    UID:             8d0c7d4a-88db-4005-b212-a2c3a6956af3
+  Resource Version:  1683602
+  UID:               53b1b69a-fb49-431b-857a-1cafe017a544
+Spec:
+  Task Ref:
+    Name:  hello-world-task
+Status:
+  Context Window:
+    Content:  You are a helpful assistant. Your job is to help the user with their tasks.
+
+    Role:         system
+    Content:      What is the capital of the moon?
+    Role:         user
+    Content:      The Moon does not have a capital. It is a natural satellite of Earth and lacks any governmental structure or human habitation that would necessitate a capital city.
+    Role:         assistant
+  Output:         The Moon does not have a capital. It is a natural satellite of Earth and lacks any governmental structure or human habitation that would necessitate a capital city.
+  Phase:          FinalAnswer
+  Ready:          true
+  Status:         Ready
+  Status Detail:  LLM final response received
+Events:
+  Type    Reason               Age   From                Message
+  ----    ------               ----  ----                -------
+  Normal  Waiting              17m   taskrun-controller  Waiting for task "hello-world-task" to become ready
+  Normal  ValidationSucceeded  17m   taskrun-controller  Task validated successfully
+  Normal  LLMFinalAnswer       17m   taskrun-controller  LLM response received successfully
+```
+
+or
+
+```bash
+kubectl get taskrun -o yaml
+```
+
+<details>
+<summary>Output (truncated for brevity)</summary>
+```
+apiVersion: v1
+items:
+- apiVersion: kubechain.humanlayer.dev/v1alpha1
+  kind: TaskRun
+  metadata:
+    labels:
+      kubechain.humanlayer.dev/task: hello-world-task
+    name: hello-world-task-1
+    namespace: default
+    # ...snip...
+  spec:
+    taskRef:
+      name: hello-world-task
+  status:
+    contextWindow:
+    - content: |
+        You are a helpful assistant. Your job is to help the user with their tasks.
+      role: system
+    - content: What is the capital of the moon?
+      role: user
+    - content: The Moon does not have a capital. It is a natural satellite of Earth
+        and lacks any governmental structure or human habitation that would necessitate
+        a capital city.
+      role: assistant
+    output: The Moon does not have a capital. It is a natural satellite of Earth and
+      lacks any governmental structure or human habitation that would necessitate
+      a capital city.
+    phase: FinalAnswer
+    ready: true
+    status: Ready
+    statusDetail: LLM final response received
+# ...snip...
+```
+</details>
 
 ### Adding Tools with MCP
+
+Agent's arent that interesting without tools. Let's add a basic MCP server tool to our agent
+
+```bash
+cat <<EOF | kubectl apply -f -
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: Agent
+metadata:
+  name: my-assistant
+spec:
+  llmRef:
+    name: gpt-4o
+  system: |
+    You are a helpful assistant. Your job is to help the user with their tasks.
+  mcpServers:
+    fetch:
+      command: "uvx"
+      args: ["mcp-server-fetch"]
+EOF
+```
 
 
 ### Cleaning Up
