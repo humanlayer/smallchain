@@ -12,7 +12,7 @@ import (
 // OpenAIClient interface for mocking in tests
 type OpenAIClient interface {
 	SendRequest(ctx context.Context, systemPrompt string, userMessage string, tools []openai.ChatCompletionToolParam) (*openai.ChatCompletionMessage, error)
-	SendContextWindow(ctx context.Context, contextWindow []kubechain.Message, tools []openai.ChatCompletionToolParam) (*openai.ChatCompletionMessage, error)
+	// SendContextWindow(ctx context.Context, contextWindow []kubechain.Message, tools []openai.ChatCompletionToolParam) (*openai.ChatCompletionMessage, error)
 }
 
 type realOpenAIClient struct {

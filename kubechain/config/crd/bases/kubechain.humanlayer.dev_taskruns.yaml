@@ -134,6 +134,10 @@ spec:
                       - assistant
                       - tool
                       type: string
+                    toolCallId:
+                      description: ToolCallId is the unique identifier for this tool
+                        call
+                      type: string
                     toolCalls:
                       description: ToolCalls contains any tool calls requested by
                         this message
