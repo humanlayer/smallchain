@@ -1,9 +1,10 @@
-package controller
+package taskrun
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -150,6 +151,57 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{Requeue: true}, nil
+	}
+
+	// Modified section of the Reconcile function to fix the workflow
+	if taskRun.Status.Phase == kubechainv1alpha1.TaskRunPhaseToolCallsPending {
+		// List all tool calls for this TaskRun
+		toolCallList := &kubechainv1alpha1.TaskRunToolCallList{}
+		logger.Info("Listing tool calls", "taskrun", taskRun.Name)
+		if err := r.List(ctx, toolCallList, client.InNamespace(taskRun.Namespace),
+			client.MatchingLabels{"kubechain.humanlayer.dev/taskruntoolcall": taskRun.Name}); err != nil {
+			logger.Error(err, "Failed to list tool calls")
+			return ctrl.Result{}, err
+		}
+
+		logger.Info("Found tool calls", "count", len(toolCallList.Items))
+
+		// Check if all tool calls are complete
+		allComplete := true
+		var toolResults []string
+		for _, tc := range toolCallList.Items {
+			logger.Info("Checking tool call", "name", tc.Name, "phase", tc.Status.Phase)
+			if tc.Status.Phase != kubechainv1alpha1.TaskRunToolCallPhaseSucceeded {
+				allComplete = false
+				logger.Info("Found incomplete tool call", "name", tc.Name)
+				break
+			}
+			toolResults = append(toolResults, tc.Status.Result)
+		}
+
+		if allComplete {
+			logger.Info("All tool calls complete, transitioning to ReadyForLLM")
+			// All tool calls are complete, update context window and move back to ReadyForLLM phase
+			// so that the LLM can process the tool results and provide a final answer
+			statusUpdate := taskRun.DeepCopy()
+			statusUpdate.Status.ContextWindow = append(statusUpdate.Status.ContextWindow, kubechainv1alpha1.Message{
+				Role:    "tool",
+				Content: strings.Join(toolResults, "\n"),
+			})
+			statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseReadyForLLM
+			statusUpdate.Status.Ready = true
+			statusUpdate.Status.Status = "Ready"
+			statusUpdate.Status.StatusDetail = "All tool calls completed, ready to send tool results to LLM"
+
+			if err := r.Status().Update(ctx, statusUpdate); err != nil {
+				logger.Error(err, "Failed to update TaskRun status")
+				return ctrl.Result{}, err
+			}
+			return ctrl.Result{Requeue: true}, nil
+		}
+
+		// Not all tool calls are complete, requeue while staying in ToolCallsPending phase
+		return ctrl.Result{RequeueAfter: time.Second * 5}, nil
 	}
 
 	// Only proceed with LLM request if we're in ReadyForLLM phase
@@ -309,16 +361,20 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 		// For each tool call, create a new TaskRunToolCall.
 		// Using the parent's details from statusUpdate.
+		statusUpdate = statusUpdate.DeepCopy()
 		for i, tc := range output.ToolCalls {
 			newName := fmt.Sprintf("%s-toolcall-%02d", statusUpdate.Name, i+1)
 			newTRTC := &kubechainv1alpha1.TaskRunToolCall{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      newName,
 					Namespace: statusUpdate.Namespace,
+					Labels: map[string]string{
+						"kubechain.humanlayer.dev/taskruntoolcall": statusUpdate.Name,
+					},
 					OwnerReferences: []metav1.OwnerReference{
 						{
-							APIVersion: statusUpdate.APIVersion,
-							Kind:       statusUpdate.Kind, // Should be "TaskRun"
+							APIVersion: "kubechain.humanlayer.dev/v1alpha1",
+							Kind:       "TaskRun",
 							Name:       statusUpdate.Name,
 							UID:        statusUpdate.UID,
 							Controller: pointer.BoolPtr(true),

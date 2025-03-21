@@ -7,10 +7,6 @@ import (
 
 // ToolSpec defines the desired state of Tool
 type ToolSpec struct {
-	// ToolType represents the type of tool; e.g. "function", "delegateToAgent", etc.
-	// +kubebuilder:validation:Enum=function;delegateToAgent
-	ToolType string `json:"toolType,omitempty"`
-
 	// Name is used for inline/function tools (optional if the object name is used).
 	Name string `json:"name,omitempty"`
 
@@ -19,8 +15,15 @@ type ToolSpec struct {
 
 	// Parameters defines the JSON schema for the tool's parameters.
 	// +kubebuilder:pruning:PreserveUnknownFields
-	// +kubebuilder:validation:Type=object
 	Parameters runtime.RawExtension `json:"parameters,omitempty"`
+
+	// Arguments defines the JSON schema for the tool's arguments.
+	// +kubebuilder:pruning:PreserveUnknownFields
+	Arguments runtime.RawExtension `json:"arguments,omitempty"`
+
+	// ToolType represents the type of tool; e.g. "function", "delegateToAgent", "externalAPI" etc.
+	// +kubebuilder:validation:Enum=function;delegateToAgent;externalAPI
+	ToolType string `json:"toolType,omitempty"`
 
 	// Execute defines how the tool should be executed.
 	Execute ToolExecute `json:"execute,omitempty"`
@@ -29,17 +32,23 @@ type ToolSpec struct {
 	AgentRef *AgentReference `json:"agentRef,omitempty"`
 }
 
-// AgentReference defines a reference to an agent resource.
-type AgentReference struct {
-	Name string `json:"name,omitempty"`
-}
-
-// ToolExecute defines execution details for the tool.
 type ToolExecute struct {
 	// Builtin represents an inline (builtin) tool.
 	Builtin *BuiltinToolSpec `json:"builtin,omitempty"`
 
-	// Future fields such as container or remote execution can be added here.
+	// ExternalAPI represents an external API call
+	ExternalAPI *ExternalAPISpec `json:"externalAPI,omitempty"`
+}
+
+// NameReference contains a name reference to another resource
+type NameReference struct {
+	// Name of the referent
+	Name string `json:"name"`
+}
+
+// AgentReference defines a reference to an agent resource.
+type AgentReference struct {
+	Name string `json:"name"`
 }
 
 // BuiltinToolSpec defines the parameters for executing a builtin tool.
@@ -47,6 +56,28 @@ type BuiltinToolSpec struct {
 	// Name is the identifier of the builtin function to run. Today, supports simple math operations
 	// +kubebuilder:validation:Enum=add;subtract;multiply;divide
 	Name string `json:"name,omitempty"`
+}
+
+type ExternalAPISpec struct {
+	// URL for the API endpoint
+	URL string `json:"url,omitempty"`
+
+	// Method specifies the HTTP method to use (GET, POST, etc.)
+	Method string `json:"method,omitempty"`
+
+	// RequiresApproval indicates if this API call needs explicit approval
+	RequiresApproval bool `json:"requiresApproval,omitempty"`
+
+	// Credentials reference for API authentication
+	CredentialsFrom *SecretKeyRef `json:"credentialsFrom,omitempty"`
+}
+
+type SecretKeySelector struct {
+	// Name of the secret
+	Name string `json:"name"`
+
+	// Key within the secret
+	Key string `json:"key"`
 }
 
 // ToolStatus defines the observed state of Tool

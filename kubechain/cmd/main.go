@@ -20,6 +20,11 @@ import (
 	"context"
 	"crypto/tls"
 	"flag"
+	"github.com/humanlayer/smallchain/kubechain/internal/controller/agent"
+	"github.com/humanlayer/smallchain/kubechain/internal/controller/llm"
+	"github.com/humanlayer/smallchain/kubechain/internal/controller/task"
+	"github.com/humanlayer/smallchain/kubechain/internal/controller/taskrun"
+	"github.com/humanlayer/smallchain/kubechain/internal/controller/tool"
 	"os"
 	"path/filepath"
 
@@ -39,7 +44,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
-	"github.com/humanlayer/smallchain/kubechain/internal/controller"
 	"github.com/humanlayer/smallchain/kubechain/internal/otel"
 	// +kubebuilder:scaffold:imports
 )
@@ -219,7 +223,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controller.LLMReconciler{
+	if err = (&llm.LLMReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
@@ -227,7 +231,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controller.ToolReconciler{
+	if err = (&tool.ToolReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
@@ -235,7 +239,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controller.AgentReconciler{
+	if err = (&agent.AgentReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
@@ -243,7 +247,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controller.TaskReconciler{
+	if err = (&task.TaskReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
@@ -251,7 +255,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controller.TaskRunReconciler{
+	if err = (&taskrun.TaskRunReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
