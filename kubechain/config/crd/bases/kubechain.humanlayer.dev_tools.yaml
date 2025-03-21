@@ -55,7 +55,13 @@ spec:
                 properties:
                   name:
                     type: string
+                required:
+                - name
                 type: object
+              arguments:
+                description: Arguments defines the JSON schema for the tool's arguments.
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
               description:
                 description: Description provides a description of the tool.
                 type: string
@@ -75,6 +81,34 @@ spec:
                         - divide
                         type: string
                     type: object
+                  externalAPI:
+                    description: ExternalAPI represents an external API call
+                    properties:
+                      credentialsFrom:
+                        description: Credentials reference for API authentication
+                        properties:
+                          key:
+                            description: Key is the key in the secret
+                            type: string
+                          name:
+                            description: Name is the name of the secret
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
+                      method:
+                        description: Method specifies the HTTP method to use (GET,
+                          POST, etc.)
+                        type: string
+                      requiresApproval:
+                        description: RequiresApproval indicates if this API call needs
+                          explicit approval
+                        type: boolean
+                      url:
+                        description: URL for the API endpoint
+                        type: string
+                    type: object
                 type: object
               name:
                 description: Name is used for inline/function tools (optional if the
@@ -86,10 +120,11 @@ spec:
                 x-kubernetes-preserve-unknown-fields: true
               toolType:
                 description: ToolType represents the type of tool; e.g. "function",
-                  "delegateToAgent", etc.
+                  "delegateToAgent", "externalAPI" etc.
                 enum:
                 - function
                 - delegateToAgent
+                - externalAPI
                 type: string
             type: object
           status:

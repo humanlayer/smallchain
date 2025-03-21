@@ -54,9 +54,9 @@ var _ = BeforeSuite(func() {
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
-		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "config", "crd", "bases")},
+		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "..", "config", "crd", "bases")},
 		ErrorIfCRDPathMissing: true,
-		BinaryAssetsDirectory: filepath.Join("..", "..", "bin", "k8s", "1.32.0-darwin-arm64"),
+		BinaryAssetsDirectory: filepath.Join("..", "..", "..", "bin", "k8s", "1.32.0-darwin-arm64"),
 	}
 
 	var err error
