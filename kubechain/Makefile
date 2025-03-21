@@ -182,6 +182,7 @@ watch-samples:
 .PHONY: undeploy-samples
 undeploy-samples: kustomize ## Undeploy samples from the K8s cluster specified in ~/.kube/config.
 	$(KUSTOMIZE) build config/samples | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
+	$(KUBECTL) delete taskruntoolcall --all
 
 .PHONY: undeploy
 undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.

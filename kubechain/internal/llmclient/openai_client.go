@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	kubechain "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 )
@@ -11,6 +12,7 @@ import (
 // OpenAIClient interface for mocking in tests
 type OpenAIClient interface {
 	SendRequest(ctx context.Context, systemPrompt string, userMessage string, tools []openai.ChatCompletionToolParam) (*openai.ChatCompletionMessage, error)
+	SendContextWindow(ctx context.Context, contextWindow []kubechain.Message, tools []openai.ChatCompletionToolParam) (*openai.ChatCompletionMessage, error)
 }
 
 type realOpenAIClient struct {
@@ -24,6 +26,10 @@ func NewOpenAIClient(apiKey string) (OpenAIClient, error) {
 	)
 
 	return &realOpenAIClient{openai: client}, nil
+}
+
+func (c *realOpenAIClient) SendContextWindow(ctx context.Context, contextWindow []kubechain.Message, tools []openai.ChatCompletionToolParam) (*openai.ChatCompletionMessage, error) {
+	return nil, fmt.Errorf("not implemented")
 }
 
 func (c *realOpenAIClient) SendRequest(ctx context.Context, systemPrompt string, userMessage string, tools []openai.ChatCompletionToolParam) (*openai.ChatCompletionMessage, error) {

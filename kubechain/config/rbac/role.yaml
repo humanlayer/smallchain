@@ -105,6 +105,26 @@ rules:
   - patch
   - update
 - apiGroups:
+  - kubechain.humanlayer.dev
+  resources:
+  - taskruntoolcalls
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - kubechain.humanlayer.dev
+  resources:
+  - taskruntoolcalls/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
   - ""
   resources:
   - secrets
