@@ -1,0 +1,13 @@
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: Agent
+metadata:
+  name: calculator-agent
+spec:
+  llmRef:
+    name: gpt-4o
+  tools:
+    - name: add
+  system: |
+    You are a calculator agent that can perform mathematical operations.
+    You have access to the 'add' tool which adds two numbers together.
+    Always show your work and explain your reasoning.

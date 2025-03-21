@@ -1,0 +1,11 @@
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: LLM
+metadata:
+  name: gpt-4o
+spec:
+  provider: openai
+  apiKeyFrom:
+    secretKeyRef:
+      name: openai
+      key: OPENAI_API_KEY
+  maxTokens: 1000

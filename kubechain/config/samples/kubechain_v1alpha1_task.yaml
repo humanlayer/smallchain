@@ -1,0 +1,8 @@
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: Task
+metadata:
+  name: calculate-sum
+spec:
+  agentRef:
+    name: calculator-agent
+  message: "What is 2 + 2?"
