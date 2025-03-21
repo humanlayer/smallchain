@@ -379,7 +379,7 @@ var _ = Describe("TaskRun Controller", func() {
 			}, 5*time.Second, 100*time.Millisecond).Should(BeTrue(), "Expected to find failure event")
 		})
 
-		FIt("should set pending status when task exists but is not ready", func() {
+		It("should set pending status when task exists but is not ready", func() {
 			By("creating a task that is not ready")
 			unreadyTask := &kubechainv1alpha1.Task{
 				ObjectMeta: metav1.ObjectMeta{
@@ -464,7 +464,7 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(updatedTaskRun.Status.Error).To(BeEmpty())
 		})
 
-		It("should pass tools correctly to OpenAI and handle tool calls", func() {
+		FIt("should pass tools correctly to OpenAI and handle tool calls", func() {
 			By("creating the taskrun")
 			taskRun := &kubechainv1alpha1.TaskRun{
 				TypeMeta: metav1.TypeMeta{
@@ -565,6 +565,12 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(updatedTaskRun.Status.ContextWindow[2].ToolCalls).To(HaveLen(1))
 			Expect(updatedTaskRun.Status.ContextWindow[2].ToolCalls[0].Function.Name).To(Equal("add"))
 			Expect(updatedTaskRun.Status.ContextWindow[2].ToolCalls[0].Function.Arguments).To(Equal(`{"a": 1, "b": 2}`))
+
+			By("checking that TaskRunToolCalls were created")
+			taskRunToolCallList := &kubechainv1alpha1.TaskRunToolCallList{}
+			Expect(k8sClient.List(ctx, taskRunToolCallList, client.InNamespace("default"), client.MatchingLabels{"kubechain.humanlayer.dev/taskruntoolcall": taskRunName})).To(Succeed())
+			Expect(taskRunToolCallList.Items).To(HaveLen(1))
+			Expect(taskRunToolCallList.Items[0].ObjectMeta.Name).To(Equal("test-taskrun-toolcall-01"))
 		})
 
 		It("should keep the task run in the ToolCallsPending state when tool call is pending", func() {
