@@ -379,7 +379,7 @@ var _ = Describe("TaskRun Controller", func() {
 			}, 5*time.Second, 100*time.Millisecond).Should(BeTrue(), "Expected to find failure event")
 		})
 
-		It("should set pending status when task exists but is not ready", func() {
+		FIt("should set pending status when task exists but is not ready", func() {
 			By("creating a task that is not ready")
 			unreadyTask := &kubechainv1alpha1.Task{
 				ObjectMeta: metav1.ObjectMeta{
@@ -444,6 +444,24 @@ var _ = Describe("TaskRun Controller", func() {
 					return false
 				}
 			}, 5*time.Second, 100*time.Millisecond).Should(BeTrue(), "Expected to find waiting event")
+			By("marking the task as ready")
+			unreadyTask.Status.Ready = true
+			Expect(k8sClient.Status().Update(ctx, unreadyTask)).To(Succeed())
+
+			By("reconciling the taskrun again")
+			result, err = reconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.RequeueAfter).To(Equal(0 * time.Second))
+
+			By("checking the taskrun status")
+			err = k8sClient.Get(ctx, typeNamespacedName, updatedTaskRun)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedTaskRun.Status.Ready).To(BeTrue())
+			Expect(updatedTaskRun.Status.Status).To(Equal("Ready"))
+			Expect(updatedTaskRun.Status.StatusDetail).To(ContainSubstring("Ready to send to LLM"))
+			Expect(updatedTaskRun.Status.Error).To(BeEmpty())
 		})
 
 		It("should pass tools correctly to OpenAI and handle tool calls", func() {
