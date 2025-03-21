@@ -129,7 +129,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	// Initialize phase if not set
-	if statusUpdate.Status.Phase == "" {
+	if statusUpdate.Status.Phase == "" || statusUpdate.Status.Phase == kubechainv1alpha1.TaskRunPhasePending {
 		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseReadyForLLM
 		statusUpdate.Status.Ready = true
 		statusUpdate.Status.ContextWindow = []kubechainv1alpha1.Message{
