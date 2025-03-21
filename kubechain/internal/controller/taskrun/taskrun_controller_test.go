@@ -464,7 +464,7 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(updatedTaskRun.Status.Error).To(BeEmpty())
 		})
 
-		FIt("should pass tools correctly to OpenAI and handle tool calls", func() {
+		It("should pass tools correctly to OpenAI and handle tool calls", func() {
 			By("creating the taskrun")
 			taskRun := &kubechainv1alpha1.TaskRun{
 				TypeMeta: metav1.TypeMeta{
