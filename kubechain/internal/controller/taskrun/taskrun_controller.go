@@ -204,9 +204,9 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{RequeueAfter: time.Second * 5}, nil
 	}
 
-	// Only proceed with LLM request if we're in ReadyForLLM phase
-	if taskRun.Status.Phase != kubechainv1alpha1.TaskRunPhaseReadyForLLM {
-		logger.Info("TaskRun not ready for LLM", "phase", taskRun.Status.Phase)
+	// at this point the only other phase is ReadyForLLM
+	if taskRun.Status.Phase == kubechainv1alpha1.TaskRunPhaseReadyForLLM {
+		logger.Info("TaskRun in unknown phase", "phase", taskRun.Status.Phase)
 		return ctrl.Result{}, nil
 	}
 
@@ -245,6 +245,8 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 
+	// todo we probably don't need error handling here, it should be handled by the LLM/Agent/Task validation
+	// however, defense in depth
 	apiKey := string(secret.Data[llm.Spec.APIKeyFrom.SecretKeyRef.Key])
 	if apiKey == "" {
 		err := fmt.Errorf("API key is empty in secret %s", secret.Name)

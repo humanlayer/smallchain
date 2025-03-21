@@ -20,13 +20,15 @@ import (
 	"context"
 	"crypto/tls"
 	"flag"
+	"os"
+	"path/filepath"
+
 	"github.com/humanlayer/smallchain/kubechain/internal/controller/agent"
 	"github.com/humanlayer/smallchain/kubechain/internal/controller/llm"
 	"github.com/humanlayer/smallchain/kubechain/internal/controller/task"
 	"github.com/humanlayer/smallchain/kubechain/internal/controller/taskrun"
+	"github.com/humanlayer/smallchain/kubechain/internal/controller/taskruntoolcall"
 	"github.com/humanlayer/smallchain/kubechain/internal/controller/tool"
-	"os"
-	"path/filepath"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -260,6 +262,14 @@ func main() {
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "TaskRun")
+		os.Exit(1)
+	}
+
+	if err = (&taskruntoolcall.TaskRunToolCallReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "TaskRunToolCall")
 		os.Exit(1)
 	}
 
