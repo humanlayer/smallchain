@@ -181,3 +181,7 @@ Alternatively, clean up components individually:
 - Use consistent error handling patterns within each language
 - Add tests for new functionality
 - Keep functions small and focused
+
+
+### Markdown
+- When writing markdown code blocks, do not indent the block, just use backticks to offset the code
