@@ -20,9 +20,9 @@ backend:
   replicas: 0
 
 loki:
-  # Turn off structured metadata requirement with older schema
+  # Enable structured metadata for OTLP logs
   limits_config:
-    allow_structured_metadata: false
+    allow_structured_metadata: true
 
   auth_enabled: false
 
