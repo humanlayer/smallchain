@@ -30,8 +30,9 @@ config:
         insecure: true
     prometheus:
       endpoint: "0.0.0.0:8889"
-    loki:
-      endpoint: "http://loki:3100/loki/api/v1/push"
+    # Loki now supports OTLP natively
+    otlphttp:
+      endpoint: "http://loki:3100/otlp"
       tls:
         insecure: true
   extensions:
@@ -64,7 +65,7 @@ config:
       logs:
         receivers: [otlp]
         processors: [memory_limiter, batch]
-        exporters: [debug, loki]
+        exporters: [debug, otlphttp]
 
 extraEnvs:
   - name: MY_POD_IP
