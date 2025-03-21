@@ -18,7 +18,6 @@ import (
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
 	"github.com/humanlayer/smallchain/kubechain/internal/llmclient"
-	"github.com/openai/openai-go"
 )
 
 var _ = Describe("TaskRun Controller", func() {
@@ -225,7 +224,7 @@ var _ = Describe("TaskRun Controller", func() {
 				Scheme:   k8sClient.Scheme(),
 				recorder: eventRecorder,
 				newLLMClient: func(apiKey string) (llmclient.OpenAIClient, error) {
-					return &llmclient.MockOpenAIClient{}, nil
+					return &llmclient.MockRawOpenAIClient{}, nil
 				},
 			}
 
@@ -484,37 +483,44 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(k8sClient.Create(ctx, taskRun)).To(Succeed())
 
 			By("creating a mock OpenAI client that validates tools and returns tool calls")
-			mockClient := &llmclient.MockOpenAIClient{
-				Response: &openai.ChatCompletionMessage{
-					ToolCalls: []openai.ChatCompletionMessageToolCall{
+			mockClient := &llmclient.MockRawOpenAIClient{
+				Response: &kubechainv1alpha1.Message{
+					Role: "assistant",
+					ToolCalls: []kubechainv1alpha1.ToolCall{
 						{
 							ID:   "call_123",
-							Type: openai.ChatCompletionMessageToolCallTypeFunction,
-							Function: openai.ChatCompletionMessageToolCallFunction{
+							Type: "function",
+							Function: kubechainv1alpha1.ToolCallFunction{
 								Name:      "add",
 								Arguments: `{"a": 1, "b": 2}`,
 							},
 						},
 					},
 				},
-				ValidateTools: func(tools []openai.ChatCompletionToolParam) error {
+				ValidateTools: func(tools []llmclient.Tool) error {
 					Expect(tools).To(HaveLen(1))
-					Expect(tools[0].Type.Value).To(Equal(openai.ChatCompletionToolTypeFunction))
-					Expect(tools[0].Function.Value.Name.Value).To(Equal("add"))
-					Expect(tools[0].Function.Value.Description.Value).To(Equal("add two numbers"))
+					Expect(tools[0].Type).To(Equal("function"))
+					Expect(tools[0].Function.Name).To(Equal("add"))
+					Expect(tools[0].Function.Description).To(Equal("add two numbers"))
 					// Verify parameters were passed correctly
-					Expect(tools[0].Function.Value.Parameters.Value).To(Equal(openai.FunctionParameters{
-						"type": "object",
-						"properties": map[string]interface{}{
-							"a": map[string]interface{}{
-								"type": "number",
-							},
-							"b": map[string]interface{}{
-								"type": "number",
-							},
+					Expect(tools[0].Function.Parameters).To(Equal(llmclient.ToolFunctionParameters{
+						Type: "object",
+						Properties: map[string]llmclient.ToolFunctionParameter{
+							"a": {Type: "number"},
+							"b": {Type: "number"},
 						},
-						"required": []interface{}{"a", "b"},
+						Required: []string{"a", "b"},
 					}))
+					return nil
+				},
+
+				ValidateContextWindow: func(contextWindow []kubechainv1alpha1.Message) error {
+					Expect(contextWindow).To(HaveLen(2))
+					Expect(contextWindow[0].Role).To(Equal("system"))
+					Expect(contextWindow[0].Content).To(Equal("you are a testing assistant"))
+					Expect(contextWindow[1].Role).To(Equal("user"))
+					Expect(contextWindow[1].Content).To(Equal("what is 2 + 2?"))
+
 					return nil
 				},
 			}

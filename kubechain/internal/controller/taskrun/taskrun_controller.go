@@ -2,7 +2,6 @@ package taskrun
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -17,7 +16,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
-	"github.com/openai/openai-go"
 
 	"github.com/humanlayer/smallchain/kubechain/internal/adapters"
 	"github.com/humanlayer/smallchain/kubechain/internal/llmclient"
@@ -205,7 +203,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	// at this point the only other phase is ReadyForLLM
-	if taskRun.Status.Phase == kubechainv1alpha1.TaskRunPhaseReadyForLLM {
+	if taskRun.Status.Phase != kubechainv1alpha1.TaskRunPhaseReadyForLLM {
 		logger.Info("TaskRun in unknown phase", "phase", taskRun.Status.Phase)
 		return ctrl.Result{}, nil
 	}
@@ -278,8 +276,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 
-	var tools []openai.ChatCompletionToolParam
-	// Get the tools from the agent's ValidTools
+	var tools []llmclient.Tool
 	for _, toolName := range agent.Status.ValidTools {
 		tool := &kubechainv1alpha1.Tool{}
 		err := r.Get(ctx, client.ObjectKey{
@@ -291,30 +288,14 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			continue
 		}
 
-		// Convert the tool's arguments to a JSON schema
-		toolParam := openai.ChatCompletionToolParam{
-			Type: openai.F(openai.ChatCompletionToolTypeFunction),
-			Function: openai.F(openai.FunctionDefinitionParam{
-				Name:        openai.F(tool.Name),
-				Description: openai.F(tool.Spec.Description),
-			}),
+		if converted := llmclient.FromKubechainTool(*tool); converted != nil {
+			tools = append(tools, *converted)
 		}
-
-		// If the tool has arguments defined, add them to the function definition
-		if tool.Spec.Parameters.Raw != nil {
-			var parameters openai.FunctionParameters
-			if err := json.Unmarshal(tool.Spec.Parameters.Raw, &parameters); err != nil {
-				logger.Error(err, "Failed to unmarshal tool arguments", "tool", toolName)
-				continue
-			}
-			toolParam.Function.Value.Parameters = openai.F(parameters)
-		}
-
-		tools = append(tools, toolParam)
 	}
 
 	// Send the prompt to the LLM using the OpenAI client.
-	output, err := llmClient.SendRequest(ctx, agent.Spec.System, task.Spec.Message, tools)
+	output, err := llmClient.SendRequest(ctx, taskRun.Status.ContextWindow, tools)
+
 	if err != nil {
 		logger.Error(err, "LLM request failed")
 		statusUpdate.Status.Ready = false
@@ -418,7 +399,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 func (r *TaskRunReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.recorder = mgr.GetEventRecorderFor("taskrun-controller")
 	if r.newLLMClient == nil {
-		r.newLLMClient = llmclient.NewOpenAIClient
+		r.newLLMClient = llmclient.NewRawOpenAIClient
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&kubechainv1alpha1.TaskRun{}).
