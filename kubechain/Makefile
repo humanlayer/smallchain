@@ -169,7 +169,15 @@ deploy-local-kind: manifests docker-build docker-load-kind kustomize ## Deploy c
 .PHONY: deploy-samples
 deploy-samples: kustomize ## Deploy samples to the K8s cluster specified in ~/.kube/config.
 	$(KUSTOMIZE) build config/samples | $(KUBECTL) apply -f -
-	watch -d $(KUBECTL) get llm,agent,tool,task,taskrun  -o wide
+
+.PHONY: show-samples
+show-samples:
+	$(KUBECTL) get llm,agent,tool,task,taskrun,taskruntoolcall  -o wide; 
+	$(KUBECTL) get taskrun -o yaml
+
+.PHONY: watch-samples
+watch-samples:
+	@watch -d $(MAKE) show-samples
 
 .PHONY: undeploy-samples
 undeploy-samples: kustomize ## Undeploy samples from the K8s cluster specified in ~/.kube/config.
