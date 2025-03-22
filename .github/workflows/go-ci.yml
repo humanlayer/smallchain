@@ -25,6 +25,7 @@ jobs:
         with:
           go-version: '1.24'
           cache: true
+          cache-dependency-path: kubechain/go.sum
 
       - name: Install golangci-lint
         working-directory: kubechain
@@ -56,6 +57,7 @@ jobs:
         with:
           go-version: '1.24'
           cache: true
+          cache-dependency-path: kubechain/go.sum
 
       - name: Run tests
         working-directory: kubechain
@@ -80,6 +82,7 @@ jobs:
         with:
           go-version: '1.24'
           cache: true
+          cache-dependency-path: kubechain/go.sum
 
       - name: Build
         working-directory: kubechain
@@ -98,6 +101,7 @@ jobs:
         with:
           go-version: '1.24'
           cache: true
+          cache-dependency-path: kubechain/go.sum
 
       - name: Setup KinD
         uses: helm/kind-action@v1.9.0
