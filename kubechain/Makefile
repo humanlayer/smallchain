@@ -1,5 +1,8 @@
+# Generate timestamp once and store it
+TIMESTAMP := $(shell date +%Y%m%d%H%M)
+
 # Image URL to use all building/pushing image targets
-IMG ?= controller:$(shell date +%Y%m%d%H%M)
+IMG ?= controller:$(TIMESTAMP)
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))

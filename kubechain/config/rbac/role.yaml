@@ -132,3 +132,23 @@ rules:
   - get
   - list
   - watch
+- apiGroups:
+  - kubechain.humanlayer.dev
+  resources:
+  - mcpservers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - kubechain.humanlayer.dev
+  resources:
+  - mcpservers/status
+  verbs:
+  - get
+  - patch
+  - update

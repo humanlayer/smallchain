@@ -3,6 +3,7 @@ module github.com/humanlayer/smallchain/kubechain
 go 1.24.0
 
 require (
+	github.com/mark3labs/mcp-go v0.15.0
 	github.com/onsi/ginkgo/v2 v2.23.2
 	github.com/onsi/gomega v1.36.2
 	github.com/openai/openai-go v0.1.0-alpha.59
@@ -23,6 +24,7 @@ require (
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tidwall/sjson v1.2.5 // indirect
+	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 )
 
 require (

@@ -4,6 +4,6 @@ kind: Kustomization
 resources:
 - kubechain_v1alpha1_llm.yaml
 - kubechain_v1alpha1_agent.yaml
-- kubechain_v1alpha1_tool.yaml
 - kubechain_v1alpha1_task.yaml
+- kubechain_v1alpha1_mcpserver.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

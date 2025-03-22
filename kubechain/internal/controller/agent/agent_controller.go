@@ -12,13 +12,20 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
+	"github.com/humanlayer/smallchain/kubechain/internal/mcpmanager"
+)
+
+const (
+	StatusReady = "Ready"
+	StatusError = "Error"
 )
 
 // AgentReconciler reconciles a Agent object
 type AgentReconciler struct {
 	client.Client
-	Scheme   *runtime.Scheme
-	recorder record.EventRecorder
+	Scheme     *runtime.Scheme
+	recorder   record.EventRecorder
+	MCPManager *mcpmanager.MCPServerManager
 }
 
 // validateLLM checks if the referenced LLM exists and is ready
@@ -32,7 +39,7 @@ func (r *AgentReconciler) validateLLM(ctx context.Context, agent *kubechainv1alp
 		return fmt.Errorf("failed to get LLM %q: %w", agent.Spec.LLMRef.Name, err)
 	}
 
-	if llm.Status.Status != "Ready" {
+	if llm.Status.Status != StatusReady {
 		return fmt.Errorf("LLM %q is not ready", agent.Spec.LLMRef.Name)
 	}
 
@@ -66,6 +73,48 @@ func (r *AgentReconciler) validateTools(ctx context.Context, agent *kubechainv1a
 	return validTools, nil
 }
 
+// validateMCPServers checks if all referenced MCP servers exist and are connected
+func (r *AgentReconciler) validateMCPServers(ctx context.Context, agent *kubechainv1alpha1.Agent) ([]kubechainv1alpha1.ResolvedMCPServer, error) {
+	if r.MCPManager == nil {
+		return nil, fmt.Errorf("MCPManager is not initialized")
+	}
+
+	validMCPServers := make([]kubechainv1alpha1.ResolvedMCPServer, 0, len(agent.Spec.MCPServers))
+
+	for _, serverRef := range agent.Spec.MCPServers {
+		mcpServer := &kubechainv1alpha1.MCPServer{}
+		err := r.Get(ctx, client.ObjectKey{
+			Namespace: agent.Namespace,
+			Name:      serverRef.Name,
+		}, mcpServer)
+		if err != nil {
+			return validMCPServers, fmt.Errorf("failed to get MCPServer %q: %w", serverRef.Name, err)
+		}
+
+		if !mcpServer.Status.Connected {
+			return validMCPServers, fmt.Errorf("MCPServer %q is not connected", serverRef.Name)
+		}
+
+		tools, exists := r.MCPManager.GetTools(mcpServer.Name)
+		if !exists {
+			return validMCPServers, fmt.Errorf("failed to get tools for MCPServer %q", mcpServer.Name)
+		}
+
+		// Create list of tool names
+		toolNames := make([]string, 0, len(tools))
+		for _, tool := range tools {
+			toolNames = append(toolNames, tool.Name)
+		}
+
+		validMCPServers = append(validMCPServers, kubechainv1alpha1.ResolvedMCPServer{
+			Name:  serverRef.Name,
+			Tools: toolNames,
+		})
+	}
+
+	return validMCPServers, nil
+}
+
 // Reconcile validates the agent's LLM and Tool references
 func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
@@ -87,16 +136,18 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		r.recorder.Event(&agent, corev1.EventTypeNormal, "Initializing", "Starting validation")
 	}
 
-	// Initialize empty valid tools slice
+	// Initialize empty valid tools and servers slices
 	validTools := make([]kubechainv1alpha1.ResolvedTool, 0)
+	validMCPServers := make([]kubechainv1alpha1.ResolvedMCPServer, 0)
 
 	// Validate LLM reference
 	if err := r.validateLLM(ctx, &agent); err != nil {
 		logger.Error(err, "LLM validation failed")
 		statusUpdate.Status.Ready = false
-		statusUpdate.Status.Status = "Error"
+		statusUpdate.Status.Status = StatusError
 		statusUpdate.Status.StatusDetail = err.Error()
 		statusUpdate.Status.ValidTools = validTools
+		statusUpdate.Status.ValidMCPServers = validMCPServers
 		r.recorder.Event(&agent, corev1.EventTypeWarning, "ValidationFailed", err.Error())
 		if updateErr := r.Status().Update(ctx, statusUpdate); updateErr != nil {
 			logger.Error(updateErr, "Failed to update Agent status")
@@ -110,9 +161,10 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	if err != nil {
 		logger.Error(err, "Tool validation failed")
 		statusUpdate.Status.Ready = false
-		statusUpdate.Status.Status = "Error"
+		statusUpdate.Status.Status = StatusError
 		statusUpdate.Status.StatusDetail = err.Error()
 		statusUpdate.Status.ValidTools = validTools
+		statusUpdate.Status.ValidMCPServers = validMCPServers
 		r.recorder.Event(&agent, corev1.EventTypeWarning, "ValidationFailed", err.Error())
 		if updateErr := r.Status().Update(ctx, statusUpdate); updateErr != nil {
 			logger.Error(updateErr, "Failed to update Agent status")
@@ -121,11 +173,31 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, err // requeue
 	}
 
+	// Validate MCP server references, if any
+	if len(agent.Spec.MCPServers) > 0 && r.MCPManager != nil {
+		validMCPServers, err = r.validateMCPServers(ctx, &agent)
+		if err != nil {
+			logger.Error(err, "MCP server validation failed")
+			statusUpdate.Status.Ready = false
+			statusUpdate.Status.Status = StatusError
+			statusUpdate.Status.StatusDetail = err.Error()
+			statusUpdate.Status.ValidTools = validTools
+			statusUpdate.Status.ValidMCPServers = validMCPServers
+			r.recorder.Event(&agent, corev1.EventTypeWarning, "ValidationFailed", err.Error())
+			if updateErr := r.Status().Update(ctx, statusUpdate); updateErr != nil {
+				logger.Error(updateErr, "Failed to update Agent status")
+				return ctrl.Result{}, fmt.Errorf("failed to update agent status: %v", err)
+			}
+			return ctrl.Result{}, err // requeue
+		}
+	}
+
 	// All validations passed
 	statusUpdate.Status.Ready = true
-	statusUpdate.Status.Status = "Ready"
+	statusUpdate.Status.Status = StatusReady
 	statusUpdate.Status.StatusDetail = "All dependencies validated successfully"
 	statusUpdate.Status.ValidTools = validTools
+	statusUpdate.Status.ValidMCPServers = validMCPServers
 	r.recorder.Event(&agent, corev1.EventTypeNormal, "ValidationSucceeded", "All dependencies validated successfully")
 
 	// Update status
@@ -145,6 +217,12 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 // SetupWithManager sets up the controller with the Manager.
 func (r *AgentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.recorder = mgr.GetEventRecorderFor("agent-controller")
+
+	// Initialize MCPManager if not already set
+	if r.MCPManager == nil {
+		r.MCPManager = mcpmanager.NewMCPServerManager()
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&kubechainv1alpha1.Agent{}).
 		Complete(r)

@@ -52,7 +52,11 @@ func (r *LLMReconciler) validateOpenAIKey(apiKey string) error {
 	if err != nil {
 		return fmt.Errorf("failed to make request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			fmt.Printf("Error closing response body: %v\n", err)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("invalid API key (status code: %d)", resp.StatusCode)

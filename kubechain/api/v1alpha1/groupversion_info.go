@@ -36,5 +36,5 @@ var (
 )
 
 func init() {
-	SchemeBuilder.Register(&LLM{}, &LLMList{}, &Tool{}, &ToolList{}, &Agent{}, &AgentList{}, &Task{}, &TaskList{}, &TaskRun{}, &TaskRunList{})
+	SchemeBuilder.Register(&LLM{}, &LLMList{}, &Tool{}, &ToolList{}, &Agent{}, &AgentList{}, &Task{}, &TaskList{}, &TaskRun{}, &TaskRunList{}, &TaskRunToolCall{}, &TaskRunToolCallList{}, &MCPServer{}, &MCPServerList{})
 }
