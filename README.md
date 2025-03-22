@@ -568,7 +568,7 @@ Remove the openai secret:
 kubectl delete secret openai
 ```
 
-Remove the operator and all resources and custom resource definitions:
+Remove the operator, resources and custom resource definitions:
 
 ```
 kustomize build kubechain/config/default | kubectl delete --ignore-not-found=true -f -
