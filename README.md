@@ -63,44 +63,45 @@ To run KubeChain, you'll need:
 
 1. **Create a Kind cluster**
 
-   ```bash
-   kind create cluster --config kubechain-example/kind/kind-config.yaml
-   ```
+```bash
+kind create cluster --config kubechain-example/kind/kind-config.yaml
+```
 
 2. **Add your OpenAI API key as a Kubernetes secret**
 
-   ```bash
-   kubectl create secret generic openai \
-     --from-literal=OPENAI_API_KEY=$OPENAI_API_KEY \
-     --namespace=default
-   ```
+```bash
+kubectl create secret generic openai \
+  --from-literal=OPENAI_API_KEY=$OPENAI_API_KEY \
+  --namespace=default
+```
 
 ### Deploying KubeChain
 
 Deploy the KubeChain operator to your cluster:
 
 ```bash
-make deploy-operator
+kubectl apply -f https://raw.githubusercontent.com/humanlayer/kubechain/main/config/release/latest.yaml
 ```
-
-This command will build the operator, create necessary CRDs, and deploy the KubeChain components to your cluster.
 
 <details>
-<summary>With the kubechain cli</summary>
-
-You can install with brew:
+<summary>Just the CRDs</summary>
 
 ```bash
-brew install humanlayer/tap/kubechain
-```
-
-Or you can install with go:
-
-```bash
-kubechain deploy operator
+kubectl apply -f https://raw.githubusercontent.com/humanlayer/kubechain/main/config/release/latest-crds.yaml
 ```
 
 </details>
+
+<details>
+<summary>Install a specific version</summary>
+
+```bash
+kubectl apply -f https://raw.githubusercontent.com/humanlayer/kubechain/main/config/release/v0.1.0.yaml
+```
+
+</details>
+
+This command will build the operator, create necessary CRDs, and deploy the KubeChain components to your cluster.
 
 ### Creating Your First Agent
 
