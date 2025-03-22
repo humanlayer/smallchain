@@ -58,6 +58,14 @@ ResourceList is a map of ResourceName to resource.Quantity (e.g., `cpu: 100m`).
 | `statusDetail` | string | Detailed status message |
 | `tools` | []MCPTool | List of tools provided by the MCP server |
 
+#### MCPTool
+
+| Field | Type | Description | Required |
+|-------|------|-------------|----------|
+| `name` | string | Name of the tool | Yes |
+| `description` | string | Description of the tool | No |
+| `inputSchema` | runtime.RawExtension | JSON schema for the tool's input parameters | No |
+
 ## LLM
 
 The LLM CRD represents a Large Language Model configuration.

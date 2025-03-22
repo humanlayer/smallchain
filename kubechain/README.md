@@ -130,7 +130,7 @@ More information can be found via the [Kubebuilder Documentation](https://book.k
 
 Model Control Protocol (MCP) servers provide a way to extend the functionality of LLMs with custom tools. The MCPServer resource supports:
 
-- **Transport Types:** 
+- **Transport:** 
   - `stdio`: Communicate with an MCP server via standard I/O
   - `http`: Communicate with an MCP server via HTTP
 
