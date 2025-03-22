@@ -10,6 +10,51 @@ kustomize build samples | kubectl apply -f -
 
 ---
 
+## MCPServer Resource with Secret References
+
+[./samples/kubechain_v1alpha1_mcpserver_with_secrets.yaml](./samples/kubechain_v1alpha1_mcpserver_with_secrets.yaml)
+
+**Resource:** `MCPServer`  
+**API Version:** `kubechain.humanlayer.dev/v1alpha1`  
+**Kind:** `MCPServer`
+
+**Sample File:** `config/samples/kubechain_v1alpha1_mcpserver_with_secrets.yaml`
+
+**Key Fields:**
+
+- **transport:** The connection type (e.g., `"stdio"`)
+- **command:** The command to run for stdio MCP servers
+- **args:** Arguments to pass to the command
+- **env:** Environment variables to set for the server
+  - Can include direct values:
+    ```yaml
+    - name: DIRECT_VALUE
+      value: "some-direct-value"
+    ```
+  - Can reference secrets:
+    ```yaml
+    - name: SECRET_VALUE
+      valueFrom:
+        secretKeyRef:
+          name: mcp-credentials
+          key: api-key
+    ```
+
+**Required Secret:**
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mcp-credentials
+  namespace: default
+type: Opaque
+data:
+  api-key: c2VjcmV0LWFwaS1rZXktdmFsdWU=  # base64 encoded value of "secret-api-key-value"
+```
+
+---
+
 ## LLM
 
 [./samples/kubechain_v1alpha1_llm.yaml](./samples/kubechain_v1alpha1_llm.yaml)

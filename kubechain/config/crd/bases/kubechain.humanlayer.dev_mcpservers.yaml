@@ -68,11 +68,30 @@ spec:
                       description: Name of the environment variable
                       type: string
                     value:
-                      description: Value of the environment variable
+                      description: Value of the environment variable (direct literal
+                        value)
                       type: string
+                    valueFrom:
+                      description: ValueFrom represents a source for the value of
+                        an environment variable
+                      properties:
+                        secretKeyRef:
+                          description: SecretKeyRef selects a key of a secret in the
+                            pod's namespace
+                          properties:
+                            key:
+                              description: Key within the secret
+                              type: string
+                            name:
+                              description: Name of the secret
+                              type: string
+                          required:
+                          - key
+                          - name
+                          type: object
+                      type: object
                   required:
                   - name
-                  - value
                   type: object
                 type: array
               resources:
@@ -99,8 +118,8 @@ spec:
                       resources required
                     type: object
                 type: object
-              type:
-                description: Type specifies the transport type for the MCP server
+              transport:
+                description: Transport specifies the transport type for the MCP server
                 enum:
                 - stdio
                 - http
@@ -109,7 +128,7 @@ spec:
                 description: URL is the endpoint for HTTP MCP servers
                 type: string
             required:
-            - type
+            - transport
             type: object
           status:
             description: MCPServerStatus defines the observed state of MCPServer

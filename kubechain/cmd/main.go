@@ -244,7 +244,7 @@ func main() {
 	}
 
 	// Create a shared MCPManager that all controllers will use
-	mcpManagerInstance := mcpmanager.NewMCPServerManager()
+	mcpManagerInstance := mcpmanager.NewMCPServerManagerWithClient(mgr.GetClient())
 
 	if err = (&agent.AgentReconciler{
 		Client:     mgr.GetClient(),

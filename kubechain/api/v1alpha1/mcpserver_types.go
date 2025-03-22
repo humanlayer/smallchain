@@ -8,10 +8,10 @@ import (
 
 // MCPServerSpec defines the desired state of MCPServer
 type MCPServerSpec struct {
-	// Type specifies the transport type for the MCP server
+	// Transport specifies the transport type for the MCP server
 	// +kubebuilder:validation:Enum=stdio;http
 	// +kubebuilder:validation:Required
-	Type string `json:"type"`
+	Transport string `json:"transport"`
 
 	// Command is the command to run for stdio MCP servers
 	// +optional
@@ -40,10 +40,23 @@ type EnvVar struct {
 	// +kubebuilder:validation:Required
 	Name string `json:"name"`
 
-	// Value of the environment variable
-	// +kubebuilder:validation:Required
-	Value string `json:"value"`
+	// Value of the environment variable (direct literal value)
+	// +optional
+	Value string `json:"value,omitempty"`
+
+	// ValueFrom represents a source for the value of an environment variable
+	// +optional
+	ValueFrom *EnvVarSource `json:"valueFrom,omitempty"`
 }
+
+// EnvVarSource represents a source for the value of an environment variable
+type EnvVarSource struct {
+	// SecretKeyRef selects a key of a secret in the pod's namespace
+	// +optional
+	SecretKeyRef *SecretKeySelector `json:"secretKeyRef,omitempty"`
+}
+
+// We're using the SecretKeySelector from tool_types.go
 
 // ResourceRequirements describes the compute resource requirements
 type ResourceRequirements struct {

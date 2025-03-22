@@ -104,21 +104,21 @@ func (r *MCPServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 // validateMCPServer performs basic validation on the MCPServer spec
 func (r *MCPServerReconciler) validateMCPServer(mcpServer *kubechainv1alpha1.MCPServer) error {
-	// Check server type
-	if mcpServer.Spec.Type != "stdio" && mcpServer.Spec.Type != "http" {
-		return fmt.Errorf("invalid server type: %s", mcpServer.Spec.Type)
+	// Check server transport type
+	if mcpServer.Spec.Transport != "stdio" && mcpServer.Spec.Transport != "http" {
+		return fmt.Errorf("invalid server transport: %s", mcpServer.Spec.Transport)
 	}
 
-	// Validate stdio type
-	if mcpServer.Spec.Type == "stdio" {
+	// Validate stdio transport
+	if mcpServer.Spec.Transport == "stdio" {
 		if mcpServer.Spec.Command == "" {
 			return fmt.Errorf("command is required for stdio servers")
 		}
 		// Other validations as needed
 	}
 
-	// Validate http type
-	if mcpServer.Spec.Type == "http" {
+	// Validate http transport
+	if mcpServer.Spec.Transport == "http" {
 		if mcpServer.Spec.URL == "" {
 			return fmt.Errorf("url is required for http servers")
 		}
@@ -134,7 +134,7 @@ func (r *MCPServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	// Initialize the MCP manager if not already set
 	if r.MCPManager == nil {
-		r.MCPManager = mcpmanager.NewMCPServerManager()
+		r.MCPManager = mcpmanager.NewMCPServerManagerWithClient(r.Client)
 	}
 
 	return ctrl.NewControllerManagedBy(mgr).
