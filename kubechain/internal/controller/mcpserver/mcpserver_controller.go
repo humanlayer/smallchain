@@ -16,12 +16,50 @@ import (
 	"github.com/humanlayer/smallchain/kubechain/internal/mcpmanager"
 )
 
+// MCPServerManagerInterface defines the interface for MCP server management
+type MCPServerManagerInterface interface {
+	ConnectServer(ctx context.Context, mcpServer *kubechainv1alpha1.MCPServer) error
+	GetTools(serverName string) ([]kubechainv1alpha1.MCPTool, bool)
+	GetConnection(serverName string) (*mcpmanager.MCPConnection, bool)
+	DisconnectServer(serverName string)
+	GetToolsForAgent(agent *kubechainv1alpha1.Agent) []kubechainv1alpha1.MCPTool
+	CallTool(ctx context.Context, serverName, toolName string, arguments map[string]interface{}) (string, error)
+	FindServerForTool(fullToolName string) (serverName string, toolName string, found bool)
+	Close()
+}
+
 // MCPServerReconciler reconciles a MCPServer object
 type MCPServerReconciler struct {
 	client.Client
 	Scheme     *runtime.Scheme
 	recorder   record.EventRecorder
-	MCPManager *mcpmanager.MCPServerManager
+	MCPManager MCPServerManagerInterface
+}
+
+// updateStatus updates the status of the MCPServer resource with the latest version
+func (r *MCPServerReconciler) updateStatus(ctx context.Context, req ctrl.Request, statusUpdate *kubechainv1alpha1.MCPServer) error {
+	logger := log.FromContext(ctx)
+
+	// Get the latest version of the MCPServer
+	var latestMCPServer kubechainv1alpha1.MCPServer
+	if err := r.Get(ctx, req.NamespacedName, &latestMCPServer); err != nil {
+		logger.Error(err, "Failed to get latest MCPServer before status update")
+		return err
+	}
+
+	// Apply status updates to the latest version
+	latestMCPServer.Status.Connected = statusUpdate.Status.Connected
+	latestMCPServer.Status.Status = statusUpdate.Status.Status
+	latestMCPServer.Status.StatusDetail = statusUpdate.Status.StatusDetail
+	latestMCPServer.Status.Tools = statusUpdate.Status.Tools
+
+	// Update the status
+	if err := r.Status().Update(ctx, &latestMCPServer); err != nil {
+		logger.Error(err, "Failed to update MCPServer status")
+		return err
+	}
+
+	return nil
 }
 
 // Reconcile processes the MCPServer resource and establishes a connection to the MCP server
@@ -45,8 +83,8 @@ func (r *MCPServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		statusUpdate.Status.Status = "Error"
 		statusUpdate.Status.StatusDetail = fmt.Sprintf("Validation failed: %v", err)
 		r.recorder.Event(&mcpServer, corev1.EventTypeWarning, "ValidationFailed", err.Error())
-		if updateErr := r.Status().Update(ctx, statusUpdate); updateErr != nil {
-			logger.Error(updateErr, "Failed to update MCPServer status")
+
+		if updateErr := r.updateStatus(ctx, req, statusUpdate); updateErr != nil {
 			return ctrl.Result{}, updateErr
 		}
 		return ctrl.Result{}, err
@@ -59,8 +97,8 @@ func (r *MCPServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		statusUpdate.Status.Status = "Error"
 		statusUpdate.Status.StatusDetail = fmt.Sprintf("Connection failed: %v", err)
 		r.recorder.Event(&mcpServer, corev1.EventTypeWarning, "ConnectionFailed", err.Error())
-		if updateErr := r.Status().Update(ctx, statusUpdate); updateErr != nil {
-			logger.Error(updateErr, "Failed to update MCPServer status")
+
+		if updateErr := r.updateStatus(ctx, req, statusUpdate); updateErr != nil {
 			return ctrl.Result{}, updateErr
 		}
 		return ctrl.Result{RequeueAfter: time.Second * 30}, nil // Retry after 30 seconds
@@ -73,8 +111,8 @@ func (r *MCPServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		statusUpdate.Status.Status = "Error"
 		statusUpdate.Status.StatusDetail = "Failed to get tools from manager"
 		r.recorder.Event(&mcpServer, corev1.EventTypeWarning, "GetToolsFailed", "Failed to get tools from manager")
-		if updateErr := r.Status().Update(ctx, statusUpdate); updateErr != nil {
-			logger.Error(updateErr, "Failed to update MCPServer status")
+
+		if updateErr := r.updateStatus(ctx, req, statusUpdate); updateErr != nil {
 			return ctrl.Result{}, updateErr
 		}
 		return ctrl.Result{RequeueAfter: time.Second * 30}, nil // Retry after 30 seconds
@@ -88,9 +126,8 @@ func (r *MCPServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	r.recorder.Event(&mcpServer, corev1.EventTypeNormal, "Connected", "MCP server connected successfully")
 
 	// Update status
-	if err := r.Status().Update(ctx, statusUpdate); err != nil {
-		logger.Error(err, "Failed to update MCPServer status")
-		return ctrl.Result{}, err
+	if updateErr := r.updateStatus(ctx, req, statusUpdate); updateErr != nil {
+		return ctrl.Result{}, updateErr
 	}
 
 	logger.Info("Successfully reconciled MCPServer",

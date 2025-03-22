@@ -422,7 +422,9 @@ func (in *MCPServerSpec) DeepCopyInto(out *MCPServerSpec) {
 	if in.Env != nil {
 		in, out := &in.Env, &out.Env
 		*out = make([]EnvVar, len(*in))
-		copy(*out, *in)
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
 	}
 	in.Resources.DeepCopyInto(&out.Resources)
 }

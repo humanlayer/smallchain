@@ -9,6 +9,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
+	ctrl "sigs.k8s.io/controller-runtime"
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
 	"github.com/humanlayer/smallchain/kubechain/internal/mcpmanager"
@@ -75,9 +76,9 @@ var _ = Describe("MCPServer Controller", func() {
 					Namespace: MCPServerNamespace,
 				},
 				Spec: kubechainv1alpha1.MCPServerSpec{
-					Transport:    "stdio",
-					Command: "test-command",
-					Args:    []string{"--arg1", "value1"},
+					Transport: "stdio",
+					Command:   "test-command",
+					Args:      []string{"--arg1", "value1"},
 					Env: []kubechainv1alpha1.EnvVar{
 						{
 							Name:  "TEST_ENV",

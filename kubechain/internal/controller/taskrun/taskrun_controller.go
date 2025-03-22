@@ -281,10 +281,34 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 
-	// Get tools from MCP servers - this replaces traditional Tool CRDs completely
+	// Collect tools from all sources (traditional Tool CRDs and MCP servers)
 	var tools []llmclient.Tool
 
-	// Only use MCP tools if the manager is available
+	// First, add tools from traditional Tool CRDs
+	if len(agent.Status.ValidTools) > 0 {
+		logger.Info("Adding traditional tools to LLM request", "toolCount", len(agent.Status.ValidTools))
+
+		for _, validTool := range agent.Status.ValidTools {
+			if validTool.Kind != "Tool" {
+				continue
+			}
+
+			// Get the Tool resource
+			tool := &kubechainv1alpha1.Tool{}
+			if err := r.Get(ctx, client.ObjectKey{Namespace: agent.Namespace, Name: validTool.Name}, tool); err != nil {
+				logger.Error(err, "Failed to get Tool", "name", validTool.Name)
+				continue
+			}
+
+			// Convert to LLM client format
+			if clientTool := llmclient.FromKubechainTool(*tool); clientTool != nil {
+				tools = append(tools, *clientTool)
+				logger.Info("Added traditional tool", "name", tool.Name)
+			}
+		}
+	}
+
+	// Then, add tools from MCP servers if available
 	if r.MCPManager != nil && len(agent.Status.ValidMCPServers) > 0 {
 		logger.Info("Adding MCP tools to LLM request", "mcpServerCount", len(agent.Status.ValidMCPServers))
 
@@ -302,9 +326,6 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 			logger.Info("Added MCP tools", "server", mcpServer.Name, "toolCount", len(mcpTools))
 		}
-	} else {
-		// Log that no MCP servers were found
-		logger.Info("No MCP servers available for this agent", "agent", agent.Name)
 	}
 
 	// Send the prompt to the LLM using the OpenAI client.
