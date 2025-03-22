@@ -574,7 +574,7 @@ Remove the operator, resources and custom resource definitions:
 kustomize build kubechain/config/default | kubectl delete --ignore-not-found=true -f -
 ```
 
-if you made a kind cluster, you can delete it with:
+If you made a kind cluster, you can delete it with:
 
 ```
 kind delete cluster --name kubechain-local
