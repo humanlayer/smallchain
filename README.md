@@ -453,7 +453,7 @@ items:
 
 ### Adding Tools with MCP
 
-Agent's arent that interesting without tools. Let's add a basic MCP server tool to our agent
+Agent's aren't that interesting without tools. Let's add a basic MCP server tool to our agent:
 
 ```bash
 cat <<EOF | kubectl apply -f -
