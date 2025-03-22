@@ -22,6 +22,11 @@ resources:
 # default, aiding admins in cluster management. Those roles are
 # not used by the {{ .ProjectName }} itself. You can comment the following lines
 # if you do not want those helpers be installed with your Project.
+- contactchannel_admin_role.yaml
+- contactchannel_editor_role.yaml
+- contactchannel_viewer_role.yaml
 - llm_admin_role.yaml
 - llm_editor_role.yaml
 - llm_viewer_role.yaml
+
+
