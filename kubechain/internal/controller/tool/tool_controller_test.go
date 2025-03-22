@@ -2,8 +2,6 @@ package tool
 
 import (
 	"context"
-	"strings"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -14,6 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
+	"github.com/humanlayer/smallchain/kubechain/test/utils"
 )
 
 var _ = Describe("Tool Controller", func() {
@@ -92,14 +91,7 @@ var _ = Describe("Tool Controller", func() {
 			Expect(updatedTool.Status.StatusDetail).To(Equal("Tool validation successful"))
 
 			By("checking that a success event was created")
-			Eventually(func() bool {
-				select {
-				case event := <-eventRecorder.Events:
-					return strings.Contains(event, "ValidationSucceeded")
-				default:
-					return false
-				}
-			}, 5*time.Second, 100*time.Millisecond).Should(BeTrue(), "Expected to find success event")
+			utils.ExpectRecorder(eventRecorder).ToEmitEventContaining("ValidationSucceeded")
 		})
 	})
 })

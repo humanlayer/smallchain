@@ -2,7 +2,6 @@ package task
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -13,6 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
+	"github.com/humanlayer/smallchain/kubechain/test/utils"
 )
 
 var _ = Describe("Task Controller", func() {
@@ -126,24 +126,10 @@ var _ = Describe("Task Controller", func() {
 			Expect(updatedTask.Status.StatusDetail).To(Equal("Task Run Created"))
 
 			By("checking that TaskRun creation event was created")
-			Eventually(func() bool {
-				select {
-				case event := <-eventRecorder.Events:
-					return strings.Contains(event, "TaskRunCreated")
-				default:
-					return false
-				}
-			}, 5*time.Second, 100*time.Millisecond).Should(BeTrue(), "Expected to find TaskRun creation event")
+			utils.ExpectRecorder(eventRecorder).ToEmitEventContaining("TaskRunCreated")
 
 			By("checking that validation success event was created")
-			Eventually(func() bool {
-				select {
-				case event := <-eventRecorder.Events:
-					return strings.Contains(event, "ValidationSucceeded")
-				default:
-					return false
-				}
-			}, 5*time.Second, 100*time.Millisecond).Should(BeTrue(), "Expected to find validation success event")
+			utils.ExpectRecorder(eventRecorder).ToEmitEventContaining("ValidationSucceeded")
 		})
 
 		It("should fail validation with non-existent agent", func() {
@@ -185,14 +171,7 @@ var _ = Describe("Task Controller", func() {
 			Expect(updatedTask.Status.StatusDetail).To(ContainSubstring(`"nonexistent-agent" not found`))
 
 			By("checking that a failure event was created")
-			Eventually(func() bool {
-				select {
-				case event := <-eventRecorder.Events:
-					return strings.Contains(event, "ValidationFailed")
-				default:
-					return false
-				}
-			}, 5*time.Second, 100*time.Millisecond).Should(BeTrue(), "Expected to find failure event")
+			utils.ExpectRecorder(eventRecorder).ToEmitEventContaining("ValidationFailed")
 		})
 	})
 })

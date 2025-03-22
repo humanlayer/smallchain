@@ -23,8 +23,11 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2" //nolint:golint,revive
+	. "github.com/onsi/gomega"
+	"k8s.io/client-go/tools/record"
 )
 
 const (
@@ -248,4 +251,27 @@ func UncommentCode(filename, target, prefix string) error {
 	// false positive
 	// nolint:gosec
 	return os.WriteFile(filename, out.Bytes(), 0644)
+}
+
+type eventAssertion struct {
+	eventRecorder *record.FakeRecorder
+}
+
+// ExpectRecorder starts the fluent assertion chain for event recording
+func ExpectRecorder(recorder *record.FakeRecorder) *eventAssertion {
+	return &eventAssertion{
+		eventRecorder: recorder,
+	}
+}
+
+// ToEmitEventContaining completes the fluent assertion chain and checks for the event
+func (a *eventAssertion) ToEmitEventContaining(substring string) {
+	Eventually(func() bool {
+		select {
+		case event := <-a.eventRecorder.Events:
+			return strings.Contains(event, substring)
+		default:
+			return false
+		}
+	}, 5*time.Second, 100*time.Millisecond).Should(BeTrue())
 }
