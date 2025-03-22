@@ -99,5 +99,5 @@ clean-all: undeploy-samples undeploy-operator undeploy-otel cluster-down ## Clea
 
 .PHONY: githooks
 githooks:
-	ln -s hack/git_pre_push.sh .git/hooks/pre-push
+	ln -s ${PWD}/hack/git_pre_push.sh ${PWD}/.git/hooks/pre-push
 
