@@ -142,6 +142,34 @@ build-installer: manifests generate kustomize ## Generate a consolidated YAML wi
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
 	$(KUSTOMIZE) build config/default > dist/install.yaml
 
+.PHONY: release-local
+release-local: manifests generate kustomize ## Build cross-platform image (amd64/arm64) and create release YAMLs (usage: make release-local tag=v0.1.0)
+	@if [ -z "$(tag)" ]; then \
+		echo "Error: tag parameter is required (e.g., make release-local tag=v0.1.0)"; \
+		exit 1; \
+	fi
+	@echo "Building and pushing image for platforms linux/amd64,linux/arm64 with tag: $(tag)"
+	$(eval VERSION=$(shell echo $(tag) | sed 's/^v//'))
+	$(eval REPO=ghcr.io/humanlayer/smallchain)
+	$(eval RELEASE_IMG=$(REPO):$(tag))
+	@echo "Setting image to: $(RELEASE_IMG)"
+	
+	# Build and push image for amd64 and arm64 platforms
+	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile > Dockerfile.cross
+	- $(CONTAINER_TOOL) buildx create --name smallchain-builder
+	$(CONTAINER_TOOL) buildx use smallchain-builder
+	$(CONTAINER_TOOL) buildx build --push --platform=linux/amd64,linux/arm64 --tag $(RELEASE_IMG) --tag $(REPO):latest -f Dockerfile.cross .
+	- $(CONTAINER_TOOL) buildx rm smallchain-builder
+	rm Dockerfile.cross
+	
+	# Generate release YAMLs
+	mkdir -p config/release
+	cd config/manager && $(KUSTOMIZE) edit set image controller=$(RELEASE_IMG)
+	$(KUSTOMIZE) build config/default > config/release/v$(VERSION).yaml
+	$(KUSTOMIZE) build config/crd > config/release/v$(VERSION)-crd.yaml
+	cp config/release/v$(VERSION).yaml config/release/latest.yaml
+	cp config/release/v$(VERSION)-crd.yaml config/release/latest-crd.yaml
+
 ##@ Deployment
 
 ifndef ignore-not-found
