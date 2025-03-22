@@ -75,7 +75,7 @@ var _ = Describe("MCPServer Controller", func() {
 					Namespace: MCPServerNamespace,
 				},
 				Spec: kubechainv1alpha1.MCPServerSpec{
-					Type:    "stdio",
+					Transport:    "stdio",
 					Command: "test-command",
 					Args:    []string{"--arg1", "value1"},
 					Env: []kubechainv1alpha1.EnvVar{
@@ -152,7 +152,7 @@ var _ = Describe("MCPServer Controller", func() {
 					Namespace: MCPServerNamespace,
 				},
 				Spec: kubechainv1alpha1.MCPServerSpec{
-					Type: "stdio",
+					Transport: "stdio",
 					// Missing command, which is required for stdio type
 				},
 			}

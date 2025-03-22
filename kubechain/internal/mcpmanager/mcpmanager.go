@@ -8,9 +8,12 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/mark3labs/mcp-go/client"
+	mcpclient "github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/mcp"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	corev1 "k8s.io/api/core/v1"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
 )
@@ -19,6 +22,7 @@ import (
 type MCPServerManager struct {
 	connections map[string]*MCPConnection
 	mu          sync.RWMutex
+	client      ctrlclient.Client // Kubernetes client for accessing resources
 }
 
 // MCPConnection represents a connection to an MCP server
@@ -30,7 +34,7 @@ type MCPConnection struct {
 	// Command is the stdio process (if ServerType is "stdio")
 	Command *exec.Cmd
 	// Client is the MCP client
-	Client client.MCPClient
+	Client mcpclient.MCPClient
 	// Tools is the list of tools provided by this server
 	Tools []kubechainv1alpha1.MCPTool
 }
@@ -43,6 +47,15 @@ func NewMCPServerManager() *MCPServerManager {
 	}
 }
 
+// NewMCPServerManagerWithClient creates a new MCPServerManager with a Kubernetes client
+func NewMCPServerManagerWithClient(c ctrlclient.Client) *MCPServerManager {
+	return &MCPServerManager{
+		connections: make(map[string]*MCPConnection),
+		mu:          sync.RWMutex{},
+		client:      c,
+	}
+}
+
 // GetConnection returns the MCPConnection for the given server name
 func (m *MCPServerManager) GetConnection(serverName string) (*MCPConnection, bool) {
 	m.mu.RLock()
@@ -52,12 +65,44 @@ func (m *MCPServerManager) GetConnection(serverName string) (*MCPConnection, boo
 }
 
 // convertEnvVars converts kubechain EnvVar to string slice of env vars
-func convertEnvVars(envVars []kubechainv1alpha1.EnvVar) []string {
+func (m *MCPServerManager) convertEnvVars(ctx context.Context, envVars []kubechainv1alpha1.EnvVar, namespace string) ([]string, error) {
 	env := make([]string, 0, len(envVars))
 	for _, e := range envVars {
-		env = append(env, fmt.Sprintf("%s=%s", e.Name, e.Value))
+		// Case 1: Direct value
+		if e.Value != "" {
+			env = append(env, fmt.Sprintf("%s=%s", e.Name, e.Value))
+			continue
+		}
+
+		// Case 2: Value from secret reference
+		if e.ValueFrom != nil && e.ValueFrom.SecretKeyRef != nil {
+			secretRef := e.ValueFrom.SecretKeyRef
+			
+			// If we don't have a Kubernetes client, we can't resolve secrets
+			if m.client == nil {
+				return nil, fmt.Errorf("cannot resolve secret reference for env var %s: no Kubernetes client available", e.Name)
+			}
+			
+			// Fetch the secret from Kubernetes
+			var secret corev1.Secret
+			if err := m.client.Get(ctx, types.NamespacedName{
+				Name:      secretRef.Name,
+				Namespace: namespace,
+			}, &secret); err != nil {
+				return nil, fmt.Errorf("failed to get secret %s for env var %s: %w", secretRef.Name, e.Name, err)
+			}
+			
+			// Get the value from the secret
+			secretValue, exists := secret.Data[secretRef.Key]
+			if !exists {
+				return nil, fmt.Errorf("key %s not found in secret %s for env var %s", secretRef.Key, secretRef.Name, e.Name)
+			}
+			
+			// Add the environment variable with the secret value
+			env = append(env, fmt.Sprintf("%s=%s", e.Name, string(secretValue)))
+		}
 	}
-	return env
+	return env, nil
 }
 
 // ConnectServer establishes a connection to an MCP server
@@ -69,7 +114,7 @@ func (m *MCPServerManager) ConnectServer(ctx context.Context, mcpServer *kubecha
 	if conn, exists := m.connections[mcpServer.Name]; exists {
 		// If the server exists and the specs are the same, reuse the connection
 		// TODO: Add logic to detect if specs changed and reconnect if needed
-		if conn.ServerType == mcpServer.Spec.Type {
+		if conn.ServerType == mcpServer.Spec.Transport {
 			return nil
 		}
 
@@ -77,23 +122,29 @@ func (m *MCPServerManager) ConnectServer(ctx context.Context, mcpServer *kubecha
 		m.disconnectServerLocked(mcpServer.Name)
 	}
 
-	var mcpClient client.MCPClient
+	var mcpClient mcpclient.MCPClient
 	var err error
 
-	if mcpServer.Spec.Type == "stdio" {
+	if mcpServer.Spec.Transport == "stdio" {
+		// Convert environment variables, resolving any secret references
+		envVars, err := m.convertEnvVars(ctx, mcpServer.Spec.Env, mcpServer.Namespace)
+		if err != nil {
+			return fmt.Errorf("failed to process environment variables: %w", err)
+		}
+		
 		// Create a stdio-based MCP client
-		mcpClient, err = client.NewStdioMCPClient(mcpServer.Spec.Command, convertEnvVars(mcpServer.Spec.Env), mcpServer.Spec.Args...)
+		mcpClient, err = mcpclient.NewStdioMCPClient(mcpServer.Spec.Command, envVars, mcpServer.Spec.Args...)
 		if err != nil {
 			return fmt.Errorf("failed to create stdio MCP client: %w", err)
 		}
-	} else if mcpServer.Spec.Type == "http" {
+	} else if mcpServer.Spec.Transport == "http" {
 		// Create an SSE-based MCP client for HTTP connections
-		mcpClient, err = client.NewSSEMCPClient(mcpServer.Spec.URL)
+		mcpClient, err = mcpclient.NewSSEMCPClient(mcpServer.Spec.URL)
 		if err != nil {
 			return fmt.Errorf("failed to create SSE MCP client: %w", err)
 		}
 	} else {
-		return fmt.Errorf("unsupported MCP server type: %s", mcpServer.Spec.Type)
+		return fmt.Errorf("unsupported MCP server transport: %s", mcpServer.Spec.Transport)
 	}
 
 	// Initialize the client
@@ -148,7 +199,7 @@ func (m *MCPServerManager) ConnectServer(ctx context.Context, mcpServer *kubecha
 	// Store the connection
 	m.connections[mcpServer.Name] = &MCPConnection{
 		ServerName: mcpServer.Name,
-		ServerType: mcpServer.Spec.Type,
+		ServerType: mcpServer.Spec.Transport,
 		Client:     mcpClient,
 		Tools:      tools,
 	}
