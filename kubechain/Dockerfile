@@ -31,11 +31,33 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o manager cmd/main.go
 
-# Use distroless as minimal base image to package the manager binary
-# Refer to https://github.com/GoogleContainerTools/distroless for more details
-FROM gcr.io/distroless/static:nonroot
+# Install uv/uvx
+FROM debian:bookworm-slim AS uv-installer
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates
+ADD https://astral.sh/uv/install.sh /uv-installer.sh
+RUN sh /uv-installer.sh && rm /uv-installer.sh
+
+# Python slim image provides both Python and a minimal Debian
+FROM python:3.12-slim-bookworm
 WORKDIR /
+
+# Install Node.js and NPM/NPX
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    nodejs npm \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy our manager binary from the builder stage
 COPY --from=builder /workspace/manager .
+
+# Copy uv/uvx from the installer stage
+COPY --from=uv-installer /root/.local/bin/uv /usr/local/bin/uv
+COPY --from=uv-installer /root/.local/bin/uvx /usr/local/bin/uvx
+
+# Create non-root user to match the 65532 UID from distroless
+RUN groupadd -g 65532 nonroot && \
+    useradd -u 65532 -g nonroot -s /bin/bash -m nonroot
+
 USER 65532:65532
 
 ENTRYPOINT ["/manager"]

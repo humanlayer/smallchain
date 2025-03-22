@@ -2,12 +2,15 @@ package mcpmanager
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os/exec"
+	"strings"
 	"sync"
 
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/mcp"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
 )
@@ -27,7 +30,7 @@ type MCPConnection struct {
 	// Command is the stdio process (if ServerType is "stdio")
 	Command *exec.Cmd
 	// Client is the MCP client
-	Client mcp.MCPClient
+	Client client.MCPClient
 	// Tools is the list of tools provided by this server
 	Tools []kubechainv1alpha1.MCPTool
 }
@@ -74,7 +77,7 @@ func (m *MCPServerManager) ConnectServer(ctx context.Context, mcpServer *kubecha
 		m.disconnectServerLocked(mcpServer.Name)
 	}
 
-	var mcpClient mcp.MCPClient
+	var mcpClient client.MCPClient
 	var err error
 
 	if mcpServer.Spec.Type == "stdio" {
@@ -84,10 +87,10 @@ func (m *MCPServerManager) ConnectServer(ctx context.Context, mcpServer *kubecha
 			return fmt.Errorf("failed to create stdio MCP client: %w", err)
 		}
 	} else if mcpServer.Spec.Type == "http" {
-		// Create an HTTP-based MCP client
-		mcpClient, err = client.NewHTTPMCPClient(mcpServer.Spec.URL)
+		// Create an SSE-based MCP client for HTTP connections
+		mcpClient, err = client.NewSSEMCPClient(mcpServer.Spec.URL)
 		if err != nil {
-			return fmt.Errorf("failed to create HTTP MCP client: %w", err)
+			return fmt.Errorf("failed to create SSE MCP client: %w", err)
 		}
 	} else {
 		return fmt.Errorf("unsupported MCP server type: %s", mcpServer.Spec.Type)
@@ -110,12 +113,35 @@ func (m *MCPServerManager) ConnectServer(ctx context.Context, mcpServer *kubecha
 	// Convert tools to kubechain format
 	tools := make([]kubechainv1alpha1.MCPTool, 0, len(toolsResp.Tools))
 	for _, tool := range toolsResp.Tools {
+		// Handle the InputSchema properly
+		var inputSchemaBytes []byte
+		var err error
+
+		if len(tool.RawInputSchema) > 0 {
+			// Use RawInputSchema if available (preferred)
+			inputSchemaBytes = tool.RawInputSchema
+		} else {
+			// Otherwise, use the structured InputSchema and ensure required is an array
+			schema := tool.InputSchema
+			
+			// Ensure required is not null
+			if schema.Required == nil {
+				schema.Required = []string{}
+			}
+			
+			inputSchemaBytes, err = json.Marshal(schema)
+			if err != nil {
+				// Log the error but continue
+				fmt.Printf("Error marshaling input schema for tool %s: %v\n", tool.Name, err)
+				// Use a minimal valid schema as fallback
+				inputSchemaBytes = []byte(`{"type":"object","properties":{},"required":[]}`)
+			}
+		}
+		
 		tools = append(tools, kubechainv1alpha1.MCPTool{
 			Name:        tool.Name,
 			Description: tool.Description,
-			// We'll need to handle the InputSchema conversion here
-			// This is a simplified version
-			// TODO: Properly convert InputSchema
+			InputSchema: runtime.RawExtension{Raw: inputSchemaBytes},
 		})
 	}
 
@@ -230,8 +256,7 @@ func (m *MCPServerManager) CallTool(ctx context.Context, serverName, toolName st
 // Format of the tool name is expected to be "serverName__toolName"
 func (m *MCPServerManager) FindServerForTool(fullToolName string) (serverName string, toolName string, found bool) {
 	// In our implementation, we'll use serverName__toolName as the format
-	// This is consistent with the MCP integration example
-	parts := client.ParseMCPToolName(fullToolName)
+	parts := strings.SplitN(fullToolName, "__", 2)
 	if len(parts) != 2 {
 		return "", "", false
 	}
