@@ -2,8 +2,6 @@ package agent
 
 import (
 	"context"
-	"strings"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -13,6 +11,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
+	"github.com/humanlayer/smallchain/kubechain/test/utils"
 )
 
 var _ = Describe("Agent Controller", func() {
@@ -95,23 +94,15 @@ var _ = Describe("Agent Controller", func() {
 		})
 
 		It("should successfully validate an agent with valid dependencies", func() {
-			By("creating the agent with valid LLM and Tool references")
-			agent := &kubechainv1alpha1.Agent{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      resourceName,
-					Namespace: "default",
-				},
-				Spec: kubechainv1alpha1.AgentSpec{
-					LLMRef: kubechainv1alpha1.LocalObjectReference{
-						Name: llmName,
-					},
-					Tools: []kubechainv1alpha1.LocalObjectReference{
-						{Name: toolName},
-					},
-					System: "Test agent",
-				},
+			By("creating the test agent")
+			testAgent := &utils.TestScopedAgent{
+				Name:         resourceName,
+				SystemPrompt: "Test agent",
+				Tools:        []string{toolName},
+				LLM:          llmName,
 			}
-			Expect(k8sClient.Create(ctx, agent)).To(Succeed())
+			testAgent.Setup(k8sClient)
+			defer testAgent.Teardown()
 
 			By("reconciling the agent")
 			eventRecorder := record.NewFakeRecorder(10)
@@ -139,31 +130,19 @@ var _ = Describe("Agent Controller", func() {
 			}))
 
 			By("checking that a success event was created")
-			Eventually(func() bool {
-				select {
-				case event := <-eventRecorder.Events:
-					return strings.Contains(event, "ValidationSucceeded")
-				default:
-					return false
-				}
-			}, 5*time.Second, 100*time.Millisecond).Should(BeTrue(), "Expected to find success event")
+			utils.ExpectRecorder(eventRecorder).ToEmitEventContaining("ValidationSucceeded")
 		})
 
 		It("should fail validation with non-existent LLM", func() {
-			By("creating the agent with invalid LLM reference")
-			agent := &kubechainv1alpha1.Agent{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      resourceName,
-					Namespace: "default",
-				},
-				Spec: kubechainv1alpha1.AgentSpec{
-					LLMRef: kubechainv1alpha1.LocalObjectReference{
-						Name: "nonexistent-llm",
-					},
-					System: "Test agent",
-				},
+			By("creating the test agent with invalid LLM")
+			testAgent := &utils.TestScopedAgent{
+				Name:         resourceName,
+				SystemPrompt: "Test agent",
+				Tools:        []string{toolName},
+				LLM:          "nonexistent-llm",
 			}
-			Expect(k8sClient.Create(ctx, agent)).To(Succeed())
+			testAgent.Setup(k8sClient)
+			defer testAgent.Teardown()
 
 			By("reconciling the agent")
 			eventRecorder := record.NewFakeRecorder(10)
@@ -188,34 +167,19 @@ var _ = Describe("Agent Controller", func() {
 			Expect(updatedAgent.Status.StatusDetail).To(ContainSubstring(`"nonexistent-llm" not found`))
 
 			By("checking that a failure event was created")
-			Eventually(func() bool {
-				select {
-				case event := <-eventRecorder.Events:
-					return strings.Contains(event, "ValidationFailed")
-				default:
-					return false
-				}
-			}, 5*time.Second, 100*time.Millisecond).Should(BeTrue(), "Expected to find failure event")
+			utils.ExpectRecorder(eventRecorder).ToEmitEventContaining("ValidationFailed")
 		})
 
 		It("should fail validation with non-existent Tool", func() {
-			By("creating the agent with invalid Tool reference")
-			agent := &kubechainv1alpha1.Agent{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      resourceName,
-					Namespace: "default",
-				},
-				Spec: kubechainv1alpha1.AgentSpec{
-					LLMRef: kubechainv1alpha1.LocalObjectReference{
-						Name: llmName,
-					},
-					Tools: []kubechainv1alpha1.LocalObjectReference{
-						{Name: "nonexistent-tool"},
-					},
-					System: "Test agent",
-				},
+			By("creating the test agent with invalid Tool")
+			testAgent := &utils.TestScopedAgent{
+				Name:         resourceName,
+				SystemPrompt: "Test agent",
+				Tools:        []string{"nonexistent-tool"},
+				LLM:          llmName,
 			}
-			Expect(k8sClient.Create(ctx, agent)).To(Succeed())
+			testAgent.Setup(k8sClient)
+			defer testAgent.Teardown()
 
 			By("reconciling the agent")
 			eventRecorder := record.NewFakeRecorder(10)
@@ -240,14 +204,7 @@ var _ = Describe("Agent Controller", func() {
 			Expect(updatedAgent.Status.StatusDetail).To(ContainSubstring(`"nonexistent-tool" not found`))
 
 			By("checking that a failure event was created")
-			Eventually(func() bool {
-				select {
-				case event := <-eventRecorder.Events:
-					return strings.Contains(event, "ValidationFailed")
-				default:
-					return false
-				}
-			}, 5*time.Second, 100*time.Millisecond).Should(BeTrue(), "Expected to find failure event")
+			utils.ExpectRecorder(eventRecorder).ToEmitEventContaining("ValidationFailed")
 		})
 	})
 })

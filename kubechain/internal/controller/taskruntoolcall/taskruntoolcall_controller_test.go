@@ -2,7 +2,6 @@ package taskruntoolcall
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -13,6 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
+	"github.com/humanlayer/smallchain/kubechain/test/utils"
 )
 
 var _ = Describe("TaskRunToolCall Controller", func() {
@@ -120,14 +120,7 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 			Expect(updatedTRTC.Status.StatusDetail).To(Equal("Tool executed successfully"))
 
 			By("checking that execution events were emitted")
-			Eventually(func() bool {
-				select {
-				case event := <-eventRecorder.Events:
-					return strings.Contains(event, "ExecutionSucceeded")
-				default:
-					return false
-				}
-			}, 5*time.Second, 100*time.Millisecond).Should(BeTrue())
+			utils.ExpectRecorder(eventRecorder).ToEmitEventContaining("ExecutionSucceeded")
 		})
 
 		It("should fail with invalid arguments", func() {
@@ -177,14 +170,7 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 			Expect(updatedTRTC.Status.StatusDetail).To(Equal("Invalid arguments JSON"))
 
 			By("checking that a validation failed event was created")
-			Eventually(func() bool {
-				select {
-				case event := <-eventRecorder.Events:
-					return strings.Contains(event, "ExecutionFailed")
-				default:
-					return false
-				}
-			}, 5*time.Second, 100*time.Millisecond).Should(BeTrue())
+			utils.ExpectRecorder(eventRecorder).ToEmitEventContaining("ExecutionFailed")
 		})
 	})
 })

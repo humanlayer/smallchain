@@ -18,6 +18,7 @@ import (
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
 	"github.com/humanlayer/smallchain/kubechain/internal/llmclient"
+	"github.com/humanlayer/smallchain/kubechain/test/utils"
 )
 
 var _ = Describe("TaskRun Controller", func() {
@@ -247,14 +248,7 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(updatedTaskRun.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunPhaseReadyForLLM))
 
 			By("checking that validation success event was created")
-			Eventually(func() bool {
-				select {
-				case event := <-eventRecorder.Events:
-					return strings.Contains(event, "ValidationSucceeded")
-				default:
-					return false
-				}
-			}, 5*time.Second, 100*time.Millisecond).Should(BeTrue(), "Expected to find validation success event")
+			utils.ExpectRecorder(eventRecorder).ToEmitEventContaining("ValidationSucceeded")
 
 			By("reconciling the taskrun again")
 			// Second reconciliation - should send to LLM and get response
@@ -275,14 +269,7 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(updatedTaskRun.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunPhaseFinalAnswer))
 
 			By("checking that LLM final answer event was created")
-			Eventually(func() bool {
-				select {
-				case event := <-eventRecorder.Events:
-					return strings.Contains(event, "LLMFinalAnswer")
-				default:
-					return false
-				}
-			}, 5*time.Second, 100*time.Millisecond).Should(BeTrue(), "Expected to find LLM final answer event")
+			utils.ExpectRecorder(eventRecorder).ToEmitEventContaining("LLMFinalAnswer")
 		})
 
 		It("should clear error field when entering ready state", func() {
@@ -368,14 +355,7 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(updatedTaskRun.Status.Error).To(ContainSubstring("failed to get Task"))
 
 			By("checking that a failure event was created")
-			Eventually(func() bool {
-				select {
-				case event := <-eventRecorder.Events:
-					return strings.Contains(event, "ValidationFailed")
-				default:
-					return false
-				}
-			}, 5*time.Second, 100*time.Millisecond).Should(BeTrue(), "Expected to find failure event")
+			utils.ExpectRecorder(eventRecorder).ToEmitEventContaining("ValidationFailed")
 		})
 
 		It("should set pending status when task exists but is not ready", func() {
@@ -767,18 +747,7 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(updatedTaskRun.Status.StatusDetail).To(ContainSubstring("LLM request failed"))
 
 			By("checking that an error event was created")
-			Eventually(func() bool {
-				select {
-				case event := <-eventRecorder.Events:
-					// The controller might not be emitting a specific "LLMRequestFailed" event
-					// but we should see some error-related event
-					return strings.Contains(event, "Error") ||
-						strings.Contains(event, "Failed") ||
-						strings.Contains(event, "Failure")
-				default:
-					return false
-				}
-			}, 5*time.Second, 100*time.Millisecond).Should(BeTrue(), "Expected to find LLM failure event")
+			utils.ExpectRecorder(eventRecorder).ToEmitEventContaining("Error")
 		})
 
 		It("should correctly handle multi-message conversations with the LLM", func() {
