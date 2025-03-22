@@ -53,12 +53,29 @@ otel-patch-service:
 otel-up: otel-deploy-base otel-patch-service 
 
 otel-test:
+	@echo "Waiting for OpenTelemetry collector deployment to be ready..."
+	kubectl wait --for=condition=Available deployment/otel-collector-opentelemetry-collector --timeout=300s
+	@echo "Waiting for Grafana deployment to be ready..."
+	kubectl wait --for=condition=Available deployment/grafana --timeout=300s
+	@echo "Waiting for Prometheus deployments to be ready..."
+	kubectl wait --for=condition=Available deployment/prometheus-server deployment/prometheus-kube-state-metrics deployment/prometheus-prometheus-pushgateway --timeout=300s
+	@echo "Waiting for Loki deployments and statefulsets to be ready..."
+	kubectl wait --for=condition=Available deployment/loki-gateway --timeout=300s
+	@echo "Waiting for Loki statefulset..."
+	kubectl rollout status --watch --timeout=600s statefulset/loki
+	@echo "Waiting for Loki chunks cache statefulset..."
+	kubectl rollout status --watch --timeout=600s statefulset/loki-chunks-cache
+	@echo "Waiting for Loki results cache statefulset..."
+	kubectl rollout status --watch --timeout=600s statefulset/loki-results-cache
+	@echo "Waiting for Tempo statefulset to be ready..."
+	kubectl rollout status --watch --timeout=600s statefulset/tempo
+	@echo "Waiting for Prometheus alertmanager statefulset to be ready..."
+	kubectl rollout status --watch --timeout=600s statefulset/prometheus-alertmanager
 	uv run otel/otel-test-traces.py
 	:
 	: Open Telemetry data has been sent to the collector.
 	: you can view the data in grafana at http://localhost:13000/d/test-data/test-data
 
-	
 otel-down:
 	@echo "Deleting OpenTelemetry collector from cluster..."
 	helm delete otel-collector
