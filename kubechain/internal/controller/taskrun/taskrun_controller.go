@@ -2,9 +2,7 @@ package taskrun
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -17,7 +15,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
-	"github.com/openai/openai-go"
 
 	"github.com/humanlayer/smallchain/kubechain/internal/adapters"
 	"github.com/humanlayer/smallchain/kubechain/internal/llmclient"
@@ -168,7 +165,8 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 		// Check if all tool calls are complete
 		allComplete := true
-		var toolResults []string
+		var toolResults []kubechainv1alpha1.Message
+
 		for _, tc := range toolCallList.Items {
 			logger.Info("Checking tool call", "name", tc.Name, "phase", tc.Status.Phase)
 			if tc.Status.Phase != kubechainv1alpha1.TaskRunToolCallPhaseSucceeded {
@@ -176,7 +174,11 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 				logger.Info("Found incomplete tool call", "name", tc.Name)
 				break
 			}
-			toolResults = append(toolResults, tc.Status.Result)
+			toolResults = append(toolResults, kubechainv1alpha1.Message{
+				ToolCallId: tc.Spec.ToolCallId,
+				Role:       "tool",
+				Content:    tc.Status.Result,
+			})
 		}
 
 		if allComplete {
@@ -184,10 +186,9 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			// All tool calls are complete, update context window and move back to ReadyForLLM phase
 			// so that the LLM can process the tool results and provide a final answer
 			statusUpdate := taskRun.DeepCopy()
-			statusUpdate.Status.ContextWindow = append(statusUpdate.Status.ContextWindow, kubechainv1alpha1.Message{
-				Role:    "tool",
-				Content: strings.Join(toolResults, "\n"),
-			})
+			for _, toolResult := range toolResults {
+				statusUpdate.Status.ContextWindow = append(statusUpdate.Status.ContextWindow, toolResult)
+			}
 			statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseReadyForLLM
 			statusUpdate.Status.Ready = true
 			statusUpdate.Status.Status = "Ready"
@@ -205,7 +206,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	// at this point the only other phase is ReadyForLLM
-	if taskRun.Status.Phase == kubechainv1alpha1.TaskRunPhaseReadyForLLM {
+	if taskRun.Status.Phase != kubechainv1alpha1.TaskRunPhaseReadyForLLM {
 		logger.Info("TaskRun in unknown phase", "phase", taskRun.Status.Phase)
 		return ctrl.Result{}, nil
 	}
@@ -278,8 +279,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 
-	var tools []openai.ChatCompletionToolParam
-	// Get the tools from the agent's ValidTools
+	var tools []llmclient.Tool
 	for _, toolName := range agent.Status.ValidTools {
 		tool := &kubechainv1alpha1.Tool{}
 		err := r.Get(ctx, client.ObjectKey{
@@ -291,30 +291,14 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			continue
 		}
 
-		// Convert the tool's arguments to a JSON schema
-		toolParam := openai.ChatCompletionToolParam{
-			Type: openai.F(openai.ChatCompletionToolTypeFunction),
-			Function: openai.F(openai.FunctionDefinitionParam{
-				Name:        openai.F(tool.Name),
-				Description: openai.F(tool.Spec.Description),
-			}),
+		if converted := llmclient.FromKubechainTool(*tool); converted != nil {
+			tools = append(tools, *converted)
 		}
-
-		// If the tool has arguments defined, add them to the function definition
-		if tool.Spec.Parameters.Raw != nil {
-			var parameters openai.FunctionParameters
-			if err := json.Unmarshal(tool.Spec.Parameters.Raw, &parameters); err != nil {
-				logger.Error(err, "Failed to unmarshal tool arguments", "tool", toolName)
-				continue
-			}
-			toolParam.Function.Value.Parameters = openai.F(parameters)
-		}
-
-		tools = append(tools, toolParam)
 	}
 
 	// Send the prompt to the LLM using the OpenAI client.
-	output, err := llmClient.SendRequest(ctx, agent.Spec.System, task.Spec.Message, tools)
+	output, err := llmClient.SendRequest(ctx, taskRun.Status.ContextWindow, tools)
+
 	if err != nil {
 		logger.Error(err, "LLM request failed")
 		statusUpdate.Status.Ready = false
@@ -384,6 +368,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 					},
 				},
 				Spec: kubechainv1alpha1.TaskRunToolCallSpec{
+					ToolCallId: tc.ID,
 					TaskRunRef: kubechainv1alpha1.LocalObjectReference{
 						Name: statusUpdate.Name,
 					},
@@ -418,7 +403,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 func (r *TaskRunReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.recorder = mgr.GetEventRecorderFor("taskrun-controller")
 	if r.newLLMClient == nil {
-		r.newLLMClient = llmclient.NewOpenAIClient
+		r.newLLMClient = llmclient.NewRawOpenAIClient
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&kubechainv1alpha1.TaskRun{}).

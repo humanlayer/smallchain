@@ -74,6 +74,9 @@ spec:
                 required:
                 - name
                 type: object
+              toolCallId:
+                description: ToolCallId is the unique identifier for this tool call
+                type: string
               toolRef:
                 description: ToolRef references the tool to execute
                 properties:
@@ -87,6 +90,7 @@ spec:
             required:
             - arguments
             - taskRunRef
+            - toolCallId
             - toolRef
             type: object
           status:
