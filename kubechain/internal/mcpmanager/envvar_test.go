@@ -12,13 +12,13 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	
+
 	corev1 "k8s.io/api/core/v1"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
@@ -86,14 +86,14 @@ func (m *MockClient) Get(ctx context.Context, key client.ObjectKey, obj client.O
 	if !ok {
 		return fmt.Errorf("not a secret: got %T", obj)
 	}
-	
+
 	// Look up the secret
 	nsName := types.NamespacedName{Namespace: key.Namespace, Name: key.Name}
 	s, exists := m.secrets[nsName]
 	if !exists {
 		return fmt.Errorf("secret not found: %s/%s", key.Namespace, key.Name)
 	}
-	
+
 	// Copy data to the result
 	secret.Data = s.Data
 	secret.ObjectMeta = s.ObjectMeta
@@ -187,23 +187,22 @@ func (m *MockSubResourceClient) Patch(ctx context.Context, obj client.Object, pa
 	return fmt.Errorf("not implemented")
 }
 
-
 var _ = Describe("Environment Variable Handling", func() {
 	var (
-		manager  *MCPServerManager
+		manager    *MCPServerManager
 		mockClient *MockClient
-		ctx      context.Context
+		ctx        context.Context
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
 		mockClient = NewMockClient()
-		
+
 		// Add test secrets to the mock client
 		mockClient.AddSecret("default", "test-secret", map[string][]byte{
 			"api-key": []byte("secret-value"),
 		})
-		
+
 		// Create the manager with the mock client
 		manager = NewMCPServerManagerWithClient(mockClient)
 	})
@@ -221,16 +220,16 @@ var _ = Describe("Environment Variable Handling", func() {
 					Value: "value2",
 				},
 			}
-			
+
 			// Process env vars
 			result, err := manager.convertEnvVars(ctx, envVars, "default")
-			
+
 			// Verify results
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(ContainElement("TEST_ENV1=value1"))
 			Expect(result).To(ContainElement("TEST_ENV2=value2"))
 		})
-		
+
 		It("should process environment variables from secrets", func() {
 			// Create reference to the test secret
 			envVars := []kubechainv1alpha1.EnvVar{
@@ -244,15 +243,15 @@ var _ = Describe("Environment Variable Handling", func() {
 					},
 				},
 			}
-			
+
 			// Process env vars
 			result, err := manager.convertEnvVars(ctx, envVars, "default")
-			
+
 			// Verify results
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(ContainElement("API_KEY=secret-value"))
 		})
-		
+
 		It("should handle mixed direct values and secret references", func() {
 			// Create test env vars with both types
 			envVars := []kubechainv1alpha1.EnvVar{
@@ -270,16 +269,16 @@ var _ = Describe("Environment Variable Handling", func() {
 					},
 				},
 			}
-			
+
 			// Process env vars
 			result, err := manager.convertEnvVars(ctx, envVars, "default")
-			
+
 			// Verify results
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(ContainElement("DIRECT_VAR=direct-value"))
 			Expect(result).To(ContainElement("SECRET_VAR=secret-value"))
 		})
-		
+
 		It("should return error for non-existent secret", func() {
 			// Create reference to a non-existent secret
 			envVars := []kubechainv1alpha1.EnvVar{
@@ -293,15 +292,15 @@ var _ = Describe("Environment Variable Handling", func() {
 					},
 				},
 			}
-			
+
 			// Process env vars
 			_, err := manager.convertEnvVars(ctx, envVars, "default")
-			
+
 			// Verify error
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to get secret"))
 		})
-		
+
 		It("should return error for non-existent key in secret", func() {
 			// Create reference to a non-existent key
 			envVars := []kubechainv1alpha1.EnvVar{
@@ -315,19 +314,19 @@ var _ = Describe("Environment Variable Handling", func() {
 					},
 				},
 			}
-			
+
 			// Process env vars
 			_, err := manager.convertEnvVars(ctx, envVars, "default")
-			
+
 			// Verify error
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("not found in secret"))
 		})
-		
+
 		It("should return error when client is nil and secret references are used", func() {
 			// Create manager without client
 			managerNoClient := NewMCPServerManager() // No client provided
-			
+
 			// Create reference to a secret
 			envVars := []kubechainv1alpha1.EnvVar{
 				{
@@ -340,10 +339,10 @@ var _ = Describe("Environment Variable Handling", func() {
 					},
 				},
 			}
-			
+
 			// Process env vars
 			_, err := managerNoClient.convertEnvVars(ctx, envVars, "default")
-			
+
 			// Verify error
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("no Kubernetes client available"))

@@ -10,9 +10,9 @@ import (
 
 	mcpclient "github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/mcp"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	corev1 "k8s.io/api/core/v1"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
@@ -77,12 +77,12 @@ func (m *MCPServerManager) convertEnvVars(ctx context.Context, envVars []kubecha
 		// Case 2: Value from secret reference
 		if e.ValueFrom != nil && e.ValueFrom.SecretKeyRef != nil {
 			secretRef := e.ValueFrom.SecretKeyRef
-			
+
 			// If we don't have a Kubernetes client, we can't resolve secrets
 			if m.client == nil {
 				return nil, fmt.Errorf("cannot resolve secret reference for env var %s: no Kubernetes client available", e.Name)
 			}
-			
+
 			// Fetch the secret from Kubernetes
 			var secret corev1.Secret
 			if err := m.client.Get(ctx, types.NamespacedName{
@@ -91,13 +91,13 @@ func (m *MCPServerManager) convertEnvVars(ctx context.Context, envVars []kubecha
 			}, &secret); err != nil {
 				return nil, fmt.Errorf("failed to get secret %s for env var %s: %w", secretRef.Name, e.Name, err)
 			}
-			
+
 			// Get the value from the secret
 			secretValue, exists := secret.Data[secretRef.Key]
 			if !exists {
 				return nil, fmt.Errorf("key %s not found in secret %s for env var %s", secretRef.Key, secretRef.Name, e.Name)
 			}
-			
+
 			// Add the environment variable with the secret value
 			env = append(env, fmt.Sprintf("%s=%s", e.Name, string(secretValue)))
 		}
@@ -131,7 +131,7 @@ func (m *MCPServerManager) ConnectServer(ctx context.Context, mcpServer *kubecha
 		if err != nil {
 			return fmt.Errorf("failed to process environment variables: %w", err)
 		}
-		
+
 		// Create a stdio-based MCP client
 		mcpClient, err = mcpclient.NewStdioMCPClient(mcpServer.Spec.Command, envVars, mcpServer.Spec.Args...)
 		if err != nil {
@@ -174,12 +174,12 @@ func (m *MCPServerManager) ConnectServer(ctx context.Context, mcpServer *kubecha
 		} else {
 			// Otherwise, use the structured InputSchema and ensure required is an array
 			schema := tool.InputSchema
-			
+
 			// Ensure required is not null
 			if schema.Required == nil {
 				schema.Required = []string{}
 			}
-			
+
 			inputSchemaBytes, err = json.Marshal(schema)
 			if err != nil {
 				// Log the error but continue
@@ -188,7 +188,7 @@ func (m *MCPServerManager) ConnectServer(ctx context.Context, mcpServer *kubecha
 				inputSchemaBytes = []byte(`{"type":"object","properties":{},"required":[]}`)
 			}
 		}
-		
+
 		tools = append(tools, kubechainv1alpha1.MCPTool{
 			Name:        tool.Name,
 			Description: tool.Description,

@@ -28,9 +28,9 @@ import (
 	"github.com/humanlayer/smallchain/kubechain/internal/controller/mcpserver"
 	"github.com/humanlayer/smallchain/kubechain/internal/controller/task"
 	"github.com/humanlayer/smallchain/kubechain/internal/controller/taskrun"
-	"github.com/humanlayer/smallchain/kubechain/internal/mcpmanager"
 	"github.com/humanlayer/smallchain/kubechain/internal/controller/taskruntoolcall"
 	"github.com/humanlayer/smallchain/kubechain/internal/controller/tool"
+	"github.com/humanlayer/smallchain/kubechain/internal/mcpmanager"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.

@@ -11,10 +11,10 @@ import (
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
+	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -49,14 +49,14 @@ func (m *MockClient) Get(ctx context.Context, key client.ObjectKey, obj client.O
 	if !ok {
 		return fmt.Errorf("not a secret")
 	}
-	
+
 	// Look up the secret
 	nsName := types.NamespacedName{Namespace: key.Namespace, Name: key.Name}
 	s, exists := m.secrets[nsName]
 	if !exists {
 		return fmt.Errorf("secret not found: %s/%s", key.Namespace, key.Name)
 	}
-	
+
 	// Copy data to the result
 	secret.Data = s.Data
 	secret.ObjectMeta = s.ObjectMeta

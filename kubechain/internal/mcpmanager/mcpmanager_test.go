@@ -7,7 +7,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	
+
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -18,21 +18,21 @@ import (
 // MockMCPClient mocks the mcpclient.MCPClient interface for testing
 type MockMCPClient struct {
 	// Results
-	initResult      *mcp.InitializeResult
-	toolsResult     *mcp.ListToolsResult
-	callToolResult  *mcp.CallToolResult
-	
+	initResult     *mcp.InitializeResult
+	toolsResult    *mcp.ListToolsResult
+	callToolResult *mcp.CallToolResult
+
 	// Errors
-	initError       error
-	toolsError      error
-	callToolError   error
-	
+	initError     error
+	toolsError    error
+	callToolError error
+
 	// Tracking calls
-	initCallCount   int
-	toolsCallCount  int
+	initCallCount     int
+	toolsCallCount    int
 	callToolCallCount int
-	closeCallCount  int
-	
+	closeCallCount    int
+
 	// Last request arguments
 	lastCallToolRequest mcp.CallToolRequest
 }
@@ -44,8 +44,8 @@ func NewMockMCPClient() *MockMCPClient {
 		toolsResult: &mcp.ListToolsResult{
 			Tools: []mcp.Tool{
 				{
-					Name:        "test_tool",
-					Description: "Test tool for testing",
+					Name:           "test_tool",
+					Description:    "Test tool for testing",
 					RawInputSchema: []byte(`{"type":"object","properties":{"param1":{"type":"string"}}}`),
 				},
 			},
@@ -90,15 +90,29 @@ func (m *MockMCPClient) Close() error {
 // Additional methods required by the interface
 // These are stubs to satisfy the interface but aren't used in our tests
 func (m *MockMCPClient) Ping(ctx context.Context) error { return nil }
-func (m *MockMCPClient) ListResources(ctx context.Context, req mcp.ListResourcesRequest) (*mcp.ListResourcesResult, error) { return nil, nil }
-func (m *MockMCPClient) ListResourceTemplates(ctx context.Context, req mcp.ListResourceTemplatesRequest) (*mcp.ListResourceTemplatesResult, error) { return nil, nil }
-func (m *MockMCPClient) ReadResource(ctx context.Context, req mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) { return nil, nil }
+func (m *MockMCPClient) ListResources(ctx context.Context, req mcp.ListResourcesRequest) (*mcp.ListResourcesResult, error) {
+	return nil, nil
+}
+func (m *MockMCPClient) ListResourceTemplates(ctx context.Context, req mcp.ListResourceTemplatesRequest) (*mcp.ListResourceTemplatesResult, error) {
+	return nil, nil
+}
+func (m *MockMCPClient) ReadResource(ctx context.Context, req mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+	return nil, nil
+}
 func (m *MockMCPClient) Subscribe(ctx context.Context, req mcp.SubscribeRequest) error { return nil }
-func (m *MockMCPClient) Unsubscribe(ctx context.Context, req mcp.UnsubscribeRequest) error { return nil }
-func (m *MockMCPClient) ListPrompts(ctx context.Context, req mcp.ListPromptsRequest) (*mcp.ListPromptsResult, error) { return nil, nil }
-func (m *MockMCPClient) GetPrompt(ctx context.Context, req mcp.GetPromptRequest) (*mcp.GetPromptResult, error) { return nil, nil }
+func (m *MockMCPClient) Unsubscribe(ctx context.Context, req mcp.UnsubscribeRequest) error {
+	return nil
+}
+func (m *MockMCPClient) ListPrompts(ctx context.Context, req mcp.ListPromptsRequest) (*mcp.ListPromptsResult, error) {
+	return nil, nil
+}
+func (m *MockMCPClient) GetPrompt(ctx context.Context, req mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+	return nil, nil
+}
 func (m *MockMCPClient) SetLevel(ctx context.Context, req mcp.SetLevelRequest) error { return nil }
-func (m *MockMCPClient) Complete(ctx context.Context, req mcp.CompleteRequest) (*mcp.CompleteResult, error) { return nil, nil }
+func (m *MockMCPClient) Complete(ctx context.Context, req mcp.CompleteRequest) (*mcp.CompleteResult, error) {
+	return nil, nil
+}
 func (m *MockMCPClient) OnNotification(handler func(notification mcp.JSONRPCNotification)) {}
 
 // Helper methods for tests
@@ -150,22 +164,22 @@ func TestMCPManager(t *testing.T) {
 
 var _ = Describe("MCPServerManager", func() {
 	var (
-		manager      *MCPServerManager
-		mockClient   *MockMCPClient
-		ctx          context.Context
-		cancelFunc   context.CancelFunc
+		manager    *MCPServerManager
+		mockClient *MockMCPClient
+		ctx        context.Context
+		cancelFunc context.CancelFunc
 	)
 
 	BeforeEach(func() {
 		ctx, cancelFunc = context.WithCancel(context.Background())
 		mockClient = NewMockMCPClient()
-		
+
 		// For the main test, we'll use a nil client since we're not testing secret retrieval here
 		// The secret retrieval is tested in envvar_test.go
-		
+
 		// Create the manager with nil client
 		manager = NewMCPServerManager()
-		
+
 		// Add a test server directly to the connections map
 		manager.connections["test-server"] = &MCPConnection{
 			ServerName: "test-server",
@@ -194,14 +208,14 @@ var _ = Describe("MCPServerManager", func() {
 			Expect(m.connections).To(BeEmpty())
 			Expect(m.client).To(BeNil())
 		})
-		
+
 		It("should create a new MCPServerManager with a client", func() {
 			// Create a dummy client
 			dummyClient := &dummyClient{}
-			
+
 			// Create manager with mock client
 			clientManager := NewMCPServerManagerWithClient(dummyClient)
-			
+
 			Expect(clientManager).NotTo(BeNil())
 			Expect(clientManager.connections).NotTo(BeNil())
 			Expect(clientManager.client).NotTo(BeNil())
@@ -269,7 +283,7 @@ var _ = Describe("MCPServerManager", func() {
 			// Get tools for the agent
 			tools := manager.GetToolsForAgent(agent)
 			Expect(tools).To(HaveLen(2))
-			
+
 			// Check both tools are present
 			foundTools := make(map[string]bool)
 			for _, tool := range tools {
@@ -301,7 +315,7 @@ var _ = Describe("MCPServerManager", func() {
 			mockClient.SetCallToolResult(&mcp.CallToolResult{
 				Content: []mcp.Content{
 					mcp.TextContent{
-						Type: "text", 
+						Type: "text",
 						Text: "Success",
 					},
 				},
@@ -332,7 +346,7 @@ var _ = Describe("MCPServerManager", func() {
 
 		It("should return an error when the tool call fails", func() {
 			mockClient.SetCallToolError(errors.New("call failed"))
-			
+
 			_, err := manager.CallTool(ctx, "test-server", "test_tool", nil)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("call failed"))
@@ -342,13 +356,13 @@ var _ = Describe("MCPServerManager", func() {
 			mockClient.SetCallToolResult(&mcp.CallToolResult{
 				Content: []mcp.Content{
 					mcp.TextContent{
-						Type: "text", 
+						Type: "text",
 						Text: "Error message",
 					},
 				},
 				IsError: true,
 			})
-			
+
 			_, err := manager.CallTool(ctx, "test-server", "test_tool", nil)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("Error message"))
@@ -384,14 +398,14 @@ var _ = Describe("MCPServerManager", func() {
 			// Verify connection exists
 			_, exists := manager.GetConnection("test-server")
 			Expect(exists).To(BeTrue())
-			
+
 			// Disconnect server
 			manager.DisconnectServer("test-server")
-			
+
 			// Verify connection is removed
 			_, exists = manager.GetConnection("test-server")
 			Expect(exists).To(BeFalse())
-			
+
 			// Verify Close was called on client
 			Expect(mockClient.GetCloseCount()).To(Equal(1))
 		})
@@ -411,16 +425,16 @@ var _ = Describe("MCPServerManager", func() {
 				ServerType: "stdio",
 				Client:     anotherMock,
 			}
-			
+
 			// Verify two connections exist
 			Expect(manager.connections).To(HaveLen(2))
-			
+
 			// Close all connections
 			manager.Close()
-			
+
 			// Verify connections map is empty
 			Expect(manager.connections).To(BeEmpty())
-			
+
 			// Verify Close was called on both clients
 			Expect(mockClient.GetCloseCount()).To(Equal(1))
 			Expect(anotherMock.GetCloseCount()).To(Equal(1))
