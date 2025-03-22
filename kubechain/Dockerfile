@@ -11,9 +11,12 @@ WORKDIR /workspace
 COPY go.mod go.mod
 COPY go.sum go.sum
 
-# Cache the go modules and build cache using BuildKit cache
+# Cache the go modules and build cache
+# First try to use the GitHub Actions mounted caches, fall back to BuildKit cache
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=bind,source=go-mod-cache,target=/go/pkg/mod,rw,from=go-mod-cache,ignore-not-found=true \
+    --mount=type=bind,source=go-build-cache,target=/root/.cache/go-build,rw,from=go-build-cache,ignore-not-found=true \
     go mod download
 
 # Copy the go source
@@ -30,6 +33,8 @@ ARG MAKEFLAGS=-j4
 
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=bind,source=go-mod-cache,target=/go/pkg/mod,rw,from=go-mod-cache,ignore-not-found=true \
+    --mount=type=bind,source=go-build-cache,target=/root/.cache/go-build,rw,from=go-build-cache,ignore-not-found=true \
     CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o manager cmd/main.go -ldflags="-s -w" -gcflags=all="-trimpath=$(go env GOPATH)"
 
 # Use distroless as minimal base image to package the manager binary

@@ -1,1 +1,1 @@
-make -C kubechain test docker-build
+make -C kubechain test
