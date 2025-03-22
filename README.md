@@ -80,14 +80,14 @@ kubectl create secret generic openai \
 Deploy the KubeChain operator to your cluster:
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/humanlayer/kubechain/main/config/release/latest.yaml
+kubectl apply -f https://raw.githubusercontent.com/humanlayer/smallchain/refs/heads/main/kubechain/config/release/latest.yaml
 ```
 
 <details>
 <summary>Just the CRDs</summary>
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/humanlayer/kubechain/main/config/release/latest-crds.yaml
+kubectl apply -f https://raw.githubusercontent.com/humanlayer/smallchain/refs/heads/main/kubechain/config/release/latest-crds.yaml
 ```
 
 </details>
@@ -96,7 +96,7 @@ kubectl apply -f https://raw.githubusercontent.com/humanlayer/kubechain/main/con
 <summary>Install a specific version</summary>
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/humanlayer/kubechain/main/config/release/v0.1.0.yaml
+kubectl apply -f https://raw.githubusercontent.com/humanlayer/smallchain/refs/heads/main/kubechain/config/release/v0.1.0.yaml
 ```
 
 </details>
