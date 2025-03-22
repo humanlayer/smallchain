@@ -207,7 +207,8 @@ kind: ToolSet
 metadata:
   name: mcp-tools
 spec:
-  # this api is tbd
+  mcpServerRef:
+    name: fetch-server  # Reference to an MCPServer resource
 ---
 apiVersion: kubechain.humanlayer.dev/v1alpha1
 kind: ContactChannel

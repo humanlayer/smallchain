@@ -1,8 +1,10 @@
 # kubechain
-// TODO(user): Add simple overview of use/purpose
+
+Kubechain is a Kubernetes operator for managing Large Language Model (LLM) workflows.
 
 ## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
+
+Kubechain provides Custom Resource Definitions (CRDs) for defining and managing LLM-based agents, tools, and tasks within a Kubernetes cluster. It enables you to define reusable components for AI/LLM workflows, including the Model Control Protocol (MCP) integration for tool extensibility.
 
 ## Getting Started
 
@@ -116,6 +118,69 @@ is manually re-applied afterwards.
 **NOTE:** Run `make help` for more information on all potential `make` targets
 
 More information can be found via the [Kubebuilder Documentation](https://book.kubebuilder.io/introduction.html)
+
+## Documentation
+
+- [MCP Server Guide](./docs/mcp-server.md) - Detailed guide for working with MCP servers
+- [CRD Reference](./docs/crd-reference.md) - Complete reference for all Custom Resource Definitions
+
+## Resource Types
+
+### MCPServer
+
+Model Control Protocol (MCP) servers provide a way to extend the functionality of LLMs with custom tools. The MCPServer resource supports:
+
+- **Transport Types:** 
+  - `stdio`: Communicate with an MCP server via standard I/O
+  - `http`: Communicate with an MCP server via HTTP
+
+- **Environment Variables:** MCPServer resources support environment variables with:
+  - Direct values: `value: "some-value"`
+  - Secret references: `valueFrom.secretKeyRef` pointing to a Kubernetes Secret
+
+Example with secret reference:
+```yaml
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: MCPServer
+metadata:
+  name: mcp-server-with-secret
+spec:
+  transport: stdio
+  command: "/usr/local/bin/mcp-server"
+  env:
+    - name: API_KEY
+      valueFrom:
+        secretKeyRef:
+          name: my-secret
+          key: api-key
+```
+
+For full examples, see the `config/samples/` directory.
+
+### LLM
+
+The LLM resource defines a language model configuration, including:
+- Provider information (e.g., OpenAI)
+- API key references (using Kubernetes Secrets)
+- Model configurations
+
+### Agent
+
+The Agent resource defines an LLM agent with:
+- A reference to an LLM
+- System prompt
+- Available tools
+
+### Tool
+
+The Tool resource defines a capability that can be used by an Agent, such as:
+- Function-based tools
+- MCP-provided tools
+- Human approval tools
+
+### Task
+
+The Task resource represents a request to an Agent, which starts a conversation.
 
 ## License
 
