@@ -7,12 +7,15 @@ import (
 // TaskRunToolCallSpec defines the desired state of TaskRunToolCall
 type TaskRunToolCallSpec struct {
 	// TaskRunRef references the parent TaskRun
+	// +kubebuilder:validation:Required
 	TaskRunRef LocalObjectReference `json:"taskRunRef"`
 
 	// ToolRef references the tool to execute
+	// +kubebuilder:validation:Required
 	ToolRef LocalObjectReference `json:"toolRef"`
 
 	// Arguments contains the arguments for the tool call
+	// +kubebuilder:validation:Required
 	Arguments string `json:"arguments"`
 }
 
@@ -27,10 +30,11 @@ type TaskRunToolCallStatus struct {
 	Ready bool `json:"ready,omitempty"`
 
 	// Status indicates the current status of the tool call
-	// +kubebuilder:validation:Enum=Ready;Error;Pending
+	// +kubebuilder:validation:Enum=Ready;Error;Pending;AwaitingHumanApproval;AwaitingHumanInput;AwaitingSubAgent
 	Status string `json:"status,omitempty"`
 
 	// StatusDetail provides additional details about the current status
+	// +optional
 	StatusDetail string `json:"statusDetail,omitempty"`
 
 	// Result contains the result of the tool call if completed
