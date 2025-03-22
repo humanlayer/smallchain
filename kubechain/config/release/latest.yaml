@@ -1280,7 +1280,7 @@ spec:
         - --health-probe-bind-address=:8081
         command:
         - /manager
-        image: controller:202503212011
+        image: ghcr.io/humanlayer/smallchain:v0.1.8
         livenessProbe:
           httpGet:
             path: /healthz
