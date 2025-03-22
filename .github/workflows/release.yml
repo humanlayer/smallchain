@@ -11,7 +11,7 @@ env:
 
 jobs:
   build-and-push:
-    runs-on: in-a-lot-of-ways-the-big-boy-never-left
+    runs-on: ubuntu-latest
     permissions:
       contents: write
       packages: write
