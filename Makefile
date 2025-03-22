@@ -96,3 +96,8 @@ setup-all: cluster-up deploy-operator deploy-samples deploy-ui deploy-otel ## Se
 
 clean-all: undeploy-samples undeploy-operator undeploy-otel cluster-down ## Clean up everything
 	@echo "Complete environment cleanup finished successfully"
+
+.PHONY: githooks
+githooks:
+	ln -s hack/git_pre_push.sh .git/hooks/pre-push
+
