@@ -127,6 +127,9 @@ spec:
                 - Ready
                 - Error
                 - Pending
+                - AwaitingHumanApproval
+                - AwaitingHumanInput
+                - AwaitingSubAgent
                 type: string
               statusDetail:
                 description: StatusDetail provides additional details about the current

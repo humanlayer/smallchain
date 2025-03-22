@@ -15,6 +15,7 @@ type ToolSpec struct {
 
 	// Parameters defines the JSON schema for the tool's parameters.
 	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Type=object
 	Parameters runtime.RawExtension `json:"parameters,omitempty"`
 
 	// Arguments defines the JSON schema for the tool's arguments.

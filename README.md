@@ -4,9 +4,9 @@
 
 </div>
 
-KubeChain is a cloud-native orchestrator for Autonomous AI Agents built on Kubernetes. It supports long-lived outer-loop agents that can process asynchronous execution of both LLM inference and long-running tool calls.
+KubeChain is a cloud-native orchestrator for AI Agents built on Kubernetes. It supports [long-lived outer-loop agents](https://theouterloop.substack.com/p/openais-realtime-api-is-a-step-towards) that can process asynchronous execution of both LLM inference and long-running tool calls. It's designed for simplicity and gives strong durability and reliability guarantees for agents that make asynchronous tool calls like contacting humans or delegating work to other agents.
 
-:warning: **Note** - KubeChain is highly experimental and has several known issues and race conditions. Use at your own risk.
+:warning: **Note** - KubeChain is experimental and some known issues and race conditions. Use at your own risk.
  
 <div align="center">
 
@@ -23,6 +23,8 @@ KubeChain is a cloud-native orchestrator for Autonomous AI Agents built on Kuber
 
 ## Table of Contents
 
+- [Key Features](#key-features)
+- [Design Principles](#design-principles)
 - [Getting Started](#getting-started)
   - [Prerequisites](#prerequisites)
   - [Setting Up a Local Cluster](#setting-up-a-local-cluster)
@@ -30,12 +32,21 @@ KubeChain is a cloud-native orchestrator for Autonomous AI Agents built on Kuber
   - [Creating Your First Agent](#creating-your-first-agent)
   - [Running Your First Task](#running-your-first-task)
   - [Monitoring Resources](#monitoring-resources)
-- [Key Features](#key-features)
-- [Design Principles](#design-principles)
 - [Architecture](#architecture)
   - [Core Objects](#core-objects)
 - [Contributing](#contributing)
 - [License](#license)
+
+
+## Architecture
+
+### Core Objects
+
+- **LLM**: Provider + API Keys + Parameters
+- **Agent**: LLM + System Prompt + Tools
+- **Tool**: Function, API, Docker container, or another Agent
+- **Task**: Agent + User Message
+- **TaskRun**: Task + Current context window
 
 ## Getting Started
 
@@ -52,44 +63,45 @@ To run KubeChain, you'll need:
 
 1. **Create a Kind cluster**
 
-   ```bash
-   kind create cluster --config kubechain-example/kind/kind-config.yaml
-   ```
+```bash
+kind create cluster --config kubechain-example/kind/kind-config.yaml
+```
 
 2. **Add your OpenAI API key as a Kubernetes secret**
 
-   ```bash
-   kubectl create secret generic openai \
-     --from-literal=OPENAI_API_KEY=$OPENAI_API_KEY \
-     --namespace=default
-   ```
+```bash
+kubectl create secret generic openai \
+  --from-literal=OPENAI_API_KEY=$OPENAI_API_KEY \
+  --namespace=default
+```
 
 ### Deploying KubeChain
 
 Deploy the KubeChain operator to your cluster:
 
 ```bash
-make deploy-operator
+kubectl apply -f https://raw.githubusercontent.com/humanlayer/kubechain/main/config/release/latest.yaml
 ```
-
-This command will build the operator, create necessary CRDs, and deploy the KubeChain components to your cluster.
 
 <details>
-<summary>With the kubechain cli</summary>
-
-You can install with brew:
+<summary>Just the CRDs</summary>
 
 ```bash
-brew install humanlayer/tap/kubechain
-```
-
-Or you can install with go:
-
-```bash
-kubechain deploy operator
+kubectl apply -f https://raw.githubusercontent.com/humanlayer/kubechain/main/config/release/latest-crds.yaml
 ```
 
 </details>
+
+<details>
+<summary>Install a specific version</summary>
+
+```bash
+kubectl apply -f https://raw.githubusercontent.com/humanlayer/kubechain/main/config/release/v0.1.0.yaml
+```
+
+</details>
+
+This command will build the operator, create necessary CRDs, and deploy the KubeChain components to your cluster.
 
 ### Creating Your First Agent
 
@@ -441,7 +453,70 @@ items:
 
 ### Adding Tools with MCP
 
-Agent's arent that interesting without tools. Let's add a basic MCP server tool to our agent
+Agent's aren't that interesting without tools. Let's add a basic MCP server tool to our agent:
+
+```bash
+cat <<EOF | kubectl apply -f -
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: MCPServer
+metadata:
+  name: fetch
+spec:
+  type: "stdio"
+  command: "uvx"
+  args: ["mcp-server-fetch"]
+EOF
+```
+
+```bash
+kubectl get mcpserver
+```
+
+```
+NAME     READY   STATUS
+fetch    true    Ready
+```
+
+```bash
+kubectl describe mcpserver
+```
+Output: 
+
+```
+Name:         fetch
+Namespace:    default
+Labels:       <none>
+Annotations:  <none>
+API Version:  kubechain.humanlayer.dev/v1alpha1
+Kind:         MCPServer
+Metadata:
+  Creation Timestamp:  2025-03-21T22:18:45Z
+  Generation:         1
+  Resource Version:   1684392
+  UID:                b2c43f91-c8e2-4d3a-9c82-f39d12e48a92
+Spec:
+  Command:  uvx
+  Args:
+    - mcp-server-fetch
+Status:
+  Connected:  true
+  Tools:
+    - Name:        fetch_url
+      Description: Fetches content from a URL
+      Input Schema:
+        Type:       object
+        Properties:
+          url:
+            Type:   string
+        Required:
+          - url
+Events:
+  Type    Reason           Age                From                Message
+  ----    ------          ----               ----                -------
+  Normal  ToolsDiscovered  2m                mcp-controller      Discovered 1 tool(s)
+```
+
+Then we can update our agent in-place to give it access to the fetch tool:
 
 ```bash
 cat <<EOF | kubectl apply -f -
@@ -455,18 +530,59 @@ spec:
   system: |
     You are a helpful assistant. Your job is to help the user with their tasks.
   mcpServers:
-    fetch:
-      command: "uvx"
-      args: ["mcp-server-fetch"]
+    - name: fetch
 EOF
 ```
 
+Let's make a new task that uses the fetch tool:
+
+```bash
+cat <<EOF | kubectl apply -f -
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: Task
+metadata:
+  name: fetch-task
+spec:
+  agentRef:
+    name: my-assistant
+  message: "What is on the front page of news.google.com?"
+EOF
+```
 
 ### Cleaning Up
 
+Remove our agent, task and related resources:
+
+```
+kubectl delete taskruntoolcall --all
+kubectl delete taskrun --all
+kubectl delete task --all
+kubectl delete agent --all 
+kubectl delete mcpserver --all
+kubectl delete llm --all
+```
+
+Remove the OpenAI secret:
+
+```
+kubectl delete secret openai
+```
+
+Remove the operator, resources and custom resource definitions:
+
+```
+kustomize build kubechain/config/default | kubectl delete --ignore-not-found=true -f -
+```
+
+If you made a kind cluster, you can delete it with:
+
+```
+kind delete cluster --name kubechain-local
+```
+
 ## Key Features
 
-- **Kubernetes-Native Architecture**: KubeChain is built as a Kubernetes operator, using Custom Resource Definitions (CRDs) to define and manage LLMs, Agents, Tools, Tasks, and TaskRuns.
+- **Kubernetes-Native Architecture**: KubeChain is built as a Kubernetes operator, using Custom Resource Definitions (CRDs) to define and manage LLMs, Agents, Tools, Tasks, and TaskRuns. 
 
 - **Durable Agent Execution**: KubeChain implements something like async/await at the infrastructure layer, checkpointing a conversation chain whenever a tool call or agent delegation occurs, with the ability to resume from that checkpoint when the operation completes.
 
@@ -474,11 +590,13 @@ EOF
 
 - **Observable Control Loop Architecture**: KubeChain uses a simple, observable control loop architecture that allows for easy debugging and observability into agent execution.
 
-- **Scalable**: Leverages Kubernetes for scalability and resilience.
+- **Scalable**: Leverages Kubernetes for scalability and resilience. If you have k8s / etcd, you can run reliable distributed async agents.
 
 - **Human Approvals and Input**: Support for durable task execution across long-running function calls means a simple tool-based interface to allow an agent to ask a human for input or wait for an approval.
 
 ## Design Principles
+
+- **Simplicity**: Leverages the unique property of AI applications where the entire "call stack" can be expressed as the rolling context window accumulated through interactions and tool calls. No separate execution state.
 
 - **Clarity**: Easy to understand what's happening and what the framework is doing with your prompts.
 
@@ -488,19 +606,8 @@ EOF
 
 - **Durability**: Resilient to failures as a distributed system.
 
-- **Simplicity**: Leverages the unique property of AI applications where the entire "call stack" can be expressed as the rolling context window accumulated through interactions and tool calls.
+- **Extensibility**: Because agents are YAML, it's easy to build and share agents, tools, and tasks.
 
-- **Extensibility**: Easy to build and share agents, tools, and tasks.
-
-## Architecture
-
-### Core Objects
-
-- **LLM**: Provider + API Keys + Parameters
-- **Agent**: LLM + System Prompt + Tools
-- **Tool**: Function, API, Docker container, or another Agent
-- **Task**: Agent + User Message
-- **TaskRun**: Task + Current context window
 
 ## Contributing
 
