@@ -18,7 +18,6 @@ import (
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
 	"github.com/humanlayer/smallchain/kubechain/internal/llmclient"
-	"github.com/openai/openai-go"
 )
 
 var _ = Describe("TaskRun Controller", func() {
@@ -225,7 +224,7 @@ var _ = Describe("TaskRun Controller", func() {
 				Scheme:   k8sClient.Scheme(),
 				recorder: eventRecorder,
 				newLLMClient: func(apiKey string) (llmclient.OpenAIClient, error) {
-					return &llmclient.MockOpenAIClient{}, nil
+					return &llmclient.MockRawOpenAIClient{}, nil
 				},
 			}
 
@@ -484,37 +483,44 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(k8sClient.Create(ctx, taskRun)).To(Succeed())
 
 			By("creating a mock OpenAI client that validates tools and returns tool calls")
-			mockClient := &llmclient.MockOpenAIClient{
-				Response: &openai.ChatCompletionMessage{
-					ToolCalls: []openai.ChatCompletionMessageToolCall{
+			mockClient := &llmclient.MockRawOpenAIClient{
+				Response: &kubechainv1alpha1.Message{
+					Role: "assistant",
+					ToolCalls: []kubechainv1alpha1.ToolCall{
 						{
 							ID:   "call_123",
-							Type: openai.ChatCompletionMessageToolCallTypeFunction,
-							Function: openai.ChatCompletionMessageToolCallFunction{
+							Type: "function",
+							Function: kubechainv1alpha1.ToolCallFunction{
 								Name:      "add",
 								Arguments: `{"a": 1, "b": 2}`,
 							},
 						},
 					},
 				},
-				ValidateTools: func(tools []openai.ChatCompletionToolParam) error {
+				ValidateTools: func(tools []llmclient.Tool) error {
 					Expect(tools).To(HaveLen(1))
-					Expect(tools[0].Type.Value).To(Equal(openai.ChatCompletionToolTypeFunction))
-					Expect(tools[0].Function.Value.Name.Value).To(Equal("add"))
-					Expect(tools[0].Function.Value.Description.Value).To(Equal("add two numbers"))
+					Expect(tools[0].Type).To(Equal("function"))
+					Expect(tools[0].Function.Name).To(Equal("add"))
+					Expect(tools[0].Function.Description).To(Equal("add two numbers"))
 					// Verify parameters were passed correctly
-					Expect(tools[0].Function.Value.Parameters.Value).To(Equal(openai.FunctionParameters{
-						"type": "object",
-						"properties": map[string]interface{}{
-							"a": map[string]interface{}{
-								"type": "number",
-							},
-							"b": map[string]interface{}{
-								"type": "number",
-							},
+					Expect(tools[0].Function.Parameters).To(Equal(llmclient.ToolFunctionParameters{
+						Type: "object",
+						Properties: map[string]llmclient.ToolFunctionParameter{
+							"a": {Type: "number"},
+							"b": {Type: "number"},
 						},
-						"required": []interface{}{"a", "b"},
+						Required: []string{"a", "b"},
 					}))
+					return nil
+				},
+
+				ValidateContextWindow: func(contextWindow []kubechainv1alpha1.Message) error {
+					Expect(contextWindow).To(HaveLen(2))
+					Expect(contextWindow[0].Role).To(Equal("system"))
+					Expect(contextWindow[0].Content).To(Equal("you are a testing assistant"))
+					Expect(contextWindow[1].Role).To(Equal("user"))
+					Expect(contextWindow[1].Content).To(Equal("what is 2 + 2?"))
+
 					return nil
 				},
 			}
@@ -655,6 +661,228 @@ var _ = Describe("TaskRun Controller", func() {
 			err = k8sClient.Get(ctx, types.NamespacedName{Name: taskRunName, Namespace: "default"}, updatedTaskRun)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedTaskRun.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunPhaseToolCallsPending))
+		})
+
+		XIt("should set Error phase when LLM request fails", func() {
+			uniqueSuffix := fmt.Sprintf("%d", time.Now().UnixNano())
+			testTaskRunName := fmt.Sprintf("error-state-%s", uniqueSuffix)
+
+			By("creating the taskrun")
+			taskRun := &kubechainv1alpha1.TaskRun{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "kubechain/v1alpha1",
+					Kind:       "TaskRun",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      testTaskRunName,
+					Namespace: "default",
+				},
+				Spec: kubechainv1alpha1.TaskRunSpec{
+					TaskRef: kubechainv1alpha1.LocalObjectReference{
+						Name: taskName,
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, taskRun)).To(Succeed())
+
+			By("setting up the taskrun with a conversation history including tool messages missing toolCallId")
+			statusUpdate := taskRun.DeepCopy()
+			statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseReadyForLLM
+			// Simulate conversation with system, user, assistant (with tool call), and tool response
+			statusUpdate.Status.ContextWindow = []kubechainv1alpha1.Message{
+				{
+					Role:    "system",
+					Content: "you are a testing assistant",
+				},
+				{
+					Role:    "user",
+					Content: "what is 2 + 2?",
+				},
+				{
+					Role:    "assistant",
+					Content: "",
+					ToolCalls: []kubechainv1alpha1.ToolCall{
+						{
+							ID:   "call_123",
+							Type: "function",
+							Function: kubechainv1alpha1.ToolCallFunction{
+								Name:      "add",
+								Arguments: `{"a": 2, "b": 2}`,
+							},
+						},
+					},
+				},
+				{
+					Role:    "tool",
+					Content: "4",
+					// Missing ToolCallId - This should cause an error with the LLM
+				},
+			}
+			Expect(k8sClient.Status().Update(ctx, statusUpdate)).To(Succeed())
+
+			By("creating a mock OpenAI client that returns an error for the invalid request")
+			mockClient := &llmclient.MockRawOpenAIClient{
+				Error: fmt.Errorf(`request failed with status 400: {
+					"error": {
+						"message": "Missing parameter 'tool_call_id': messages with role 'tool' must have a 'tool_call_id'.",
+						"type": "invalid_request_error",
+						"param": "messages.[3].tool_call_id",
+						"code": null
+					}
+				}`),
+			}
+
+			By("reconciling the taskrun")
+			eventRecorder := record.NewFakeRecorder(10)
+			reconciler := &TaskRunReconciler{
+				Client:   k8sClient,
+				Scheme:   k8sClient.Scheme(),
+				recorder: eventRecorder,
+				newLLMClient: func(apiKey string) (llmclient.OpenAIClient, error) {
+					return mockClient, nil
+				},
+			}
+
+			_, err := reconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      testTaskRunName,
+					Namespace: "default",
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("checking that the taskrun moved to Error phase with correct status")
+			updatedTaskRun := &kubechainv1alpha1.TaskRun{}
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: testTaskRunName, Namespace: "default"}, updatedTaskRun)
+			Expect(err).NotTo(HaveOccurred())
+
+			// This expectation should fail with the current code as the phase doesn't change to Failed or ErrorBackoff
+			Expect(updatedTaskRun.Status.Phase).To(BeElementOf(
+				kubechainv1alpha1.TaskRunPhaseFailed,
+				kubechainv1alpha1.TaskRunPhaseErrorBackoff),
+				"TaskRun should enter Failed or ErrorBackoff phase on LLM request failure")
+
+			Expect(updatedTaskRun.Status.Status).To(Equal("Error"))
+			Expect(updatedTaskRun.Status.Error).To(ContainSubstring("Missing parameter 'tool_call_id'"))
+			Expect(updatedTaskRun.Status.StatusDetail).To(ContainSubstring("LLM request failed"))
+
+			By("checking that an error event was created")
+			Eventually(func() bool {
+				select {
+				case event := <-eventRecorder.Events:
+					// The controller might not be emitting a specific "LLMRequestFailed" event
+					// but we should see some error-related event
+					return strings.Contains(event, "Error") ||
+						strings.Contains(event, "Failed") ||
+						strings.Contains(event, "Failure")
+				default:
+					return false
+				}
+			}, 5*time.Second, 100*time.Millisecond).Should(BeTrue(), "Expected to find LLM failure event")
+		})
+
+		It("should correctly handle multi-message conversations with the LLM", func() {
+			uniqueSuffix := fmt.Sprintf("%d", time.Now().UnixNano())
+			testTaskRunName := fmt.Sprintf("multi-message-%s", uniqueSuffix)
+
+			By("creating the taskrun")
+			taskRun := &kubechainv1alpha1.TaskRun{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "kubechain/v1alpha1",
+					Kind:       "TaskRun",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      testTaskRunName,
+					Namespace: "default",
+				},
+				Spec: kubechainv1alpha1.TaskRunSpec{
+					TaskRef: kubechainv1alpha1.LocalObjectReference{
+						Name: taskName,
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, taskRun)).To(Succeed())
+
+			By("setting up the taskrun with an existing conversation history")
+			statusUpdate := taskRun.DeepCopy()
+			statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseReadyForLLM
+			// Simulate an existing conversation with system, user, assistant, user
+			statusUpdate.Status.ContextWindow = []kubechainv1alpha1.Message{
+				{
+					Role:    "system",
+					Content: "you are a testing assistant",
+				},
+				{
+					Role:    "user",
+					Content: "what is 2 + 2?",
+				},
+				{
+					Role:    "assistant",
+					Content: "2 + 2 = 4",
+				},
+				{
+					Role:    "user",
+					Content: "what is 4 + 4?",
+				},
+			}
+			Expect(k8sClient.Status().Update(ctx, statusUpdate)).To(Succeed())
+
+			By("creating a mock OpenAI client that validates context window messages are passed correctly")
+			mockClient := &llmclient.MockRawOpenAIClient{
+				Response: &kubechainv1alpha1.Message{
+					Role:    "assistant",
+					Content: "4 + 4 = 8",
+				},
+				ValidateContextWindow: func(contextWindow []kubechainv1alpha1.Message) error {
+					Expect(contextWindow).To(HaveLen(4), "All 4 messages should be sent to the LLM")
+
+					// Verify all messages are present in the correct order
+					Expect(contextWindow[0].Role).To(Equal("system"))
+					Expect(contextWindow[0].Content).To(Equal("you are a testing assistant"))
+
+					Expect(contextWindow[1].Role).To(Equal("user"))
+					Expect(contextWindow[1].Content).To(Equal("what is 2 + 2?"))
+
+					Expect(contextWindow[2].Role).To(Equal("assistant"))
+					Expect(contextWindow[2].Content).To(Equal("2 + 2 = 4"))
+
+					Expect(contextWindow[3].Role).To(Equal("user"))
+					Expect(contextWindow[3].Content).To(Equal("what is 4 + 4?"))
+
+					return nil
+				},
+			}
+
+			By("reconciling the taskrun")
+			eventRecorder := record.NewFakeRecorder(10)
+			reconciler := &TaskRunReconciler{
+				Client:   k8sClient,
+				Scheme:   k8sClient.Scheme(),
+				recorder: eventRecorder,
+				newLLMClient: func(apiKey string) (llmclient.OpenAIClient, error) {
+					return mockClient, nil
+				},
+			}
+
+			_, err := reconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      testTaskRunName,
+					Namespace: "default",
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("checking that the taskrun moved to FinalAnswer phase")
+			updatedTaskRun := &kubechainv1alpha1.TaskRun{}
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: testTaskRunName, Namespace: "default"}, updatedTaskRun)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedTaskRun.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunPhaseFinalAnswer))
+
+			By("checking that the new assistant response was appended to the context window")
+			Expect(updatedTaskRun.Status.ContextWindow).To(HaveLen(5))
+			lastMessage := updatedTaskRun.Status.ContextWindow[4]
+			Expect(lastMessage.Role).To(Equal("assistant"))
+			Expect(lastMessage.Content).To(Equal("4 + 4 = 8"))
 		})
 
 		It("should transition to ReadyForLLM when all tool calls are complete", func() {

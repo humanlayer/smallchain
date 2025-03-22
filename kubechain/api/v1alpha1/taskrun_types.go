@@ -35,6 +35,18 @@ type Message struct {
 	// ToolCallId is the unique identifier for this tool call
 	// +optional
 	ToolCallId string `json:"toolCallId,omitempty"`
+
+	// Name is the name of the tool call
+	// +optional
+	Name string `json:"name,omitempty"`
+
+	// Type is the type of tool call
+	// +kubebuilder:validation:Enum=function
+	Type string `json:"type,omitempty"`
+
+	// Arguments is the arguments to pass to the tool call
+	// +optional
+	Arguments string `json:"arguments,omitempty"`
 }
 
 // ToolCall represents a request to call a tool

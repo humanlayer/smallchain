@@ -2,9 +2,7 @@ package taskrun
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -169,7 +167,8 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 		// Check if all tool calls are complete
 		allComplete := true
-		var toolResults []string
+		var toolResults []kubechainv1alpha1.Message
+
 		for _, tc := range toolCallList.Items {
 			logger.Info("Checking tool call", "name", tc.Name, "phase", tc.Status.Phase)
 			if tc.Status.Phase != kubechainv1alpha1.TaskRunToolCallPhaseSucceeded {
@@ -177,7 +176,11 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 				logger.Info("Found incomplete tool call", "name", tc.Name)
 				break
 			}
-			toolResults = append(toolResults, tc.Status.Result)
+			toolResults = append(toolResults, kubechainv1alpha1.Message{
+				ToolCallId: tc.Spec.ToolCallId,
+				Role:       "tool",
+				Content:    tc.Status.Result,
+			})
 		}
 
 		if allComplete {
@@ -185,10 +188,9 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			// All tool calls are complete, update context window and move back to ReadyForLLM phase
 			// so that the LLM can process the tool results and provide a final answer
 			statusUpdate := taskRun.DeepCopy()
-			statusUpdate.Status.ContextWindow = append(statusUpdate.Status.ContextWindow, kubechainv1alpha1.Message{
-				Role:    "tool",
-				Content: strings.Join(toolResults, "\n"),
-			})
+			for _, toolResult := range toolResults {
+				statusUpdate.Status.ContextWindow = append(statusUpdate.Status.ContextWindow, toolResult)
+			}
 			statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseReadyForLLM
 			statusUpdate.Status.Ready = true
 			statusUpdate.Status.Status = "Ready"
@@ -206,7 +208,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	// at this point the only other phase is ReadyForLLM
-	if taskRun.Status.Phase == kubechainv1alpha1.TaskRunPhaseReadyForLLM {
+	if taskRun.Status.Phase != kubechainv1alpha1.TaskRunPhaseReadyForLLM {
 		logger.Info("TaskRun in unknown phase", "phase", taskRun.Status.Phase)
 		return ctrl.Result{}, nil
 	}
@@ -306,7 +308,8 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	// Send the prompt to the LLM using the OpenAI client.
-	output, err := llmClient.SendRequest(ctx, agent.Spec.System, task.Spec.Message, tools)
+	output, err := llmClient.SendRequest(ctx, taskRun.Status.ContextWindow, tools)
+
 	if err != nil {
 		logger.Error(err, "LLM request failed")
 		statusUpdate.Status.Ready = false
@@ -376,6 +379,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 					},
 				},
 				Spec: kubechainv1alpha1.TaskRunToolCallSpec{
+					ToolCallId: tc.ID,
 					TaskRunRef: kubechainv1alpha1.LocalObjectReference{
 						Name: statusUpdate.Name,
 					},
@@ -410,7 +414,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 func (r *TaskRunReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.recorder = mgr.GetEventRecorderFor("taskrun-controller")
 	if r.newLLMClient == nil {
-		r.newLLMClient = llmclient.NewOpenAIClient
+		r.newLLMClient = llmclient.NewRawOpenAIClient
 	}
 
 	// Initialize MCPManager if not already set

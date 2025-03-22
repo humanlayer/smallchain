@@ -6,6 +6,9 @@ import (
 
 // TaskRunToolCallSpec defines the desired state of TaskRunToolCall
 type TaskRunToolCallSpec struct {
+	// ToolCallId is the unique identifier for this tool call
+	ToolCallId string `json:"toolCallId"`
+
 	// TaskRunRef references the parent TaskRun
 	TaskRunRef LocalObjectReference `json:"taskRunRef"`
 
