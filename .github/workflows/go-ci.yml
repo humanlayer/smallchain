@@ -105,14 +105,27 @@ jobs:
           cluster_name: kubechain-example-cluster
           config: kubechain-example/kind/kind-config.yaml
 
+      - name: Set timestamp
+        id: timestamp
+        run: echo "TIMESTAMP=$(date +%Y%m%d%H%M)" >> $GITHUB_ENV
+
+      - name: Fix test-e2e check for cluster
+        working-directory: kubechain
+        run: |
+          # Temporarily modify the Makefile to check for kubechain-example-cluster instead of 'kind'
+          sed -i 's/@kind get clusters | grep -q '"'"'kind'"'"'/@kind get clusters | grep -q '"'"'kubechain-example-cluster'"'"'/' Makefile
+
       - name: Build and load controller image
         working-directory: kubechain
-        run: make docker-load-kind
+        env:
+          IMG: controller:${{ env.TIMESTAMP }}
+        run: make docker-build && kind load docker-image controller:${{ env.TIMESTAMP }} --name kubechain-example-cluster
 
       - name: Run e2e tests
         working-directory: kubechain
         env:
           KIND_CLUSTER: kubechain-example-cluster
+          IMG: controller:${{ env.TIMESTAMP }}
         run: make test-e2e
 
   docker:
