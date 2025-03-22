@@ -31,6 +31,11 @@ const (
 	DetailInvalidArgsJSON     = "Invalid arguments JSON"
 )
 
+// +kubebuilder:rbac:groups=kubechain.humanlayer.dev,resources=taskruntoolcalls,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=kubechain.humanlayer.dev,resources=taskruntoolcalls/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=kubechain.humanlayer.dev,resources=tools,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+
 // TaskRunToolCallReconciler reconciles a TaskRunToolCall object.
 type TaskRunToolCallReconciler struct {
 	client.Client
