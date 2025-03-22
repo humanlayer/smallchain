@@ -1,253 +1,151 @@
 package agent
 
 import (
-	"context"
-	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
+	testutil "github.com/humanlayer/smallchain/kubechain/test/controller"
 )
 
 var _ = Describe("Agent Controller", func() {
-	Context("When reconciling a resource", func() {
-		const resourceName = "test-agent"
-		const llmName = "test-llm"
-		const toolName = "test-tool"
+	const (
+		resourceName = "test-agent"
+		llmName      = "test-llm"
+		toolName     = "test-tool"
+		namespace    = "default"
+	)
 
-		ctx := context.Background()
+	// Define test cases for table-driven testing
+	testCases := []testutil.AgentTestCase{
+		{
+			TestCase: testutil.TestCase{
+				Name:           "Valid dependencies",
+				ShouldSucceed:  true,
+				ExpectedStatus: "Ready",
+				ExpectedDetail: "All dependencies validated successfully",
+				EventType:      "ValidationSucceeded",
+			},
+			LLMExists:   true,
+			ToolsExist:  true,
+			ToolsReady:  true,
+			ExpectError: false,
+		},
+		{
+			TestCase: testutil.TestCase{
+				Name:           "Non-existent LLM",
+				ShouldSucceed:  false,
+				ExpectedStatus: "Error",
+				ExpectedDetail: "not found",
+				EventType:      "ValidationFailed",
+			},
+			LLMExists:   false,
+			ToolsExist:  true,
+			ToolsReady:  true,
+			ExpectError: true,
+		},
+		{
+			TestCase: testutil.TestCase{
+				Name:           "Non-existent Tool",
+				ShouldSucceed:  false,
+				ExpectedStatus: "Error",
+				ExpectedDetail: "not found",
+				EventType:      "ValidationFailed",
+			},
+			LLMExists:   true,
+			ToolsExist:  false,
+			ToolsReady:  true,
+			ExpectError: true,
+		},
+	}
 
-		typeNamespacedName := types.NamespacedName{
-			Name:      resourceName,
-			Namespace: "default",
-		}
-
-		BeforeEach(func() {
-			// Create a test LLM
-			llm := &kubechainv1alpha1.LLM{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      llmName,
-					Namespace: "default",
-				},
-				Spec: kubechainv1alpha1.LLMSpec{
-					Provider: "openai",
-					APIKeyFrom: kubechainv1alpha1.APIKeySource{
-						SecretKeyRef: kubechainv1alpha1.SecretKeyRef{
-							Name: "test-secret",
-							Key:  "api-key",
-						},
-					},
-				},
-			}
-			Expect(k8sClient.Create(ctx, llm)).To(Succeed())
-
-			// Mark LLM as ready
-			llm.Status.Status = "Ready"
-			llm.Status.StatusDetail = "Ready for testing"
-			Expect(k8sClient.Status().Update(ctx, llm)).To(Succeed())
-
-			// Create a test Tool
-			tool := &kubechainv1alpha1.Tool{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      toolName,
-					Namespace: "default",
-				},
-				Spec: kubechainv1alpha1.ToolSpec{
-					ToolType: "function",
-					Name:     "test",
-				},
-			}
-			Expect(k8sClient.Create(ctx, tool)).To(Succeed())
-
-			// Mark Tool as ready
-			tool.Status.Ready = true
-			Expect(k8sClient.Status().Update(ctx, tool)).To(Succeed())
-		})
-
-		AfterEach(func() {
-			// Cleanup test resources
-			By("Cleanup the test LLM")
-			llm := &kubechainv1alpha1.LLM{}
-			err := k8sClient.Get(ctx, types.NamespacedName{Name: llmName, Namespace: "default"}, llm)
-			if err == nil {
-				Expect(k8sClient.Delete(ctx, llm)).To(Succeed())
-			}
-
-			By("Cleanup the test Tool")
-			tool := &kubechainv1alpha1.Tool{}
-			err = k8sClient.Get(ctx, types.NamespacedName{Name: toolName, Namespace: "default"}, tool)
-			if err == nil {
-				Expect(k8sClient.Delete(ctx, tool)).To(Succeed())
-			}
-
-			By("Cleanup the test Agent")
-			agent := &kubechainv1alpha1.Agent{}
-			err = k8sClient.Get(ctx, typeNamespacedName, agent)
-			if err == nil {
-				Expect(k8sClient.Delete(ctx, agent)).To(Succeed())
-			}
-		})
-
-		It("should successfully validate an agent with valid dependencies", func() {
-			By("creating the agent with valid LLM and Tool references")
-			agent := &kubechainv1alpha1.Agent{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      resourceName,
-					Namespace: "default",
-				},
-				Spec: kubechainv1alpha1.AgentSpec{
-					LLMRef: kubechainv1alpha1.LocalObjectReference{
-						Name: llmName,
-					},
-					Tools: []kubechainv1alpha1.LocalObjectReference{
-						{Name: toolName},
-					},
-					System: "Test agent",
-				},
-			}
-			Expect(k8sClient.Create(ctx, agent)).To(Succeed())
-
-			By("reconciling the agent")
-			eventRecorder := record.NewFakeRecorder(10)
-			reconciler := &AgentReconciler{
-				Client:   k8sClient,
-				Scheme:   k8sClient.Scheme(),
-				recorder: eventRecorder,
-			}
-
-			_, err := reconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedName,
-			})
-			Expect(err).NotTo(HaveOccurred())
-
-			By("checking the agent status")
-			updatedAgent := &kubechainv1alpha1.Agent{}
-			err = k8sClient.Get(ctx, typeNamespacedName, updatedAgent)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(updatedAgent.Status.Ready).To(BeTrue())
-			Expect(updatedAgent.Status.Status).To(Equal("Ready"))
-			Expect(updatedAgent.Status.StatusDetail).To(Equal("All dependencies validated successfully"))
-			Expect(updatedAgent.Status.ValidTools).To(ContainElement(kubechainv1alpha1.ResolvedTool{
-				Kind: "Tool",
-				Name: toolName,
-			}))
-
-			By("checking that a success event was created")
-			Eventually(func() bool {
-				select {
-				case event := <-eventRecorder.Events:
-					return strings.Contains(event, "ValidationSucceeded")
-				default:
-					return false
+	for _, tc := range testCases {
+		// Use a closure to ensure proper variable scoping
+		func(tc testutil.AgentTestCase) {
+			It(tc.Name, func() {
+				// Set up test resources according to test case
+				// Create LLM if the test case requires it
+				if tc.LLMExists {
+					llm := testEnv.CreateLLM(llmName, "test-secret", "api-key")
+					testEnv.MarkLLMReady(llm)
+					DeferCleanup(func() {
+						testEnv.DeleteLLM(llmName)
+					})
 				}
-			}, 5*time.Second, 100*time.Millisecond).Should(BeTrue(), "Expected to find success event")
-		})
 
-		It("should fail validation with non-existent LLM", func() {
-			By("creating the agent with invalid LLM reference")
-			agent := &kubechainv1alpha1.Agent{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      resourceName,
-					Namespace: "default",
-				},
-				Spec: kubechainv1alpha1.AgentSpec{
-					LLMRef: kubechainv1alpha1.LocalObjectReference{
-						Name: "nonexistent-llm",
-					},
-					System: "Test agent",
-				},
-			}
-			Expect(k8sClient.Create(ctx, agent)).To(Succeed())
-
-			By("reconciling the agent")
-			eventRecorder := record.NewFakeRecorder(10)
-			reconciler := &AgentReconciler{
-				Client:   k8sClient,
-				Scheme:   k8sClient.Scheme(),
-				recorder: eventRecorder,
-			}
-
-			_, err := reconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedName,
-			})
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring(`"nonexistent-llm" not found`))
-
-			By("checking the agent status")
-			updatedAgent := &kubechainv1alpha1.Agent{}
-			err = k8sClient.Get(ctx, typeNamespacedName, updatedAgent)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(updatedAgent.Status.Ready).To(BeFalse())
-			Expect(updatedAgent.Status.Status).To(Equal("Error"))
-			Expect(updatedAgent.Status.StatusDetail).To(ContainSubstring(`"nonexistent-llm" not found`))
-
-			By("checking that a failure event was created")
-			Eventually(func() bool {
-				select {
-				case event := <-eventRecorder.Events:
-					return strings.Contains(event, "ValidationFailed")
-				default:
-					return false
+				// Create Tool if the test case requires it
+				toolNames := []string{}
+				if tc.ToolsExist {
+					tool := testEnv.CreateTool(toolName)
+					if tc.ToolsReady {
+						testEnv.MarkToolReady(tool)
+					}
+					toolNames = append(toolNames, toolName)
+					DeferCleanup(func() {
+						testEnv.DeleteTool(toolName)
+					})
+				} else {
+					toolNames = append(toolNames, "nonexistent-tool")
 				}
-			}, 5*time.Second, 100*time.Millisecond).Should(BeTrue(), "Expected to find failure event")
-		})
 
-		It("should fail validation with non-existent Tool", func() {
-			By("creating the agent with invalid Tool reference")
-			agent := &kubechainv1alpha1.Agent{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      resourceName,
-					Namespace: "default",
-				},
-				Spec: kubechainv1alpha1.AgentSpec{
-					LLMRef: kubechainv1alpha1.LocalObjectReference{
-						Name: llmName,
-					},
-					Tools: []kubechainv1alpha1.LocalObjectReference{
-						{Name: "nonexistent-tool"},
-					},
-					System: "Test agent",
-				},
-			}
-			Expect(k8sClient.Create(ctx, agent)).To(Succeed())
-
-			By("reconciling the agent")
-			eventRecorder := record.NewFakeRecorder(10)
-			reconciler := &AgentReconciler{
-				Client:   k8sClient,
-				Scheme:   k8sClient.Scheme(),
-				recorder: eventRecorder,
-			}
-
-			_, err := reconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedName,
-			})
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring(`"nonexistent-tool" not found`))
-
-			By("checking the agent status")
-			updatedAgent := &kubechainv1alpha1.Agent{}
-			err = k8sClient.Get(ctx, typeNamespacedName, updatedAgent)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(updatedAgent.Status.Ready).To(BeFalse())
-			Expect(updatedAgent.Status.Status).To(Equal("Error"))
-			Expect(updatedAgent.Status.StatusDetail).To(ContainSubstring(`"nonexistent-tool" not found`))
-
-			By("checking that a failure event was created")
-			Eventually(func() bool {
-				select {
-				case event := <-eventRecorder.Events:
-					return strings.Contains(event, "ValidationFailed")
-				default:
-					return false
+				// Prepare the Agent resource
+				var llmRef string
+				if tc.LLMExists {
+					llmRef = llmName
+				} else {
+					llmRef = "nonexistent-llm"
 				}
-			}, 5*time.Second, 100*time.Millisecond).Should(BeTrue(), "Expected to find failure event")
-		})
-	})
+				_ = testEnv.CreateAgent(resourceName, llmRef, toolNames)
+				DeferCleanup(func() {
+					testEnv.DeleteAgent(resourceName)
+				})
+
+				// Create reconciler with fake recorder
+				reconciler := &AgentReconciler{
+					Client:   testEnv.Client,
+					Scheme:   testEnv.Client.Scheme(),
+					recorder: testEnv.Recorder,
+				}
+
+				// Perform reconciliation
+				result, err := reconciler.Reconcile(testEnv.Ctx, reconcile.Request{
+					NamespacedName: types.NamespacedName{
+						Name:      resourceName,
+						Namespace: namespace,
+					},
+				})
+
+				// Check expectations
+				if tc.ExpectError {
+					Expect(err).To(HaveOccurred())
+				} else {
+					Expect(err).NotTo(HaveOccurred())
+					Expect(result).To(Equal(reconcile.Result{}))
+				}
+
+				// Verify status updates
+				updatedAgent := &kubechainv1alpha1.Agent{}
+				err = testEnv.Client.Get(testEnv.Ctx, types.NamespacedName{Name: resourceName, Namespace: namespace}, updatedAgent)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(updatedAgent.Status.Ready).To(Equal(tc.ShouldSucceed))
+				Expect(updatedAgent.Status.Status).To(Equal(tc.ExpectedStatus))
+				Expect(updatedAgent.Status.StatusDetail).To(ContainSubstring(tc.ExpectedDetail))
+
+				// Verify events
+				testEnv.CheckEvent(tc.EventType, 5*time.Second)
+
+				// Additional validation for successful cases
+				if tc.ShouldSucceed {
+					Expect(updatedAgent.Status.ValidTools).To(ContainElement(kubechainv1alpha1.ResolvedTool{
+						Kind: "Tool",
+						Name: toolName,
+					}))
+				}
+			})
+		}(tc)
+	}
 })
