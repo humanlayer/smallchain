@@ -534,7 +534,7 @@ spec:
 EOF
 ```
 
-let's make a new task that uses the fetch tool:
+Let's make a new task that uses the fetch tool:
 
 ```bash
 cat <<EOF | kubectl apply -f -
