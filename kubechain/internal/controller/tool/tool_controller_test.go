@@ -1,105 +1,123 @@
 package tool
 
 import (
-	"context"
-	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
+	testutil "github.com/humanlayer/smallchain/kubechain/test/controller"
 )
 
+// toolTestCase defines a test case for the tool controller
+type toolTestCase struct {
+	testutil.TestCase
+	ToolType    string
+	Name        string
+	Description string
+	Parameters  string
+	BuiltinName string
+}
+
 var _ = Describe("Tool Controller", func() {
-	Context("When reconciling a resource", func() {
-		const resourceName = "test-tool"
+	const (
+		resourceName = "test-tool"
+		namespace    = "default"
+	)
 
-		ctx := context.Background()
-
-		typeNamespacedName := types.NamespacedName{
-			Name:      resourceName,
-			Namespace: "default",
-		}
-
-		AfterEach(func() {
-			By("Cleanup the specific resource instance Tool")
-			resource := &kubechainv1alpha1.Tool{}
-			err := k8sClient.Get(ctx, typeNamespacedName, resource)
-			if err == nil {
-				Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
-			}
-		})
-
-		It("should successfully reconcile a function tool", func() {
-			By("creating the custom resource")
-			resource := &kubechainv1alpha1.Tool{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      resourceName,
-					Namespace: "default",
-				},
-				Spec: kubechainv1alpha1.ToolSpec{
-					ToolType:    "function",
-					Name:        "add",
-					Description: "Add two numbers",
-					Parameters: runtime.RawExtension{
-						Raw: []byte(`{
-							"type": "object",
-							"properties": {
-								"a": {
-									"type": "number"
-								},
-								"b": {
-									"type": "number"
-								}
-							},
-							"required": ["a", "b"]
-						}`),
+	// Define test cases
+	testCases := []toolTestCase{
+		{
+			TestCase: testutil.TestCase{
+				Name:           "Function tool",
+				ShouldSucceed:  true,
+				ExpectedStatus: "Ready",
+				ExpectedDetail: "Tool validation successful",
+				EventType:      "ValidationSucceeded",
+			},
+			ToolType:    "function",
+			Name:        "add",
+			Description: "Add two numbers",
+			Parameters: `{
+				"type": "object",
+				"properties": {
+					"a": {
+						"type": "number"
 					},
-					Execute: kubechainv1alpha1.ToolExecute{
-						Builtin: &kubechainv1alpha1.BuiltinToolSpec{
-							Name: "add",
+					"b": {
+						"type": "number"
+					}
+				},
+				"required": ["a", "b"]
+			}`,
+			BuiltinName: "add",
+		},
+	}
+
+	for _, tc := range testCases {
+		// Use a closure to ensure proper variable scoping
+		func(tc toolTestCase) {
+			It(tc.Name, func() {
+				// Create the tool resource
+				resource := &kubechainv1alpha1.Tool{
+					ObjectMeta: testutil.CreateObjectMeta(resourceName, namespace),
+					Spec: kubechainv1alpha1.ToolSpec{
+						ToolType:    tc.ToolType,
+						Name:        tc.Name,
+						Description: tc.Description,
+						Parameters: runtime.RawExtension{
+							Raw: []byte(tc.Parameters),
+						},
+						Execute: kubechainv1alpha1.ToolExecute{
+							Builtin: &kubechainv1alpha1.BuiltinToolSpec{
+								Name: tc.BuiltinName,
+							},
 						},
 					},
-				},
-			}
-			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
-
-			By("Reconciling the created resource")
-			eventRecorder := record.NewFakeRecorder(10)
-			controllerReconciler := &ToolReconciler{
-				Client:   k8sClient,
-				Scheme:   k8sClient.Scheme(),
-				recorder: eventRecorder,
-			}
-
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedName,
-			})
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Checking the resource status")
-			updatedTool := &kubechainv1alpha1.Tool{}
-			err = k8sClient.Get(ctx, typeNamespacedName, updatedTool)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(updatedTool.Status.Ready).To(BeTrue())
-			Expect(updatedTool.Status.Status).To(Equal("Ready"))
-			Expect(updatedTool.Status.StatusDetail).To(Equal("Tool validation successful"))
-
-			By("checking that a success event was created")
-			Eventually(func() bool {
-				select {
-				case event := <-eventRecorder.Events:
-					return strings.Contains(event, "ValidationSucceeded")
-				default:
-					return false
 				}
-			}, 5*time.Second, 100*time.Millisecond).Should(BeTrue(), "Expected to find success event")
-		})
-	})
+				Expect(testEnv.Client.Create(testEnv.Ctx, resource)).To(Succeed())
+				
+				// Clean up after test
+				DeferCleanup(func() {
+					// Delete the tool
+					tool := &kubechainv1alpha1.Tool{}
+					err := testEnv.Client.Get(testEnv.Ctx, types.NamespacedName{Name: resourceName, Namespace: namespace}, tool)
+					if err == nil {
+						Expect(testEnv.Client.Delete(testEnv.Ctx, tool)).To(Succeed())
+					}
+				})
+
+				// Create reconciler for test
+				reconciler := &ToolReconciler{
+					Client:   testEnv.Client,
+					Scheme:   testEnv.Client.Scheme(),
+					recorder: testEnv.Recorder,
+				}
+
+				// Reconcile the resource
+				_, err := reconciler.Reconcile(testEnv.Ctx, reconcile.Request{
+					NamespacedName: types.NamespacedName{
+						Name:      resourceName,
+						Namespace: namespace,
+					},
+				})
+				Expect(err).NotTo(HaveOccurred())
+
+				// Check status updates
+				updatedTool := &kubechainv1alpha1.Tool{}
+				err = testEnv.Client.Get(testEnv.Ctx, types.NamespacedName{Name: resourceName, Namespace: namespace}, updatedTool)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(updatedTool.Status.Ready).To(Equal(tc.ShouldSucceed))
+				Expect(updatedTool.Status.Status).To(Equal(tc.ExpectedStatus))
+				Expect(updatedTool.Status.StatusDetail).To(Equal(tc.ExpectedDetail))
+
+				// Verify events
+				testEnv.CheckEvent(tc.EventType, 5*time.Second)
+			})
+		}(tc)
+	}
 })

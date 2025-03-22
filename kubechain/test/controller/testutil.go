@@ -26,6 +26,7 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -219,6 +220,102 @@ func (e *TestEnv) DeleteAgent(name string) {
 	if err == nil {
 		Expect(e.Client.Delete(e.Ctx, agent)).To(Succeed())
 	}
+}
+
+// CreateTask creates a test Task resource with the given name and references
+func (e *TestEnv) CreateTask(name, agentName, message string) *kubechainv1alpha1.Task {
+	task := &kubechainv1alpha1.Task{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: e.Namespace,
+		},
+		Spec: kubechainv1alpha1.TaskSpec{
+			AgentRef: kubechainv1alpha1.LocalObjectReference{
+				Name: agentName,
+			},
+			Message: message,
+		},
+	}
+	Expect(e.Client.Create(e.Ctx, task)).To(Succeed())
+	return task
+}
+
+// MarkTaskReady marks a Task as ready
+func (e *TestEnv) MarkTaskReady(task *kubechainv1alpha1.Task) {
+	task.Status.Ready = true
+	task.Status.Status = "Ready"
+	task.Status.StatusDetail = "Agent validated successfully"
+	Expect(e.Client.Status().Update(e.Ctx, task)).To(Succeed())
+}
+
+// DeleteTask deletes a Task if it exists
+func (e *TestEnv) DeleteTask(name string) {
+	task := &kubechainv1alpha1.Task{}
+	err := e.Client.Get(e.Ctx, types.NamespacedName{Name: name, Namespace: e.Namespace}, task)
+	if err == nil {
+		Expect(e.Client.Delete(e.Ctx, task)).To(Succeed())
+	}
+}
+
+// CreateTaskRun creates a test TaskRun resource with the given name and references
+func (e *TestEnv) CreateTaskRun(name, taskName string) *kubechainv1alpha1.TaskRun {
+	taskRun := &kubechainv1alpha1.TaskRun{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: e.Namespace,
+		},
+		Spec: kubechainv1alpha1.TaskRunSpec{
+			TaskRef: kubechainv1alpha1.LocalObjectReference{
+				Name: taskName,
+			},
+		},
+	}
+	Expect(e.Client.Create(e.Ctx, taskRun)).To(Succeed())
+	return taskRun
+}
+
+// DeleteTaskRun deletes a TaskRun if it exists
+func (e *TestEnv) DeleteTaskRun(name string) {
+	taskRun := &kubechainv1alpha1.TaskRun{}
+	err := e.Client.Get(e.Ctx, types.NamespacedName{Name: name, Namespace: e.Namespace}, taskRun)
+	if err == nil {
+		Expect(e.Client.Delete(e.Ctx, taskRun)).To(Succeed())
+	}
+}
+
+// CreateAddTool creates a test Tool with add functionality
+func (e *TestEnv) CreateAddTool(name string) *kubechainv1alpha1.Tool {
+	tool := &kubechainv1alpha1.Tool{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: e.Namespace,
+		},
+		Spec: kubechainv1alpha1.ToolSpec{
+			Name:        name,
+			Description: "add two numbers",
+			Execute: kubechainv1alpha1.ToolExecute{
+				Builtin: &kubechainv1alpha1.BuiltinToolSpec{
+					Name: "add",
+				},
+			},
+			Parameters: runtime.RawExtension{
+				Raw: []byte(`{
+					"type": "object",
+					"properties": {
+						"a": {
+							"type": "number"
+						},
+						"b": {
+							"type": "number"
+						}
+					},
+					"required": ["a", "b"]
+				}`),
+			},
+		},
+	}
+	Expect(e.Client.Create(e.Ctx, tool)).To(Succeed())
+	return tool
 }
 
 // CheckEvent checks if an event with the expected message was recorded

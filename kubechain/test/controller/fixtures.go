@@ -21,6 +21,7 @@ import (
 	"net/http/httptest"
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
+	"github.com/humanlayer/smallchain/kubechain/internal/llmclient"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -58,6 +59,19 @@ type AgentTestCase struct {
 	ToolsExist  bool
 	ToolsReady  bool
 	ExpectError bool
+}
+
+// TaskRunTestCase represents a TaskRun controller test case
+type TaskRunTestCase struct {
+	TestCase
+	TaskExists   bool
+	TaskReady    bool
+	LLMResponse  *kubechainv1alpha1.Message
+	LLMError     error
+	InitialPhase kubechainv1alpha1.TaskRunPhase
+	FinalPhase   kubechainv1alpha1.TaskRunPhase
+	ExpectedRequeue bool
+	ExpectLLMValidation func(tools []llmclient.Tool, contextWindow []kubechainv1alpha1.Message) error
 }
 
 // CreateAgentSpec creates an agent spec with the given LLM and tool references
