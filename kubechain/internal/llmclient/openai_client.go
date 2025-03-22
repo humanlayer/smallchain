@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 // OpenAIClient interface for mocking in tests
@@ -132,8 +133,10 @@ func NewRawOpenAIClient(apiKey string) (OpenAIClient, error) {
 }
 
 func (c *rawOpenAIClient) SendRequest(ctx context.Context, messages []v1alpha1.Message, tools []Tool) (*v1alpha1.Message, error) {
+	logger := log.FromContext(ctx)
+
 	reqBody := chatCompletionRequest{
-		Model:    "gpt-4",
+		Model:    "gpt-4o",
 		Messages: FromKubechainMessages(messages),
 	}
 	if len(tools) > 0 {
@@ -144,6 +147,8 @@ func (c *rawOpenAIClient) SendRequest(ctx context.Context, messages []v1alpha1.M
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
+
+	logger.Info("Sending request to OpenAI", "request", string(jsonBody))
 
 	req, err := http.NewRequestWithContext(ctx, "POST", "https://api.openai.com/v1/chat/completions", bytes.NewBuffer(jsonBody))
 	if err != nil {
