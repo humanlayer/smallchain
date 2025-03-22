@@ -562,7 +562,7 @@ kubectl delete mcpserver --all
 kubectl delete llm --all
 ```
 
-Remove the openai secret:
+Remove the OpenAI secret:
 
 ```
 kubectl delete secret openai
