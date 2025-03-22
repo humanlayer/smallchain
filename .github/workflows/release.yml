@@ -11,7 +11,8 @@ env:
 
 jobs:
   build-and-push:
-    runs-on: ubuntu-latest
+    # Use a larger runner for faster builds
+    runs-on: ubuntu-latest-16-core
     permissions:
       contents: write
       packages: write
@@ -24,6 +25,17 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.24'
+      
+      # Cache Go modules to speed up builds
+      - name: Go Module Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
 
       - name: Set environment variables
         run: |
@@ -42,6 +54,22 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # Create cache directories for Go modules and build cache
+      - name: Create Go cache directories
+        run: |
+          mkdir -p ~/.cache/go-build
+          mkdir -p ~/go/pkg/mod
+
+      # Set up Docker layer caching
+      - name: Docker Layer Caching
+        uses: ScribeMD/docker-cache@0.4.0
+        with:
+          key: docker-${{ runner.os }}-${{ hashFiles('kubechain/Dockerfile') }}
+
+      # Set DOCKER_BUILDKIT=1 for enhanced build performance
+      - name: Set Docker Buildkit
+        run: echo "DOCKER_BUILDKIT=1" >> $GITHUB_ENV
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
@@ -53,6 +81,13 @@ jobs:
           platforms: linux/amd64,linux/arm64
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
+            MAKEFLAGS=-j16
+          # Mount Go module and build caches to speed up builds
+          build-contexts: |
+            go-mod-cache=~/go/pkg/mod
+            go-build-cache=~/.cache/go-build
 
       - name: Install Kustomize
         run: |
