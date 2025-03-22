@@ -16,6 +16,7 @@ rules:
   - kubechain.humanlayer.dev
   resources:
   - agents
+  - contactchannels
   - llms
   - mcpservers
   - taskruns
@@ -34,6 +35,7 @@ rules:
   - kubechain.humanlayer.dev
   resources:
   - agents/status
+  - contactchannels/status
   - llms/status
   - mcpservers/status
   - taskruns/status
@@ -43,4 +45,10 @@ rules:
   verbs:
   - get
   - patch
+  - update
+- apiGroups:
+  - kubechain.humanlayer.dev
+  resources:
+  - contactchannels/finalizers
+  verbs:
   - update

@@ -9,6 +9,7 @@ resources:
 - bases/kubechain.humanlayer.dev_taskruns.yaml
 - bases/kubechain.humanlayer.dev_taskruntoolcalls.yaml
 - bases/kubechain.humanlayer.dev_mcpservers.yaml
+- bases/kubechain.humanlayer.dev_contactchannels.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:
