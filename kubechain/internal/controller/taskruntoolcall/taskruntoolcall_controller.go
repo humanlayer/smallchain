@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -20,14 +21,16 @@ import (
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
 	externalapi "github.com/humanlayer/smallchain/kubechain/internal/externalAPI"
 	"github.com/humanlayer/smallchain/kubechain/internal/humanlayer"
+	"github.com/humanlayer/smallchain/kubechain/internal/mcpmanager"
 )
 
 // TaskRunToolCallReconciler reconciles a TaskRunToolCall object.
 type TaskRunToolCallReconciler struct {
 	client.Client
-	Scheme   *runtime.Scheme
-	recorder record.EventRecorder
-	server   *http.Server
+	Scheme     *runtime.Scheme
+	recorder   record.EventRecorder
+	server     *http.Server
+	MCPManager *mcpmanager.MCPServerManager
 }
 
 func (r *TaskRunToolCallReconciler) webhookHandler(w http.ResponseWriter, req *http.Request) {
@@ -119,6 +122,42 @@ func convertToFloat(val interface{}) (float64, error) {
 	}
 }
 
+// checkIfMCPTool checks if a tool name follows the MCPServer tool pattern (serverName__toolName)
+// and returns the serverName, toolName, and whether it's an MCP tool
+func isMCPTool(toolName string) (serverName string, actualToolName string, isMCP bool) {
+	parts := strings.Split(toolName, "__")
+	if len(parts) == 2 {
+		return parts[0], parts[1], true
+	}
+	return "", toolName, false
+}
+
+// executeMCPTool executes a tool call on an MCP server
+func (r *TaskRunToolCallReconciler) executeMCPTool(ctx context.Context, trtc *kubechainv1alpha1.TaskRunToolCall, serverName, toolName string, args map[string]interface{}) error {
+	logger := log.FromContext(ctx)
+
+	if r.MCPManager == nil {
+		return fmt.Errorf("MCPManager is not initialized")
+	}
+
+	// Call the MCP tool
+	result, err := r.MCPManager.CallTool(ctx, serverName, toolName, args)
+	if err != nil {
+		logger.Error(err, "Failed to call MCP tool",
+			"serverName", serverName,
+			"toolName", toolName)
+		return err
+	}
+
+	// Update TaskRunToolCall status with the MCP tool result
+	trtc.Status.Result = result
+	trtc.Status.Phase = kubechainv1alpha1.TaskRunToolCallPhaseSucceeded
+	trtc.Status.Status = "Ready"
+	trtc.Status.StatusDetail = "MCP tool executed successfully"
+
+	return nil
+}
+
 // Reconcile processes TaskRunToolCall objects.
 func (r *TaskRunToolCallReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
@@ -159,7 +198,56 @@ func (r *TaskRunToolCallReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, nil
 	}
 
-	// Fetch the referenced Tool.
+	// Check if this is an MCP tool before looking up the traditional Tool
+	serverName, mcpToolName, isMCP := isMCPTool(trtc.Spec.ToolRef.Name)
+
+	// Parse the arguments string as JSON (needed for both MCP and traditional tools)
+	var args map[string]interface{}
+	if err := json.Unmarshal([]byte(trtc.Spec.Arguments), &args); err != nil {
+		logger.Error(err, "Failed to parse arguments")
+		trtc.Status.Status = "Error"
+		trtc.Status.StatusDetail = "Invalid arguments JSON"
+		trtc.Status.Error = err.Error()
+		r.recorder.Event(&trtc, corev1.EventTypeWarning, "ExecutionFailed", err.Error())
+		if err := r.Status().Update(ctx, &trtc); err != nil {
+			logger.Error(err, "Failed to update status")
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, err
+	}
+
+	// If this is an MCP tool, handle it
+	if isMCP && r.MCPManager != nil {
+		logger.Info("Executing MCP tool", "serverName", serverName, "toolName", mcpToolName)
+
+		// Execute the MCP tool
+		if err := r.executeMCPTool(ctx, &trtc, serverName, mcpToolName, args); err != nil {
+			trtc.Status.Status = "Error"
+			trtc.Status.StatusDetail = fmt.Sprintf("MCP tool execution failed: %v", err)
+			trtc.Status.Error = err.Error()
+			trtc.Status.Phase = kubechainv1alpha1.TaskRunToolCallPhaseFailed
+			r.recorder.Event(&trtc, corev1.EventTypeWarning, "ExecutionFailed", err.Error())
+
+			if updateErr := r.Status().Update(ctx, &trtc); updateErr != nil {
+				logger.Error(updateErr, "Failed to update status")
+				return ctrl.Result{}, updateErr
+			}
+			return ctrl.Result{}, err
+		}
+
+		// Save the result
+		if err := r.Status().Update(ctx, &trtc); err != nil {
+			logger.Error(err, "Failed to update TaskRunToolCall status after execution")
+			return ctrl.Result{}, err
+		}
+		logger.Info("MCP tool execution completed", "result", trtc.Status.Result)
+		r.recorder.Event(&trtc, corev1.EventTypeNormal, "ExecutionSucceeded",
+			fmt.Sprintf("MCP tool %q executed successfully", trtc.Spec.ToolRef.Name))
+		return ctrl.Result{}, nil
+	}
+
+	// If not an MCP tool, continue with traditional tool processing
+	// Note: This code path will be deprecated once MCP fully replaces traditional tools
 	var tool kubechainv1alpha1.Tool
 	if err := r.Get(ctx, client.ObjectKey{Namespace: trtc.Namespace, Name: trtc.Spec.ToolRef.Name}, &tool); err != nil {
 		logger.Error(err, "Failed to get Tool", "tool", trtc.Spec.ToolRef.Name)
@@ -489,6 +577,11 @@ func (r *TaskRunToolCallReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.recorder = mgr.GetEventRecorderFor("taskruntoolcall-controller")
 	r.server = &http.Server{Addr: ":8080"} // Choose a port
 	http.HandleFunc("/webhook/inbound", r.webhookHandler)
+
+	// Initialize MCPManager if it hasn't been initialized yet
+	if r.MCPManager == nil {
+		r.MCPManager = mcpmanager.NewMCPServerManager()
+	}
 
 	go func() {
 		if err := r.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {

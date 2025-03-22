@@ -14,6 +14,10 @@ type AgentSpec struct {
 	// +optional
 	Tools []LocalObjectReference `json:"tools,omitempty"`
 
+	// MCPServers is a list of MCP servers this agent can use
+	// +optional
+	MCPServers []LocalObjectReference `json:"mcpServers,omitempty"`
+
 	// System is the system prompt for the agent
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinLength=1
@@ -43,6 +47,10 @@ type AgentStatus struct {
 	// ValidTools is the list of tools that were successfully validated
 	// +optional
 	ValidTools []ResolvedTool `json:"validTools,omitempty"`
+
+	// ValidMCPServers is the list of MCP servers that were successfully validated
+	// +optional
+	ValidMCPServers []ResolvedMCPServer `json:"validMCPServers,omitempty"`
 }
 
 type ResolvedTool struct {
@@ -53,6 +61,16 @@ type ResolvedTool struct {
 	// Name of the tool
 	// +kubebuilder:validation:Required
 	Name string `json:"name"`
+}
+
+type ResolvedMCPServer struct {
+	// Name of the MCP server
+	// +kubebuilder:validation:Required
+	Name string `json:"name"`
+
+	// Tools available from this MCP server
+	// +optional
+	Tools []string `json:"tools,omitempty"`
 }
 
 // +kubebuilder:object:root=true

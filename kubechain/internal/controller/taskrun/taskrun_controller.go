@@ -17,10 +17,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
-	"github.com/openai/openai-go"
 
 	"github.com/humanlayer/smallchain/kubechain/internal/adapters"
 	"github.com/humanlayer/smallchain/kubechain/internal/llmclient"
+	"github.com/humanlayer/smallchain/kubechain/internal/mcpmanager"
 )
 
 // TaskRunReconciler reconciles a TaskRun object
@@ -29,6 +29,7 @@ type TaskRunReconciler struct {
 	Scheme       *runtime.Scheme
 	recorder     record.EventRecorder
 	newLLMClient func(apiKey string) (llmclient.OpenAIClient, error)
+	MCPManager   *mcpmanager.MCPServerManager
 }
 
 // getTask fetches the parent Task for this TaskRun
@@ -278,39 +279,30 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 
-	var tools []openai.ChatCompletionToolParam
-	// Get the tools from the agent's ValidTools
-	for _, toolName := range agent.Status.ValidTools {
-		tool := &kubechainv1alpha1.Tool{}
-		err := r.Get(ctx, client.ObjectKey{
-			Namespace: agent.Namespace,
-			Name:      toolName.Name,
-		}, tool)
-		if err != nil {
-			logger.Error(err, "Failed to get Tool", "tool", toolName)
-			continue
-		}
+	// Get tools from MCP servers - this replaces traditional Tool CRDs completely
+	var tools []llmclient.Tool
 
-		// Convert the tool's arguments to a JSON schema
-		toolParam := openai.ChatCompletionToolParam{
-			Type: openai.F(openai.ChatCompletionToolTypeFunction),
-			Function: openai.F(openai.FunctionDefinitionParam{
-				Name:        openai.F(tool.Name),
-				Description: openai.F(tool.Spec.Description),
-			}),
-		}
+	// Only use MCP tools if the manager is available
+	if r.MCPManager != nil && len(agent.Status.ValidMCPServers) > 0 {
+		logger.Info("Adding MCP tools to LLM request", "mcpServerCount", len(agent.Status.ValidMCPServers))
 
-		// If the tool has arguments defined, add them to the function definition
-		if tool.Spec.Parameters.Raw != nil {
-			var parameters openai.FunctionParameters
-			if err := json.Unmarshal(tool.Spec.Parameters.Raw, &parameters); err != nil {
-				logger.Error(err, "Failed to unmarshal tool arguments", "tool", toolName)
+		for _, mcpServer := range agent.Status.ValidMCPServers {
+			// Get tools for this server
+			mcpTools, exists := r.MCPManager.GetTools(mcpServer.Name)
+			if !exists {
+				logger.Error(fmt.Errorf("MCP server tools not found"), "Failed to get tools for MCP server", "server", mcpServer.Name)
 				continue
 			}
-			toolParam.Function.Value.Parameters = openai.F(parameters)
-		}
 
-		tools = append(tools, toolParam)
+			// Convert MCP tools to LLM client format
+			mcpClientTools := adapters.ConvertMCPToolsToLLMClientTools(mcpTools, mcpServer.Name)
+			tools = append(tools, mcpClientTools...)
+
+			logger.Info("Added MCP tools", "server", mcpServer.Name, "toolCount", len(mcpTools))
+		}
+	} else {
+		// Log that no MCP servers were found
+		logger.Info("No MCP servers available for this agent", "agent", agent.Name)
 	}
 
 	// Send the prompt to the LLM using the OpenAI client.
@@ -420,6 +412,12 @@ func (r *TaskRunReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if r.newLLMClient == nil {
 		r.newLLMClient = llmclient.NewOpenAIClient
 	}
+
+	// Initialize MCPManager if not already set
+	if r.MCPManager == nil {
+		r.MCPManager = mcpmanager.NewMCPServerManager()
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&kubechainv1alpha1.TaskRun{}).
 		Complete(r)

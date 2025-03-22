@@ -25,6 +25,7 @@ import (
 
 	"github.com/humanlayer/smallchain/kubechain/internal/controller/agent"
 	"github.com/humanlayer/smallchain/kubechain/internal/controller/llm"
+	"github.com/humanlayer/smallchain/kubechain/internal/controller/mcpserver"
 	"github.com/humanlayer/smallchain/kubechain/internal/controller/task"
 	"github.com/humanlayer/smallchain/kubechain/internal/controller/taskrun"
 	"github.com/humanlayer/smallchain/kubechain/internal/controller/taskruntoolcall"
@@ -241,9 +242,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Create a shared MCPManager that all controllers will use
+	mcpManagerInstance := mcpmanager.NewMCPServerManager()
+
 	if err = (&agent.AgentReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:     mgr.GetClient(),
+		Scheme:     mgr.GetScheme(),
+		MCPManager: mcpManagerInstance,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Agent")
 		os.Exit(1)
@@ -258,18 +263,29 @@ func main() {
 	}
 
 	if err = (&taskrun.TaskRunReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:     mgr.GetClient(),
+		Scheme:     mgr.GetScheme(),
+		MCPManager: mcpManagerInstance,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "TaskRun")
 		os.Exit(1)
 	}
 
 	if err = (&taskruntoolcall.TaskRunToolCallReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:     mgr.GetClient(),
+		Scheme:     mgr.GetScheme(),
+		MCPManager: mcpManagerInstance,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "TaskRunToolCall")
+		os.Exit(1)
+	}
+
+	if err = (&mcpserver.MCPServerReconciler{
+		Client:     mgr.GetClient(),
+		Scheme:     mgr.GetScheme(),
+		MCPManager: mcpManagerInstance,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "MCPServer")
 		os.Exit(1)
 	}
 
