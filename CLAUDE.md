@@ -76,8 +76,8 @@ You can run these commands directly in the ts directory or use the pattern-match
 - `make lint-fix`: Run golangci-lint and fix issues
 - `make test`: Run unit tests
 - `make test-e2e`: Run end-to-end tests (requires a running Kind cluster)
-- `make manifests`: Generate Kubernetes manifests (CRDs, RBAC)
-- `make generate`: Generate Go code (DeepCopy methods)
+- `make manifests`: Generate Kubernetes manifests (CRDs, RBAC) - **Important:** Run this after modifying CRD types or controller RBAC annotations
+- `make generate`: Generate Go code (DeepCopy methods) - **Important:** Run this after adding new struct fields
 
 #### Build Commands
 - `make build`: Build the manager binary
@@ -121,6 +121,14 @@ Individual components can be managed separately:
 - `make otel-up/down`
 - `make tempo-up/down`
 - `make loki-up/down`
+
+## Documentation
+
+The project includes detailed documentation in the `/kubechain/docs/` directory:
+
+- [MCP Server Guide](/kubechain/docs/mcp-server.md) - Working with Model Control Protocol servers
+- [CRD Reference](/kubechain/docs/crd-reference.md) - Complete reference for all Custom Resource Definitions
+- [Kubebuilder Guide](/kubechain/docs/kubebuilder-guide.md) - How to develop with Kubebuilder in this project
 
 ## Typical Workflow
 
@@ -167,6 +175,16 @@ Alternatively, clean up components individually:
 - Use dependency injection for controllers
 - Test with Ginkgo/Gomega framework
 - Document public functions with godoc
+
+### Kubebuilder and CRD Development
+- All resources should be in the `kubechain.humanlayer.dev` API group
+- Use proper kubebuilder annotations for validation and RBAC
+- Add RBAC annotations to all controllers to generate proper permissions
+- Run `make manifests` after modifying CRD types or controller annotations
+- Run `make generate` after adding new struct fields to generate DeepCopy methods
+- When creating new resources, use `kubebuilder create api --group kubechain --version v1alpha1 --kind YourResource --namespaced true --resource true --controller true`
+- Ensure the PROJECT file contains entries for all resources before running `make manifests`
+- Follow the detailed guidance in the [Kubebuilder Guide](/kubechain/docs/kubebuilder-guide.md)
 
 ### TypeScript
 - Use 2-space indentation
