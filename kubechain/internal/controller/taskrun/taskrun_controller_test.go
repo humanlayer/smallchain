@@ -67,7 +67,7 @@ var _ = Describe("TaskRun Controller", func() {
 
 			// Mark LLM as ready
 			llm.Status.Ready = true
-			llm.Status.Status = "Ready"
+			llm.Status.Status = StatusReady
 			llm.Status.StatusDetail = "Ready for testing"
 			Expect(k8sClient.Status().Update(ctx, llm)).To(Succeed())
 
@@ -124,7 +124,7 @@ var _ = Describe("TaskRun Controller", func() {
 
 			// Mark Agent as ready
 			agent.Status.Ready = true
-			agent.Status.Status = "Ready"
+			agent.Status.Status = StatusReady
 			agent.Status.StatusDetail = "Ready for testing"
 			agent.Status.ValidTools = []kubechainv1alpha1.ResolvedTool{
 				{
@@ -151,7 +151,7 @@ var _ = Describe("TaskRun Controller", func() {
 
 			// Mark Task as ready
 			task.Status.Ready = true
-			task.Status.Status = "Ready"
+			task.Status.Status = StatusReady
 			task.Status.StatusDetail = "Agent validated successfully"
 			Expect(k8sClient.Status().Update(ctx, task)).To(Succeed())
 		})
@@ -242,7 +242,7 @@ var _ = Describe("TaskRun Controller", func() {
 			err = k8sClient.Get(ctx, types.NamespacedName{Name: taskRunName, Namespace: "default"}, updatedTaskRun)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedTaskRun.Status.Ready).To(BeTrue())
-			Expect(updatedTaskRun.Status.Status).To(Equal("Ready"))
+			Expect(updatedTaskRun.Status.Status).To(Equal(StatusReady))
 			Expect(updatedTaskRun.Status.StatusDetail).To(Equal("Ready to send to LLM"))
 			Expect(updatedTaskRun.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunPhaseReadyForLLM))
 
@@ -270,7 +270,7 @@ var _ = Describe("TaskRun Controller", func() {
 			err = k8sClient.Get(ctx, types.NamespacedName{Name: taskRunName, Namespace: "default"}, updatedTaskRun)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedTaskRun.Status.Ready).To(BeTrue())
-			Expect(updatedTaskRun.Status.Status).To(Equal("Ready"))
+			Expect(updatedTaskRun.Status.Status).To(Equal(StatusReady))
 			Expect(updatedTaskRun.Status.StatusDetail).To(Equal("LLM final response received"))
 			Expect(updatedTaskRun.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunPhaseFinalAnswer))
 
@@ -324,7 +324,7 @@ var _ = Describe("TaskRun Controller", func() {
 			err = k8sClient.Get(ctx, types.NamespacedName{Name: taskRunName, Namespace: "default"}, updatedTaskRun)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedTaskRun.Status.Ready).To(BeTrue())
-			Expect(updatedTaskRun.Status.Status).To(Equal("Ready"))
+			Expect(updatedTaskRun.Status.Status).To(Equal(StatusReady))
 			Expect(updatedTaskRun.Status.StatusDetail).To(Equal("Ready to send to LLM"))
 			Expect(updatedTaskRun.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunPhaseReadyForLLM))
 			Expect(updatedTaskRun.Status.Error).To(BeEmpty(), "Error field should be cleared")
@@ -458,7 +458,7 @@ var _ = Describe("TaskRun Controller", func() {
 			err = k8sClient.Get(ctx, typeNamespacedName, updatedTaskRun)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedTaskRun.Status.Ready).To(BeTrue())
-			Expect(updatedTaskRun.Status.Status).To(Equal("Ready"))
+			Expect(updatedTaskRun.Status.Status).To(Equal(StatusReady))
 			Expect(updatedTaskRun.Status.StatusDetail).To(ContainSubstring("Ready to send to LLM"))
 			Expect(updatedTaskRun.Status.Error).To(BeEmpty())
 		})
@@ -944,7 +944,7 @@ var _ = Describe("TaskRun Controller", func() {
 					Arguments: `{"a": 1, "b": 2}`,
 				},
 				Status: kubechainv1alpha1.TaskRunToolCallStatus{
-					Status: "Ready",
+					Status: StatusReady,
 					Result: "3",
 					Phase:  kubechainv1alpha1.TaskRunToolCallPhaseSucceeded,
 				},
@@ -959,7 +959,7 @@ var _ = Describe("TaskRun Controller", func() {
 			}, createdToolCall)).To(Succeed())
 
 			createdToolCall.Status = kubechainv1alpha1.TaskRunToolCallStatus{
-				Status: "Ready",
+				Status: StatusReady,
 				Result: "3",
 				Phase:  kubechainv1alpha1.TaskRunToolCallPhaseSucceeded,
 			}

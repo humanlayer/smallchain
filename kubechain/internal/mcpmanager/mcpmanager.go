@@ -150,14 +150,18 @@ func (m *MCPServerManager) ConnectServer(ctx context.Context, mcpServer *kubecha
 	// Initialize the client
 	_, err = mcpClient.Initialize(ctx, mcp.InitializeRequest{})
 	if err != nil {
-		mcpClient.Close() // Clean up on error
+		if closeErr := mcpClient.Close(); closeErr != nil {
+			fmt.Printf("Error closing mcpClient: %v\n", closeErr)
+		} // Clean up on error
 		return fmt.Errorf("failed to initialize MCP client: %w", err)
 	}
 
 	// Get the list of tools
 	toolsResp, err := mcpClient.ListTools(ctx, mcp.ListToolsRequest{})
 	if err != nil {
-		mcpClient.Close() // Clean up on error
+		if closeErr := mcpClient.Close(); closeErr != nil {
+			fmt.Printf("Error closing mcpClient: %v\n", closeErr)
+		} // Clean up on error
 		return fmt.Errorf("failed to list tools: %w", err)
 	}
 
@@ -224,7 +228,9 @@ func (m *MCPServerManager) disconnectServerLocked(serverName string) {
 
 	// Close the connection
 	if conn.Client != nil {
-		conn.Client.Close()
+		if err := conn.Client.Close(); err != nil {
+			fmt.Printf("Error closing MCP client connection: %v\n", err)
+		}
 	}
 
 	// Remove the connection from the map

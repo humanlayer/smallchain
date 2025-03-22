@@ -16,6 +16,10 @@ import (
 	"github.com/humanlayer/smallchain/kubechain/internal/mcpmanager"
 )
 
+const (
+	StatusError = "Error"
+)
+
 // MCPServerManagerInterface defines the interface for MCP server management
 type MCPServerManagerInterface interface {
 	ConnectServer(ctx context.Context, mcpServer *kubechainv1alpha1.MCPServer) error
@@ -80,7 +84,7 @@ func (r *MCPServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// Basic validation
 	if err := r.validateMCPServer(&mcpServer); err != nil {
 		statusUpdate.Status.Connected = false
-		statusUpdate.Status.Status = "Error"
+		statusUpdate.Status.Status = StatusError
 		statusUpdate.Status.StatusDetail = fmt.Sprintf("Validation failed: %v", err)
 		r.recorder.Event(&mcpServer, corev1.EventTypeWarning, "ValidationFailed", err.Error())
 
@@ -94,7 +98,7 @@ func (r *MCPServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	err := r.MCPManager.ConnectServer(ctx, &mcpServer)
 	if err != nil {
 		statusUpdate.Status.Connected = false
-		statusUpdate.Status.Status = "Error"
+		statusUpdate.Status.Status = StatusError
 		statusUpdate.Status.StatusDetail = fmt.Sprintf("Connection failed: %v", err)
 		r.recorder.Event(&mcpServer, corev1.EventTypeWarning, "ConnectionFailed", err.Error())
 
@@ -108,7 +112,7 @@ func (r *MCPServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	tools, exists := r.MCPManager.GetTools(mcpServer.Name)
 	if !exists {
 		statusUpdate.Status.Connected = false
-		statusUpdate.Status.Status = "Error"
+		statusUpdate.Status.Status = StatusError
 		statusUpdate.Status.StatusDetail = "Failed to get tools from manager"
 		r.recorder.Event(&mcpServer, corev1.EventTypeWarning, "GetToolsFailed", "Failed to get tools from manager")
 

@@ -15,6 +15,11 @@ import (
 	"github.com/humanlayer/smallchain/kubechain/internal/mcpmanager"
 )
 
+const (
+	StatusReady = "Ready"
+	StatusError = "Error"
+)
+
 // AgentReconciler reconciles a Agent object
 type AgentReconciler struct {
 	client.Client
@@ -34,7 +39,7 @@ func (r *AgentReconciler) validateLLM(ctx context.Context, agent *kubechainv1alp
 		return fmt.Errorf("failed to get LLM %q: %w", agent.Spec.LLMRef.Name, err)
 	}
 
-	if llm.Status.Status != "Ready" {
+	if llm.Status.Status != StatusReady {
 		return fmt.Errorf("LLM %q is not ready", agent.Spec.LLMRef.Name)
 	}
 
@@ -139,7 +144,7 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	if err := r.validateLLM(ctx, &agent); err != nil {
 		logger.Error(err, "LLM validation failed")
 		statusUpdate.Status.Ready = false
-		statusUpdate.Status.Status = "Error"
+		statusUpdate.Status.Status = StatusError
 		statusUpdate.Status.StatusDetail = err.Error()
 		statusUpdate.Status.ValidTools = validTools
 		statusUpdate.Status.ValidMCPServers = validMCPServers
@@ -156,7 +161,7 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	if err != nil {
 		logger.Error(err, "Tool validation failed")
 		statusUpdate.Status.Ready = false
-		statusUpdate.Status.Status = "Error"
+		statusUpdate.Status.Status = StatusError
 		statusUpdate.Status.StatusDetail = err.Error()
 		statusUpdate.Status.ValidTools = validTools
 		statusUpdate.Status.ValidMCPServers = validMCPServers
@@ -174,7 +179,7 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		if err != nil {
 			logger.Error(err, "MCP server validation failed")
 			statusUpdate.Status.Ready = false
-			statusUpdate.Status.Status = "Error"
+			statusUpdate.Status.Status = StatusError
 			statusUpdate.Status.StatusDetail = err.Error()
 			statusUpdate.Status.ValidTools = validTools
 			statusUpdate.Status.ValidMCPServers = validMCPServers
@@ -189,7 +194,7 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 
 	// All validations passed
 	statusUpdate.Status.Ready = true
-	statusUpdate.Status.Status = "Ready"
+	statusUpdate.Status.Status = StatusReady
 	statusUpdate.Status.StatusDetail = "All dependencies validated successfully"
 	statusUpdate.Status.ValidTools = validTools
 	statusUpdate.Status.ValidMCPServers = validMCPServers

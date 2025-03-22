@@ -9,7 +9,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -19,6 +19,12 @@ import (
 	"github.com/humanlayer/smallchain/kubechain/internal/adapters"
 	"github.com/humanlayer/smallchain/kubechain/internal/llmclient"
 	"github.com/humanlayer/smallchain/kubechain/internal/mcpmanager"
+)
+
+const (
+	StatusReady   = "Ready"
+	StatusError   = "Error"
+	StatusPending = "Pending"
 )
 
 // TaskRunReconciler reconciles a TaskRun object
@@ -67,7 +73,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if err != nil {
 		logger.Error(err, "Task validation failed")
 		statusUpdate.Status.Ready = false
-		statusUpdate.Status.Status = "Error"
+		statusUpdate.Status.Status = StatusError
 		statusUpdate.Status.StatusDetail = fmt.Sprintf("Task validation failed: %v", err)
 		statusUpdate.Status.Error = err.Error()
 		r.recorder.Event(&taskRun, corev1.EventTypeWarning, "ValidationFailed", err.Error())
@@ -82,7 +88,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if task != nil && !task.Status.Ready {
 		logger.Info("Task exists but is not ready", "task", task.Name)
 		statusUpdate.Status.Ready = false
-		statusUpdate.Status.Status = "Pending"
+		statusUpdate.Status.Status = StatusPending
 		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhasePending
 		statusUpdate.Status.StatusDetail = fmt.Sprintf("Waiting for task %q to become ready", task.Name)
 		statusUpdate.Status.Error = "" // Clear previous error
@@ -99,7 +105,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if err := r.Get(ctx, client.ObjectKey{Namespace: task.Namespace, Name: task.Spec.AgentRef.Name}, &agent); err != nil {
 		logger.Error(err, "Failed to get Agent")
 		statusUpdate.Status.Ready = false
-		statusUpdate.Status.Status = "Pending"
+		statusUpdate.Status.Status = StatusPending
 		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhasePending
 		statusUpdate.Status.StatusDetail = "Waiting for Agent to exist"
 		statusUpdate.Status.Error = "" // Clear previous error
@@ -115,7 +121,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if !agent.Status.Ready {
 		logger.Info("Agent exists but is not ready", "agent", agent.Name)
 		statusUpdate.Status.Ready = false
-		statusUpdate.Status.Status = "Pending"
+		statusUpdate.Status.Status = StatusPending
 		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhasePending
 		statusUpdate.Status.StatusDetail = fmt.Sprintf("Waiting for agent %q to become ready", agent.Name)
 		statusUpdate.Status.Error = "" // Clear previous error
@@ -141,7 +147,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 				Content: task.Spec.Message,
 			},
 		}
-		statusUpdate.Status.Status = "Ready"
+		statusUpdate.Status.Status = StatusReady
 		statusUpdate.Status.StatusDetail = "Ready to send to LLM"
 		statusUpdate.Status.Error = "" // Clear any previous error
 		r.recorder.Event(&taskRun, corev1.EventTypeNormal, "ValidationSucceeded", "Task validated successfully")
@@ -188,12 +194,10 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			// All tool calls are complete, update context window and move back to ReadyForLLM phase
 			// so that the LLM can process the tool results and provide a final answer
 			statusUpdate := taskRun.DeepCopy()
-			for _, toolResult := range toolResults {
-				statusUpdate.Status.ContextWindow = append(statusUpdate.Status.ContextWindow, toolResult)
-			}
+			statusUpdate.Status.ContextWindow = append(statusUpdate.Status.ContextWindow, toolResults...)
 			statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseReadyForLLM
 			statusUpdate.Status.Ready = true
-			statusUpdate.Status.Status = "Ready"
+			statusUpdate.Status.Status = StatusReady
 			statusUpdate.Status.StatusDetail = "All tool calls completed, ready to send tool results to LLM"
 
 			if err := r.Status().Update(ctx, statusUpdate); err != nil {
@@ -218,7 +222,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if err := r.Get(ctx, client.ObjectKey{Namespace: agent.Namespace, Name: agent.Spec.LLMRef.Name}, &llm); err != nil {
 		logger.Error(err, "Failed to get LLM")
 		statusUpdate.Status.Ready = false
-		statusUpdate.Status.Status = "Error"
+		statusUpdate.Status.Status = StatusError
 		statusUpdate.Status.StatusDetail = "Failed to get LLM: " + err.Error()
 		statusUpdate.Status.Error = err.Error()
 		r.recorder.Event(&taskRun, corev1.EventTypeWarning, "LLMFetchFailed", err.Error())
@@ -237,7 +241,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}, &secret); err != nil {
 		logger.Error(err, "Failed to get API key secret")
 		statusUpdate.Status.Ready = false
-		statusUpdate.Status.Status = "Error"
+		statusUpdate.Status.Status = StatusError
 		statusUpdate.Status.StatusDetail = "Failed to get API key secret: " + err.Error()
 		statusUpdate.Status.Error = err.Error()
 		r.recorder.Event(&taskRun, corev1.EventTypeWarning, "SecretFetchFailed", err.Error())
@@ -255,7 +259,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		err := fmt.Errorf("API key is empty in secret %s", secret.Name)
 		logger.Error(err, "Empty API key")
 		statusUpdate.Status.Ready = false
-		statusUpdate.Status.Status = "Error"
+		statusUpdate.Status.Status = StatusError
 		statusUpdate.Status.StatusDetail = "API key is empty"
 		statusUpdate.Status.Error = err.Error()
 		r.recorder.Event(&taskRun, corev1.EventTypeWarning, "EmptyAPIKey", err.Error())
@@ -270,7 +274,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if err != nil {
 		logger.Error(err, "Failed to create OpenAI client")
 		statusUpdate.Status.Ready = false
-		statusUpdate.Status.Status = "Error"
+		statusUpdate.Status.Status = StatusError
 		statusUpdate.Status.StatusDetail = "Failed to create OpenAI client: " + err.Error()
 		statusUpdate.Status.Error = err.Error()
 		r.recorder.Event(&taskRun, corev1.EventTypeWarning, "OpenAIClientCreationFailed", err.Error())
@@ -334,7 +338,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if err != nil {
 		logger.Error(err, "LLM request failed")
 		statusUpdate.Status.Ready = false
-		statusUpdate.Status.Status = "Error"
+		statusUpdate.Status.Status = StatusError
 		statusUpdate.Status.StatusDetail = fmt.Sprintf("LLM request failed: %v", err)
 		statusUpdate.Status.Error = err.Error()
 		r.recorder.Event(&taskRun, corev1.EventTypeWarning, "LLMRequestFailed", err.Error())
@@ -354,7 +358,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			Role:    "assistant",
 			Content: output.Content,
 		})
-		statusUpdate.Status.Status = "Ready"
+		statusUpdate.Status.Status = StatusReady
 		statusUpdate.Status.StatusDetail = "LLM final response received"
 		statusUpdate.Status.Error = ""
 		r.recorder.Event(&taskRun, corev1.EventTypeNormal, "LLMFinalAnswer", "LLM response received successfully")
@@ -367,7 +371,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			ToolCalls: adapters.CastOpenAIToolCallsToKubechain(output.ToolCalls),
 		})
 		statusUpdate.Status.Ready = true
-		statusUpdate.Status.Status = "Ready"
+		statusUpdate.Status.Status = StatusReady
 		statusUpdate.Status.StatusDetail = "LLM response received, tool calls pending"
 		statusUpdate.Status.Error = ""
 
@@ -395,7 +399,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 							Kind:       "TaskRun",
 							Name:       statusUpdate.Name,
 							UID:        statusUpdate.UID,
-							Controller: pointer.BoolPtr(true),
+							Controller: ptr.To(true),
 						},
 					},
 				},

@@ -10,7 +10,7 @@ import (
 
 // ConvertMCPToolsToLLMClientTools converts KubeChain MCPTool objects to LLM client tool format
 func ConvertMCPToolsToLLMClientTools(mcpTools []kubechainv1alpha1.MCPTool, serverName string) []llmclient.Tool {
-	var clientTools []llmclient.Tool
+	var clientTools = make([]llmclient.Tool, 0, len(mcpTools))
 
 	for _, tool := range mcpTools {
 		// Create a function definition
