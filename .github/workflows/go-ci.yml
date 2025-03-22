@@ -111,6 +111,8 @@ jobs:
 
       - name: Run e2e tests
         working-directory: kubechain
+        env:
+          KIND_CLUSTER: kubechain-example-cluster
         run: make test-e2e
 
   docker:
