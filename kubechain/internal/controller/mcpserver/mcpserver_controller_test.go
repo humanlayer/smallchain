@@ -240,6 +240,7 @@ var _ = Describe("MCPServer Controller", func() {
 			Expect(createdMCPServer.Status.Connected).To(BeFalse())
 			Expect(createdMCPServer.Status.Status).To(Equal("Error"))
 			Expect(createdMCPServer.Status.StatusDetail).To(ContainSubstring("ContactChannel \"non-existent-channel\" not found"))
+			By("Checking that the event was emitted")
 			utils.ExpectRecorder(recorder).ToEmitEventContaining("ContactChannelNotFound")
 
 			By("Cleaning up the MCPServer")
@@ -302,6 +303,10 @@ var _ = Describe("MCPServer Controller", func() {
 			Expect(createdMCPServer.Status.Status).To(Equal("Pending"))
 			Expect(createdMCPServer.Status.StatusDetail).To(ContainSubstring("ContactChannel \"test-channel\" is not ready"))
 			utils.ExpectRecorder(recorder).ToEmitEventContaining("ContactChannelNotReady")
+
+			By("Cleaning up the MCPServer and ContactChannel")
+			Expect(k8sClient.Delete(ctx, mcpServer)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, contactChannel)).To(Succeed())
 		})
 	})
 })
