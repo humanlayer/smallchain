@@ -70,6 +70,15 @@ type ToolCallFunction struct {
 	Arguments string `json:"arguments"`
 }
 
+// SpanContext contains OpenTelemetry span context information
+type SpanContext struct {
+	// TraceID is the trace ID for the span
+	TraceID string `json:"traceID,omitempty"`
+
+	// SpanID is the span ID
+	SpanID string `json:"spanID,omitempty"`
+}
+
 // TaskRunStatus defines the observed state of TaskRun
 type TaskRunStatus struct {
 	// Phase indicates the current phase of the TaskRun
@@ -114,13 +123,19 @@ type TaskRunStatus struct {
 	// Error message if the task failed
 	// +optional
 	Error string `json:"error,omitempty"`
+
+	// SpanContext contains OpenTelemetry span context information
+	// +optional
+	SpanContext *SpanContext `json:"spanContext,omitempty"`
 }
 
 // TaskRunPhase represents the phase of a TaskRun
-// +kubebuilder:validation:Enum=Pending;ReadyForLLM;SendContextWindowToLLM;ToolCallsPending;FinalAnswer;ErrorBackoff;Failed
+// +kubebuilder:validation:Enum=Initializing;Pending;ReadyForLLM;SendContextWindowToLLM;ToolCallsPending;FinalAnswer;ErrorBackoff;Failed
 type TaskRunPhase string
 
 const (
+	// TaskRunPhaseInitializing indicates the TaskRun is initializing with span contexts
+	TaskRunPhaseInitializing TaskRunPhase = "Initializing"
 	// TaskRunPhasePending indicates the TaskRun is pending execution
 	TaskRunPhasePending TaskRunPhase = "Pending"
 	// TaskRunPhaseReadyForLLM indicates the TaskRun is ready for context to be sent to LLM

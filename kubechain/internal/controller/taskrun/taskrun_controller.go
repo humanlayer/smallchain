@@ -430,6 +430,32 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// Create a copy for status update
 	statusUpdate := taskRun.DeepCopy()
 
+	// Initialize phase if not set
+	if statusUpdate.Status.Phase == "" {
+		// Start tracing the TaskRun
+		tracer := otel.GetTracerProvider().Tracer("taskrun")
+		ctx, span := tracer.Start(ctx, "TaskRun")
+
+		// Store span context in status
+		spanCtx := span.SpanContext()
+		statusUpdate.Status.SpanContext = &kubechainv1alpha1.SpanContext{
+			TraceID: spanCtx.TraceID().String(),
+			SpanID:  spanCtx.SpanID().String(),
+		}
+
+		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseInitializing
+		statusUpdate.Status.Ready = false
+		statusUpdate.Status.Status = "Initializing"
+		statusUpdate.Status.StatusDetail = "Initializing"
+		if err := r.Status().Update(ctx, statusUpdate); err != nil {
+			logger.Error(err, "Failed to update TaskRun status")
+			return ctrl.Result{}, err
+		}
+
+		// Don't end the span - it will be ended when we reach FinalAnswer
+		return ctrl.Result{Requeue: true}, nil
+	}
+
 	// Step 1: Validate Task and Agent
 	task, agent, result, err := r.validateTaskAndAgent(ctx, &taskRun, statusUpdate)
 	if err != nil || !result.IsZero() {

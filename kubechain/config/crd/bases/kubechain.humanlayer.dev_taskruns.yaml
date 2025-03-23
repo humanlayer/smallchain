@@ -203,6 +203,7 @@ spec:
               phase:
                 description: Phase indicates the current phase of the TaskRun
                 enum:
+                - Initializing
                 - Pending
                 - ReadyForLLM
                 - SendContextWindowToLLM
@@ -214,6 +215,16 @@ spec:
               ready:
                 description: Ready indicates if the TaskRun is ready to be executed
                 type: boolean
+              spanContext:
+                description: SpanContext contains OpenTelemetry span context information
+                properties:
+                  spanID:
+                    description: SpanID is the span ID
+                    type: string
+                  traceID:
+                    description: TraceID is the trace ID for the span
+                    type: string
+                type: object
               startTime:
                 description: StartTime is when the TaskRun started
                 format: date-time
