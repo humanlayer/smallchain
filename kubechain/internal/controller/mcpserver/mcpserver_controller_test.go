@@ -273,6 +273,18 @@ var _ = Describe("MCPServer Controller", func() {
 					Name:      "test-channel",
 					Namespace: MCPServerNamespace,
 				},
+				Spec: kubechainv1alpha1.ContactChannelSpec{
+					ChannelType: "slack",
+					APIKeyFrom: kubechainv1alpha1.APIKeySource{
+						SecretKeyRef: kubechainv1alpha1.SecretKeyRef{
+							Name: "test-secret",
+							Key:  "token",
+						},
+					},
+					SlackConfig: &kubechainv1alpha1.SlackChannelConfig{
+						ChannelOrUserID: "C12345678",
+					},
+				},
 				Status: kubechainv1alpha1.ContactChannelStatus{
 					Ready:        false,
 					Status:       "Pending",
