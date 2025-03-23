@@ -16,6 +16,11 @@ import (
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
 )
 
+// +kubebuilder:rbac:groups=kubechain.humanlayer.dev,resources=tasks,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=kubechain.humanlayer.dev,resources=tasks/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=kubechain.humanlayer.dev,resources=agents,verbs=get;list;watch
+// +kubebuilder:rbac:groups=kubechain.humanlayer.dev,resources=taskruns,verbs=get;list;create;watch
+
 // TaskReconciler reconciles a Task object
 type TaskReconciler struct {
 	client.Client

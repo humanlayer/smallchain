@@ -17,4 +17,67 @@ resources:
   kind: LLM
   path: github.com/humanlayer/smallchain/kubechain/api/v1alpha1
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: humanlayer.dev
+  group: kubechain
+  kind: Tool
+  path: github.com/humanlayer/smallchain/kubechain/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: humanlayer.dev
+  group: kubechain
+  kind: Agent
+  path: github.com/humanlayer/smallchain/kubechain/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: humanlayer.dev
+  group: kubechain
+  kind: Task
+  path: github.com/humanlayer/smallchain/kubechain/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: humanlayer.dev
+  group: kubechain
+  kind: TaskRun
+  path: github.com/humanlayer/smallchain/kubechain/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: humanlayer.dev
+  group: kubechain
+  kind: TaskRunToolCall
+  path: github.com/humanlayer/smallchain/kubechain/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: humanlayer.dev
+  group: kubechain
+  kind: MCPServer
+  path: github.com/humanlayer/smallchain/kubechain/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: humanlayer.dev
+  group: kubechain
+  kind: ContactChannel
+  path: github.com/humanlayer/smallchain/kubechain/api/v1alpha1
+  version: v1alpha1
 version: "3"

@@ -20,6 +20,12 @@ const (
 	StatusError = "Error"
 )
 
+// +kubebuilder:rbac:groups=kubechain.humanlayer.dev,resources=agents,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=kubechain.humanlayer.dev,resources=agents/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=kubechain.humanlayer.dev,resources=llms,verbs=get;list;watch
+// +kubebuilder:rbac:groups=kubechain.humanlayer.dev,resources=tools,verbs=get;list;watch
+// +kubebuilder:rbac:groups=kubechain.humanlayer.dev,resources=mcpservers,verbs=get;list;watch
+
 // AgentReconciler reconciles a Agent object
 type AgentReconciler struct {
 	client.Client

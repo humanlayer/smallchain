@@ -5,48 +5,23 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - kubechain.humanlayer.dev
   resources:
   - agents
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - kubechain.humanlayer.dev
-  resources:
-  - agents/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - kubechain.humanlayer.dev
-  resources:
+  - contactchannels
   - llms
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - kubechain.humanlayer.dev
-  resources:
-  - llms/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - kubechain.humanlayer.dev
-  resources:
+  - mcpservers
+  - taskruns
+  - taskruntoolcalls
+  - tasks
   - tools
   verbs:
   - create
@@ -59,6 +34,13 @@ rules:
 - apiGroups:
   - kubechain.humanlayer.dev
   resources:
+  - agents/status
+  - contactchannels/status
+  - llms/status
+  - mcpservers/status
+  - taskruns/status
+  - taskruntoolcalls/status
+  - tasks/status
   - tools/status
   verbs:
   - get
@@ -67,88 +49,6 @@ rules:
 - apiGroups:
   - kubechain.humanlayer.dev
   resources:
-  - tasks
+  - contactchannels/finalizers
   verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - kubechain.humanlayer.dev
-  resources:
-  - tasks/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - kubechain.humanlayer.dev
-  resources:
-  - taskruns
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - kubechain.humanlayer.dev
-  resources:
-  - taskruns/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - kubechain.humanlayer.dev
-  resources:
-  - taskruntoolcalls
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - kubechain.humanlayer.dev
-  resources:
-  - taskruntoolcalls/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - ""
-  resources:
-  - secrets
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - kubechain.humanlayer.dev
-  resources:
-  - mcpservers
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - kubechain.humanlayer.dev
-  resources:
-  - mcpservers/status
-  verbs:
-  - get
-  - patch
   - update

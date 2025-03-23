@@ -16,6 +16,9 @@ import (
 	"github.com/openai/openai-go"
 )
 
+// +kubebuilder:rbac:groups=kubechain.humanlayer.dev,resources=tools,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=kubechain.humanlayer.dev,resources=tools/status,verbs=get;update;patch
+
 // ToolReconciler reconciles a Tool object
 type ToolReconciler struct {
 	client.Client

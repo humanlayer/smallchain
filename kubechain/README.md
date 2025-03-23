@@ -113,16 +113,38 @@ previously added to 'dist/chart/values.yaml' or 'dist/chart/manager/manager.yaml
 is manually re-applied afterwards.
 
 ## Contributing
-// TODO(user): Add detailed information on how you would like others to contribute to this project
 
-**NOTE:** Run `make help` for more information on all potential `make` targets
+### Development Workflow
 
-More information can be found via the [Kubebuilder Documentation](https://book.kubebuilder.io/introduction.html)
+The project uses [Kubebuilder](https://book.kubebuilder.io/) for scaffolding Kubernetes resources and controllers. If you're extending the API or adding new resource types, please refer to our [Kubebuilder Guide](./docs/kubebuilder-guide.md) for detailed instructions on:
+
+- Adding new custom resources
+- Updating existing resources
+- Working with controllers
+- Generating RBAC permissions
+- Following best practices
+
+### Make Targets
+
+Run `make help` for more information on all potential `make` targets. Common targets include:
+
+- `make build` - Build the manager binary
+- `make manifests` - Generate WebhookConfiguration, ClusterRole, and CustomResourceDefinition objects
+- `make generate` - Generate code (DeepCopy methods)
+- `make test` - Run tests
+- `make docker-build` - Build the Docker image
+
+### Resources
+
+- [Kubebuilder Book](https://book.kubebuilder.io/introduction.html) - Official Kubebuilder documentation
+- [Controller Runtime](https://github.com/kubernetes-sigs/controller-runtime) - Library for building controllers
+- [Kubernetes API Conventions](https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md) - Standards for Kubernetes API design
 
 ## Documentation
 
 - [MCP Server Guide](./docs/mcp-server.md) - Detailed guide for working with MCP servers
 - [CRD Reference](./docs/crd-reference.md) - Complete reference for all Custom Resource Definitions
+- [Kubebuilder Guide](./docs/kubebuilder-guide.md) - How to develop with Kubebuilder in this project
 
 ## Resource Types
 
