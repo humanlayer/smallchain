@@ -3,7 +3,7 @@
     "GO111MODULE": "on"
   },
   "go.useLanguageServer": true,
-  "go.workspaceFolder": "/Users/dex/go/src/github.com/humanlayer/smallchain/kubechain",
+  "go.workspaceFolder": "${workspaceFolder}/kubechain",
   "go.coverShowCounts": true,
   "gopls": {
     "formatting.gofumpt": true,
