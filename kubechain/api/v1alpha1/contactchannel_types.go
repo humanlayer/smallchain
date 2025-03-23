@@ -20,26 +20,74 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+// SlackChannelConfig defines configuration specific to Slack channels
+type SlackChannelConfig struct {
+	// ChannelOrUserID is the Slack channel ID (C...) or user ID (U...)
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Pattern=^[CU][A-Z0-9]+$
+	ChannelOrUserID string `json:"channelOrUserID"`
+
+	// ContextAboutChannelOrUser provides context for the LLM about the channel or user
+	ContextAboutChannelOrUser string `json:"contextAboutChannelOrUser,omitempty"`
+
+	// AllowedResponderIDs restricts who can respond (Slack user IDs)
+	AllowedResponderIDs []string `json:"allowedResponderIDs,omitempty"`
+}
+
+// EmailChannelConfig defines configuration specific to Email channels
+type EmailChannelConfig struct {
+	// Address is the recipient email address
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Pattern=.+@.+\..+
+	Address string `json:"address"`
+
+	// ContextAboutUser provides context for the LLM about the recipient
+	ContextAboutUser string `json:"contextAboutUser,omitempty"`
+
+	// Subject is the custom subject line
+	Subject string `json:"subject,omitempty"`
+}
 
 // ContactChannelSpec defines the desired state of ContactChannel.
 type ContactChannelSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// ChannelType is the type of channel (e.g. "slack", "email")
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Enum=slack;email
+	ChannelType string `json:"channelType"`
 
-	// Foo is an example field of ContactChannel. Edit contactchannel_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	// APIKeyFrom references the secret containing the API key or token
+	// +kubebuilder:validation:Required
+	APIKeyFrom APIKeySource `json:"apiKeyFrom"`
+
+	// SlackConfig holds configuration specific to Slack channels
+	// +optional
+	SlackConfig *SlackChannelConfig `json:"slackConfig,omitempty"`
+
+	// EmailConfig holds configuration specific to Email channels
+	// +optional
+	EmailConfig *EmailChannelConfig `json:"emailConfig,omitempty"`
 }
 
 // ContactChannelStatus defines the observed state of ContactChannel.
 type ContactChannelStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// Ready indicates if the ContactChannel is ready to be used
+	Ready bool `json:"ready,omitempty"`
+
+	// Status indicates the current status of the ContactChannel
+	// +kubebuilder:validation:Enum=Ready;Error;Pending
+	Status string `json:"status,omitempty"`
+
+	// StatusDetail provides additional details about the current status
+	StatusDetail string `json:"statusDetail,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="ChannelType",type="string",JSONPath=".spec.channelType"
+// +kubebuilder:printcolumn:name="Ready",type="boolean",JSONPath=".status.ready"
+// +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.status"
+// +kubebuilder:printcolumn:name="Detail",type="string",JSONPath=".status.statusDetail",priority=1
+// +kubebuilder:resource:scope=Namespaced
 
 // ContactChannel is the Schema for the contactchannels API.
 type ContactChannel struct {
