@@ -462,7 +462,7 @@ kind: MCPServer
 metadata:
   name: fetch
 spec:
-  type: "stdio"
+  transport: "stdio"
   command: "uvx"
   args: ["mcp-server-fetch"]
 EOF

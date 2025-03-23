@@ -152,7 +152,7 @@ Run `make help` for more information on all potential `make` targets. Common tar
 
 Model Control Protocol (MCP) servers provide a way to extend the functionality of LLMs with custom tools. The MCPServer resource supports:
 
-- **Transport Types:** 
+- **Transport:** 
   - `stdio`: Communicate with an MCP server via standard I/O
   - `http`: Communicate with an MCP server via HTTP
 
