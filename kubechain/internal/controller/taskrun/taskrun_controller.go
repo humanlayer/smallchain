@@ -19,6 +19,7 @@ import (
 	"github.com/humanlayer/smallchain/kubechain/internal/adapters"
 	"github.com/humanlayer/smallchain/kubechain/internal/llmclient"
 	"github.com/humanlayer/smallchain/kubechain/internal/mcpmanager"
+	"go.opentelemetry.io/otel"
 )
 
 const (
