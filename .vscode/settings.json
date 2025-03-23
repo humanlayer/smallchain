@@ -1,0 +1,12 @@
+{
+  "go.toolsEnvVars": {
+    "GO111MODULE": "on"
+  },
+  "go.useLanguageServer": true,
+  "go.workspaceFolder": "${workspaceFolder}/kubechain",
+  "go.coverShowCounts": true,
+  "gopls": {
+    "formatting.gofumpt": true,
+    "ui.semanticTokens": true
+  }
+}

@@ -32,6 +32,10 @@ type MCPServerSpec struct {
 	// ResourceRequirements defines CPU/Memory resources requests/limits
 	// +optional
 	Resources ResourceRequirements `json:"resources,omitempty"`
+
+	// ApprovalContactChannel is the contact channel for approval
+	// +optional
+	ApprovalContactChannel *LocalObjectReference `json:"approvalContactChannel,omitempty"`
 }
 
 // EnvVar represents an environment variable

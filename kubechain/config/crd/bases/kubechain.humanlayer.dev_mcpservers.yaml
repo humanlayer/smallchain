@@ -50,6 +50,16 @@ spec:
           spec:
             description: MCPServerSpec defines the desired state of MCPServer
             properties:
+              approvalContactChannel:
+                description: ApprovalContactChannel is the contact channel for approval
+                properties:
+                  name:
+                    description: Name of the referent
+                    minLength: 1
+                    type: string
+                required:
+                - name
+                type: object
               args:
                 description: Args are the arguments to pass to the command for stdio
                   MCP servers

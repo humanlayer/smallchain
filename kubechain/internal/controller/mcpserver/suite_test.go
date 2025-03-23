@@ -25,11 +25,13 @@ import (
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 
-var cfg *rest.Config
-var k8sClient client.Client
-var testEnv *envtest.Environment
-var cancel context.CancelFunc
-var ctx context.Context
+var (
+	cfg       *rest.Config
+	k8sClient client.Client
+	testEnv   *envtest.Environment
+	cancel    context.CancelFunc
+	ctx       context.Context
+)
 
 func TestControllers(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -46,6 +48,7 @@ var _ = BeforeSuite(func() {
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "..", "config", "crd", "bases")},
 		ErrorIfCRDPathMissing: true,
+		BinaryAssetsDirectory: filepath.Join("..", "..", "..", "bin", "k8s", "1.32.0-darwin-arm64"),
 	}
 
 	var err error
@@ -85,7 +88,6 @@ var _ = BeforeSuite(func() {
 		err = k8sManager.Start(ctx)
 		Expect(err).ToNot(HaveOccurred(), "Failed to run manager")
 	}()
-
 })
 
 var _ = AfterSuite(func() {
