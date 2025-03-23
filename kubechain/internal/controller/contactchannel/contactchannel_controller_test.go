@@ -14,11 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controller
+package contactchannel
 
 import (
 	"context"
-	"fmt"
+	"net/http"
+	"net/http/httptest"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -31,25 +32,49 @@ import (
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
 )
 
-// Mock functions for testing
-var validateHumanLayerAPIKey func(string) error
-var validateSlackToken func(string) error
-
 var _ = Describe("ContactChannel Controller", func() {
-
 	Context("When reconciling a resource", func() {
 		const resourceName = "test-contactchannel"
 		const secretName = "test-contactchannel-secret"
 		const secretKey = "api-key"
 
 		ctx := context.Background()
+		var mockHumanLayerServer *httptest.Server
+		var mockSlackServer *httptest.Server
 
 		typeNamespacedName := types.NamespacedName{
 			Name:      resourceName,
 			Namespace: "default",
 		}
 
+		BeforeEach(func() {
+			// Set up mock HumanLayer server
+			mockHumanLayerServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Header.Get("Authorization") == "Bearer valid-humanlayer-key" {
+					w.WriteHeader(http.StatusOK)
+				} else {
+					w.WriteHeader(http.StatusUnauthorized)
+				}
+			}))
+
+			// Set up mock Slack server
+			mockSlackServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Header.Get("Authorization") == "Bearer valid-slack-token" {
+					w.WriteHeader(http.StatusOK)
+				} else {
+					w.WriteHeader(http.StatusUnauthorized)
+				}
+			}))
+
+			// Override constants for testing
+			humanLayerAPIURL = mockHumanLayerServer.URL
+			slackAPIEndpoint = mockSlackServer.URL
+		})
+
 		AfterEach(func() {
+			mockHumanLayerServer.Close()
+			mockSlackServer.Close()
+
 			By("Cleanup the test secret")
 			secret := &corev1.Secret{}
 			err := k8sClient.Get(ctx, types.NamespacedName{Name: secretName, Namespace: "default"}, secret)
@@ -63,37 +88,6 @@ var _ = Describe("ContactChannel Controller", func() {
 			if err == nil {
 				Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
 			}
-		})
-
-		// Mock the validation function in the controller to avoid real HTTP requests
-		var originalValidateHumanLayerAPIKey func(string) error
-		var originalValidateSlackToken func(string) error
-
-		BeforeEach(func() {
-			// Save original functions
-			originalValidateHumanLayerAPIKey = validateHumanLayerAPIKey
-			originalValidateSlackToken = validateSlackToken
-
-			// Mock for testing
-			validateHumanLayerAPIKey = func(apiKey string) error {
-				if apiKey == "valid-humanlayer-key" {
-					return nil
-				}
-				return fmt.Errorf("invalid HumanLayer API key")
-			}
-
-			validateSlackToken = func(token string) error {
-				if token == "valid-slack-token" {
-					return nil
-				}
-				return fmt.Errorf("invalid Slack token")
-			}
-		})
-
-		AfterEach(func() {
-			// Restore original functions
-			validateHumanLayerAPIKey = originalValidateHumanLayerAPIKey
-			validateSlackToken = originalValidateSlackToken
 		})
 
 		It("should successfully validate a Slack channel with valid config", func() {
@@ -124,7 +118,7 @@ var _ = Describe("ContactChannel Controller", func() {
 						},
 					},
 					SlackConfig: &kubechainv1alpha1.SlackChannelConfig{
-						ChannelOrUserID: "C12345678",
+						ChannelOrUserID:           "C12345678",
 						ContextAboutChannelOrUser: "A test channel",
 					},
 				},
@@ -181,9 +175,9 @@ var _ = Describe("ContactChannel Controller", func() {
 						},
 					},
 					EmailConfig: &kubechainv1alpha1.EmailChannelConfig{
-						Address:         "test@example.com",
+						Address:          "test@example.com",
 						ContextAboutUser: "Test user",
-						Subject:         "Test notification",
+						Subject:          "Test notification",
 					},
 				},
 			}
@@ -319,6 +313,107 @@ var _ = Describe("ContactChannel Controller", func() {
 			Expect(updatedChannel.Status.Ready).To(BeFalse())
 			Expect(updatedChannel.Status.Status).To(Equal(statusError))
 			Expect(updatedChannel.Status.StatusDetail).To(ContainSubstring("invalid"))
+		})
+
+		It("should fail validation with non-existent secret", func() {
+			By("Creating a ContactChannel resource with non-existent secret")
+			channel := &kubechainv1alpha1.ContactChannel{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName,
+					Namespace: "default",
+				},
+				Spec: kubechainv1alpha1.ContactChannelSpec{
+					ChannelType: "slack",
+					APIKeyFrom: kubechainv1alpha1.APIKeySource{
+						SecretKeyRef: kubechainv1alpha1.SecretKeyRef{
+							Name: "nonexistent-secret",
+							Key:  secretKey,
+						},
+					},
+					SlackConfig: &kubechainv1alpha1.SlackChannelConfig{
+						ChannelOrUserID: "C12345678",
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, channel)).To(Succeed())
+
+			By("Reconciling the resource")
+			eventRecorder := record.NewFakeRecorder(10)
+			controllerReconciler := &ContactChannelReconciler{
+				Client:   k8sClient,
+				Scheme:   k8sClient.Scheme(),
+				recorder: eventRecorder,
+			}
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Checking the resource status")
+			updatedChannel := &kubechainv1alpha1.ContactChannel{}
+			err = k8sClient.Get(ctx, typeNamespacedName, updatedChannel)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedChannel.Status.Ready).To(BeFalse())
+			Expect(updatedChannel.Status.Status).To(Equal(statusError))
+			Expect(updatedChannel.Status.StatusDetail).To(ContainSubstring("failed to get secret"))
+		})
+
+		It("should fail validation with invalid email address", func() {
+			By("Creating a secret with valid API key")
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      secretName,
+					Namespace: "default",
+				},
+				Data: map[string][]byte{
+					secretKey: []byte("valid-humanlayer-key"),
+				},
+			}
+			Expect(k8sClient.Create(ctx, secret)).To(Succeed())
+
+			By("Creating a ContactChannel resource with invalid email")
+			channel := &kubechainv1alpha1.ContactChannel{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName,
+					Namespace: "default",
+				},
+				Spec: kubechainv1alpha1.ContactChannelSpec{
+					ChannelType: "email",
+					APIKeyFrom: kubechainv1alpha1.APIKeySource{
+						SecretKeyRef: kubechainv1alpha1.SecretKeyRef{
+							Name: secretName,
+							Key:  secretKey,
+						},
+					},
+					EmailConfig: &kubechainv1alpha1.EmailChannelConfig{
+						// Use an email that passes regex pattern but fails RFC5322 validation
+						Address: "test@example..com",
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, channel)).To(Succeed())
+
+			By("Reconciling the resource")
+			eventRecorder := record.NewFakeRecorder(10)
+			controllerReconciler := &ContactChannelReconciler{
+				Client:   k8sClient,
+				Scheme:   k8sClient.Scheme(),
+				recorder: eventRecorder,
+			}
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Checking the resource status")
+			updatedChannel := &kubechainv1alpha1.ContactChannel{}
+			err = k8sClient.Get(ctx, typeNamespacedName, updatedChannel)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedChannel.Status.Ready).To(BeFalse())
+			Expect(updatedChannel.Status.Status).To(Equal(statusError))
+			Expect(updatedChannel.Status.StatusDetail).To(ContainSubstring("invalid email"))
 		})
 	})
 })

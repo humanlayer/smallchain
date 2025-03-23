@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controller
+package contactchannel
 
 import (
 	"context"
@@ -33,7 +33,7 @@ import (
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
 )
 
-const (
+var (
 	// Status constants
 	statusReady   = "Ready"
 	statusError   = "Error"
@@ -43,7 +43,7 @@ const (
 	channelTypeSlack = "slack"
 	channelTypeEmail = "email"
 
-	// API endpoints
+	// API endpoints - variables so they can be overridden in tests
 	slackAPIEndpoint = "https://slack.com/api/auth.test"
 	humanLayerAPIURL = "https://api.humanlayer.dev/humanlayer/v1/function_calls"
 
@@ -67,12 +67,6 @@ type ContactChannelReconciler struct {
 
 // validateSlackToken verifies that the provided Slack token is valid by making an auth.test API call
 func (r *ContactChannelReconciler) validateSlackToken(token string) error {
-	// For unit testing with mocks
-	if validateSlackToken != nil {
-		return validateSlackToken(token)
-	}
-
-	// Real implementation for production
 	req, err := http.NewRequest("GET", slackAPIEndpoint, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
@@ -100,12 +94,6 @@ func (r *ContactChannelReconciler) validateSlackToken(token string) error {
 
 // validateHumanLayerAPIKey checks if the HumanLayer API key is valid
 func (r *ContactChannelReconciler) validateHumanLayerAPIKey(apiKey string) error {
-	// For unit testing with mocks
-	if validateHumanLayerAPIKey != nil {
-		return validateHumanLayerAPIKey(apiKey)
-	}
-
-	// Real implementation for production
 	req, err := http.NewRequest("GET", humanLayerAPIURL, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
@@ -130,7 +118,7 @@ func (r *ContactChannelReconciler) validateHumanLayerAPIKey(apiKey string) error
 	}
 
 	// The endpoint might return other status codes even with valid token
-	// since we're doing a GET without a proper body, but as long as 
+	// since we're doing a GET without a proper body, but as long as
 	// it's not a 401, we consider the token valid
 	return nil
 }
@@ -153,13 +141,13 @@ func (r *ContactChannelReconciler) validateChannelConfig(channel *kubechainv1alp
 		}
 		// Slack channel ID validation is handled by the CRD validation
 		return nil
-	
+
 	case channelTypeEmail:
 		if channel.Spec.EmailConfig == nil {
 			return fmt.Errorf("emailConfig is required for email channel type")
 		}
 		return r.validateEmailAddress(channel.Spec.EmailConfig.Address)
-	
+
 	default:
 		return fmt.Errorf("unsupported channel type: %s", channel.Spec.ChannelType)
 	}
@@ -181,7 +169,7 @@ func (r *ContactChannelReconciler) validateSecret(ctx context.Context, channel *
 	if !exists {
 		return fmt.Errorf("key %q not found in secret", key)
 	}
-	
+
 	apiKey := string(apiKeyBytes)
 	if apiKey == "" {
 		return fmt.Errorf("empty API key provided")
@@ -199,11 +187,11 @@ func (r *ContactChannelReconciler) validateSecret(ctx context.Context, channel *
 		// if the implementation requires a separate Slack token
 		// This would depend on how HumanLayer handles the integration
 		return nil
-	
+
 	case channelTypeEmail:
 		// Email validation doesn't require additional API key validation
 		return nil
-	
+
 	default:
 		return fmt.Errorf("unsupported channel type: %s", channel.Spec.ChannelType)
 	}
@@ -238,7 +226,7 @@ func (r *ContactChannelReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		statusUpdate.Status.Status = statusError
 		statusUpdate.Status.StatusDetail = err.Error()
 		r.recorder.Event(&channel, corev1.EventTypeWarning, eventReasonValidationFailed, err.Error())
-		
+
 		// Update status and return
 		if err := r.Status().Patch(ctx, statusUpdate, client.MergeFrom(&channel)); err != nil {
 			log.Error(err, "Unable to update ContactChannel status")

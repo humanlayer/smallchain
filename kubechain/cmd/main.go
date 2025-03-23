@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 
 	"github.com/humanlayer/smallchain/kubechain/internal/controller/agent"
+	"github.com/humanlayer/smallchain/kubechain/internal/controller/contactchannel"
 	"github.com/humanlayer/smallchain/kubechain/internal/controller/llm"
 	"github.com/humanlayer/smallchain/kubechain/internal/controller/mcpserver"
 	"github.com/humanlayer/smallchain/kubechain/internal/controller/task"
@@ -287,6 +288,14 @@ func main() {
 		MCPManager: mcpManagerInstance,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "MCPServer")
+		os.Exit(1)
+	}
+
+	if err = (&contactchannel.ContactChannelReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ContactChannel")
 		os.Exit(1)
 	}
 
