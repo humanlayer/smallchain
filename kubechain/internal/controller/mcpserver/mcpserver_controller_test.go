@@ -13,6 +13,7 @@ import (
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
 	"github.com/humanlayer/smallchain/kubechain/internal/mcpmanager"
+	"github.com/humanlayer/smallchain/kubechain/test/utils"
 )
 
 // MockMCPServerManager is a mock implementation of the MCPServerManager for testing
@@ -195,6 +196,112 @@ var _ = Describe("MCPServer Controller", func() {
 
 			By("Cleaning up the invalid MCPServer")
 			Expect(k8sClient.Delete(ctx, invalidMCPServer)).To(Succeed())
+		})
+
+		It("Should error if the approval contact channel is non-existent", func() {
+			ctx := context.Background()
+
+			By("Creating a new MCPServer with non-existent approval contact channel reference")
+			mcpServer := &kubechainv1alpha1.MCPServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "mcpserver-missing-channel",
+					Namespace: MCPServerNamespace,
+				},
+				Spec: kubechainv1alpha1.MCPServerSpec{
+					Transport: "stdio",
+					Command:   "test-command",
+					ApprovalContactChannel: &kubechainv1alpha1.LocalObjectReference{
+						Name: "non-existent-channel",
+					},
+				},
+			}
+
+			Expect(k8sClient.Create(ctx, mcpServer)).To(Succeed())
+
+			By("Creating a controller with a mock manager")
+			recorder := record.NewFakeRecorder(10)
+			reconciler := &MCPServerReconciler{
+				Client:     k8sClient,
+				Scheme:     k8sClient.Scheme(),
+				recorder:   recorder,
+				MCPManager: &MockMCPServerManager{},
+			}
+
+			By("Reconciling the MCPServer with non-existent contact channel")
+			_, err := reconciler.Reconcile(ctx, ctrl.Request{
+				NamespacedName: types.NamespacedName{Name: "mcpserver-missing-channel", Namespace: MCPServerNamespace},
+			})
+			Expect(err).To(HaveOccurred()) // Should fail because contact channel doesn't exist
+
+			By("Checking that the status was updated correctly to reflect the error")
+			createdMCPServer := &kubechainv1alpha1.MCPServer{}
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: "mcpserver-missing-channel", Namespace: MCPServerNamespace}, createdMCPServer)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(createdMCPServer.Status.Connected).To(BeFalse())
+			Expect(createdMCPServer.Status.Status).To(Equal("Error"))
+			Expect(createdMCPServer.Status.StatusDetail).To(ContainSubstring("ContactChannel \"non-existent-channel\" not found"))
+			utils.ExpectRecorder(recorder).ToEmitEventContaining("ContactChannelNotFound")
+
+			By("Cleaning up the MCPServer")
+			Expect(k8sClient.Delete(ctx, mcpServer)).To(Succeed())
+		})
+
+		It("Should stay in pending if the approval contact channel is not ready", func() {
+			ctx := context.Background()
+
+			By("Creating a new MCPServer with approval contact channel reference")
+			mcpServer := &kubechainv1alpha1.MCPServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "mcpserver-channel-ready",
+					Namespace: MCPServerNamespace,
+				},
+				Spec: kubechainv1alpha1.MCPServerSpec{
+					Transport: "stdio",
+					Command:   "test-command",
+					ApprovalContactChannel: &kubechainv1alpha1.LocalObjectReference{
+						Name: "test-channel",
+					},
+				},
+			}
+
+			Expect(k8sClient.Create(ctx, mcpServer)).To(Succeed())
+
+			By("Creating the contact channel in not-ready state")
+			contactChannel := &kubechainv1alpha1.ContactChannel{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-channel",
+					Namespace: MCPServerNamespace,
+				},
+				Status: kubechainv1alpha1.ContactChannelStatus{
+					Ready:        false,
+					Status:       "Pending",
+					StatusDetail: "Initializing",
+				},
+			}
+			Expect(k8sClient.Create(ctx, contactChannel)).To(Succeed())
+
+			By("Reconciling the MCPServer with not-ready contact channel")
+			recorder := record.NewFakeRecorder(10)
+			reconciler := &MCPServerReconciler{
+				Client:     k8sClient,
+				Scheme:     k8sClient.Scheme(),
+				recorder:   recorder,
+				MCPManager: &MockMCPServerManager{},
+			}
+
+			result, err := reconciler.Reconcile(ctx, ctrl.Request{
+				NamespacedName: types.NamespacedName{Name: "mcpserver-channel-ready", Namespace: MCPServerNamespace},
+			})
+			Expect(err).NotTo(HaveOccurred()) // Should stay in pending because contact channel is not ready
+			Expect(result.RequeueAfter).To(Equal(time.Second * 5))
+
+			By("Checking that the status was updated to Pending")
+			createdMCPServer := &kubechainv1alpha1.MCPServer{}
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: "mcpserver-channel-ready", Namespace: MCPServerNamespace}, createdMCPServer)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(createdMCPServer.Status.Status).To(Equal("Pending"))
+			Expect(createdMCPServer.Status.StatusDetail).To(ContainSubstring("ContactChannel \"test-channel\" is not ready"))
+			utils.ExpectRecorder(recorder).ToEmitEventContaining("ContactChannelNotReady")
 		})
 	})
 })
