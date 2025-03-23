@@ -7,6 +7,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -17,7 +18,9 @@ import (
 )
 
 const (
-	StatusError = "Error"
+	StatusError   = "Error"
+	StatusPending = "Pending"
+	StatusReady   = "Ready"
 )
 
 // MCPServerManagerInterface defines the interface for MCP server management
@@ -83,6 +86,34 @@ func (r *MCPServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	// Create a status update copy
 	statusUpdate := mcpServer.DeepCopy()
+
+	if statusUpdate.Spec.ApprovalContactChannel != nil {
+		// validate the approval contact channel
+		approvalContactChannel := &kubechainv1alpha1.ContactChannel{}
+		err := r.Get(ctx, types.NamespacedName{Name: statusUpdate.Spec.ApprovalContactChannel.Name, Namespace: statusUpdate.Namespace}, approvalContactChannel)
+		if err != nil {
+			statusUpdate.Status.Connected = false
+			statusUpdate.Status.Status = StatusError
+			// todo handle other types of error, not just "not found"
+			statusUpdate.Status.StatusDetail = fmt.Sprintf("ContactChannel %q not found", statusUpdate.Spec.ApprovalContactChannel.Name)
+			r.recorder.Event(&mcpServer, corev1.EventTypeWarning, "ContactChannelNotFound", fmt.Sprintf("ContactChannel %q not found", statusUpdate.Spec.ApprovalContactChannel.Name))
+			if err := r.updateStatus(ctx, req, statusUpdate); err != nil {
+				return ctrl.Result{}, err
+			}
+			return ctrl.Result{}, err
+		}
+
+		if !approvalContactChannel.Status.Ready {
+			statusUpdate.Status.Connected = false
+			statusUpdate.Status.Status = StatusPending
+			statusUpdate.Status.StatusDetail = fmt.Sprintf("ContactChannel %q is not ready", statusUpdate.Spec.ApprovalContactChannel.Name)
+			r.recorder.Event(&mcpServer, corev1.EventTypeWarning, "ContactChannelNotReady", fmt.Sprintf("ContactChannel %q is not ready", statusUpdate.Spec.ApprovalContactChannel.Name))
+			if err := r.updateStatus(ctx, req, statusUpdate); err != nil {
+				return ctrl.Result{}, err
+			}
+			return ctrl.Result{RequeueAfter: time.Second * 5}, nil
+		}
+	}
 
 	// Basic validation
 	if err := r.validateMCPServer(&mcpServer); err != nil {

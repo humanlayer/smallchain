@@ -36,6 +36,13 @@ type ContactChannelSpec struct {
 type ContactChannelStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+	Ready bool `json:"ready,omitempty"`
+
+	// +kubebuilder:validation:Enum=Ready;Error;Pending
+	Status string `json:"status,omitempty"`
+
+	// StatusDetail provides additional details about the current status
+	StatusDetail string `json:"statusDetail,omitempty"`
 }
 
 // +kubebuilder:object:root=true
