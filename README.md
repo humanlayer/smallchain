@@ -609,6 +609,98 @@ spec:
 EOF
 ```
 
+You should see some events in the output of 
+
+```
+kubectl get events
+```
+
+```
+0s          Normal    ValidationSucceeded       task/fetch-task                                      Task validation successful
+0s          Normal    ValidationSucceeded       taskrun/fetch-task-1                                 Task validated successfully
+0s          Normal    ToolCallCreated           taskrun/fetch-task-1                                 Created TaskRunToolCall fetch-task-1-toolcall-01
+0s          Normal    ExecutionSucceeded        taskruntoolcall/fetch-task-1-toolcall-01             MCP tool "fetch__fetch" executed successfully
+0s          Normal    LLMFinalAnswer            taskrun/fetch-task-1                                 LLM response received successfully
+```
+
+
+```
+kubectl get taskrun fetch-task-1 -o jsonpath='{.status.output}'
+```
+
+> The front page of PlanetScale.com highlights their new feature: blazing fast NVMe drives with unlimited IOPS available through [PlanetScale Metal](https://www.planetscale.com/metal). This platform, backed by Vitess, aims to simplify achieving a shared-nothing architecture with explicit sharding, providing horizontal scale, performance, and simplified operations for businesses of all sizes.
+
+and you can describe the taskrun to see the full context window and tool-calling turns
+
+```
+kubectl describe taskrun fetch-task-1 
+```
+
+```
+Name:         fetch-task-1
+Namespace:    default
+Labels:       kubechain.humanlayer.dev/task=fetch-task
+Annotations:  <none>
+API Version:  kubechain.humanlayer.dev/v1alpha1
+Kind:         TaskRun
+Metadata:
+  Creation Timestamp:  2025-03-24T16:30:06Z
+  Generation:          1
+  Owner References:
+    API Version:     kubechain.humanlayer.dev/v1alpha1
+    Controller:      true
+    Kind:            Task
+    Name:            fetch-task
+    UID:             430ba269-a214-4ba6-9ab8-16c90204a607
+  Resource Version:  1972
+  UID:               547e3d81-4101-454b-b47a-fb5dcc379d99
+Spec:
+  Task Ref:
+    Name:  fetch-task
+Status:
+  Context Window:
+    Content:  You are a helpful assistant. Your job is to help the user with their tasks.
+
+    Role:     system
+    Content:  What is on the front page of planetscale.com?
+    Role:     user
+    Content:
+    Role:     assistant
+    Tool Calls:
+      Function:
+        Arguments:  {"url":"https://www.planetscale.com","max_length":500}
+        Name:       fetch__fetch
+      Id:           call_I6ERhMGu5GPzon2ItXwnWnbu
+      Type:         function
+    Content:        Contents of https://www.planetscale.com/:
+⚡ Blazing fast NVMe drives with unlimited IOPS now available. [Read about PlanetScale Metal](/blog/announcing-metal) ⚡
+
+Backed by Vitess, our cloud platform makes achieving a shared-nothing architecture with explicit sharding simpler than ever. PlanetScale’s platform delivers horizontal scale, performance, and simplified operations no matter the size your business.
+
+[PlanetScale Metal](/metal)’s blazing fast NVMe drives unlock **unlimited IOPS**, bringing data center performance to the cloud. We
+
+<error>Content truncated. Call the fetch tool with a start_index of 500 to get more content.</error>
+    Role:          tool
+    Tool Call Id:  call_I6ERhMGu5GPzon2ItXwnWnbu
+    Content:       The front page of PlanetScale.com highlights their new feature: blazing fast NVMe drives with unlimited IOPS available through [PlanetScale Metal](https://www.planetscale.com/metal). This platform, backed by Vitess, aims to simplify achieving a shared-nothing architecture with explicit sharding, providing horizontal scale, performance, and simplified operations for businesses of all sizes.
+    Role:          assistant
+  Output:          The front page of PlanetScale.com highlights their new feature: blazing fast NVMe drives with unlimited IOPS available through [PlanetScale Metal](https://www.planetscale.com/metal). This platform, backed by Vitess, aims to simplify achieving a shared-nothing architecture with explicit sharding, providing horizontal scale, performance, and simplified operations for businesses of all sizes.
+  Phase:           FinalAnswer
+  Ready:           true
+  Status:          Ready
+  Status Detail:   LLM final response received
+Events:
+  Type    Reason               Age    From                Message
+  ----    ------               ----   ----                -------
+  Normal  Waiting              3m12s  taskrun-controller  Waiting for task "fetch-task" to become ready
+  Normal  ValidationSucceeded  3m12s  taskrun-controller  Task validated successfully
+  Normal  ToolCallCreated      3m11s  taskrun-controller  Created TaskRunToolCall fetch-task-1-toolcall-01
+  Normal  LLMFinalAnswer       3m5s   taskrun-controller  LLM response received successfully
+```
+
+That's it! Go add your favorite MCPs and start running durable agents in Kubernetes!
+
+
 ### Cleaning Up
 
 Remove our agent, task and related resources:
