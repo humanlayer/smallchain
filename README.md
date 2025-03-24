@@ -371,6 +371,18 @@ NAME                 READY   STATUS   PHASE         TASK               PREVIEW  
 hello-world-task-1   true    Ready    FinalAnswer   hello-world-task             The Moon does not have a capital. It is a natural satellite of Earth and lacks any governmental structure or human habitation that would necessitate a capital city.
 ```
 
+To get just the output, run
+
+```
+kubectl get taskrun -o jsonpath='{.items[*].status.output}'
+```
+
+and you'll see 
+
+```
+The Moon does not have a capital. It is a natural satellite of Earth and lacks any governmental structure or human habitation that would necessitate a capital city.
+```
+
 ### Inspecting the TaskRun more closely
 
 We saw above how you can get the status of a taskrun with `kubectl get taskrun`.
