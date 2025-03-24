@@ -250,7 +250,7 @@ func UncommentCode(filename, target, prefix string) error {
 	}
 	// false positive
 	// nolint:gosec
-	return os.WriteFile(filename, out.Bytes(), 0644)
+	return os.WriteFile(filename, out.Bytes(), 0o644)
 }
 
 type eventAssertion struct {
@@ -269,6 +269,7 @@ func (a *eventAssertion) ToEmitEventContaining(substring string) {
 	Eventually(func() bool {
 		select {
 		case event := <-a.eventRecorder.Events:
+			_, _ = fmt.Fprintf(GinkgoWriter, "Checking if event %q contains %q\n", event, substring)
 			return strings.Contains(event, substring)
 		default:
 			return false

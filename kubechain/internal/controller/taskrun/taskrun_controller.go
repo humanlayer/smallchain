@@ -6,6 +6,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
@@ -69,16 +70,28 @@ func (r *TaskRunReconciler) validateTaskAndAgent(ctx context.Context, taskRun *k
 	// Get parent Task
 	task, err := r.getTask(ctx, taskRun)
 	if err != nil {
-		logger.Error(err, "Task validation failed")
-		statusUpdate.Status.Ready = false
-		statusUpdate.Status.Status = StatusError
-		statusUpdate.Status.StatusDetail = fmt.Sprintf("Task validation failed: %v", err)
-		statusUpdate.Status.Error = err.Error()
-		r.recorder.Event(taskRun, corev1.EventTypeWarning, "ValidationFailed", err.Error())
+		r.recorder.Event(taskRun, corev1.EventTypeWarning, "TaskValidationFailed", err.Error())
+		if apierrors.IsNotFound(err) {
+			logger.Info("Task %q not found")
+			statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseFailed
+			statusUpdate.Status.Error = fmt.Sprintf("Task %q not found", taskRun.Spec.TaskRef.Name)
+			statusUpdate.Status.StatusDetail = fmt.Sprintf("Task %q not found", taskRun.Spec.TaskRef.Name)
+			statusUpdate.Status.Status = StatusError
+		} else {
+			logger.Error(err, "Task validation failed")
+			statusUpdate.Status.Ready = false
+			statusUpdate.Status.Status = StatusError
+			statusUpdate.Status.StatusDetail = fmt.Sprintf("Task validation failed: %v", err)
+			statusUpdate.Status.Error = err.Error()
+		}
+
 		if updateErr := r.Status().Update(ctx, statusUpdate); updateErr != nil {
 			logger.Error(updateErr, "Failed to update TaskRun status")
 			return nil, nil, ctrl.Result{}, fmt.Errorf("failed to update taskrun status: %v", err)
 		}
+		// todo dont error if not found, don't requeue
+		// (can use client.IgnoreNotFound(err), but today
+		// the parent method needs err != nil to break control flow properly)
 		return nil, nil, ctrl.Result{}, err
 	}
 
@@ -90,7 +103,7 @@ func (r *TaskRunReconciler) validateTaskAndAgent(ctx context.Context, taskRun *k
 		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhasePending
 		statusUpdate.Status.StatusDetail = fmt.Sprintf("Waiting for task %q to become ready", task.Name)
 		statusUpdate.Status.Error = "" // Clear previous error
-		r.recorder.Event(taskRun, corev1.EventTypeNormal, "Waiting", fmt.Sprintf("Waiting for task %q to become ready", task.Name))
+		r.recorder.Event(taskRun, corev1.EventTypeNormal, "TaskNotReady", fmt.Sprintf("Waiting for task %q to become ready", task.Name))
 		if err := r.Status().Update(ctx, statusUpdate); err != nil {
 			logger.Error(err, "Failed to update TaskRun status")
 			return nil, nil, ctrl.Result{}, err
@@ -417,6 +430,34 @@ func (r *TaskRunReconciler) createToolCalls(ctx context.Context, taskRun *kubech
 	return ctrl.Result{}, nil
 }
 
+// initializePhaseAndSpan initializes the TaskRun phase and starts tracing
+func (r *TaskRunReconciler) initializePhaseAndSpan(ctx context.Context, statusUpdate *kubechainv1alpha1.TaskRun) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
+
+	// Start tracing the TaskRun
+	tracer := otel.GetTracerProvider().Tracer("taskrun")
+	ctx, span := tracer.Start(ctx, "TaskRun")
+
+	// Store span context in status
+	spanCtx := span.SpanContext()
+	statusUpdate.Status.SpanContext = &kubechainv1alpha1.SpanContext{
+		TraceID: spanCtx.TraceID().String(),
+		SpanID:  spanCtx.SpanID().String(),
+	}
+
+	statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseInitializing
+	statusUpdate.Status.Ready = false
+	statusUpdate.Status.Status = "Initializing"
+	statusUpdate.Status.StatusDetail = "Initializing"
+	if err := r.Status().Update(ctx, statusUpdate); err != nil {
+		logger.Error(err, "Failed to update TaskRun status")
+		return ctrl.Result{}, err
+	}
+
+	// Don't end the span - it will be ended when we reach FinalAnswer
+	return ctrl.Result{Requeue: true}, nil
+}
+
 // Reconcile validates the taskrun's task reference and sends the prompt to the LLM.
 func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
@@ -433,28 +474,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 	// Initialize phase if not set
 	if statusUpdate.Status.Phase == "" {
-		// Start tracing the TaskRun
-		tracer := otel.GetTracerProvider().Tracer("taskrun")
-		ctx, span := tracer.Start(ctx, "TaskRun")
-
-		// Store span context in status
-		spanCtx := span.SpanContext()
-		statusUpdate.Status.SpanContext = &kubechainv1alpha1.SpanContext{
-			TraceID: spanCtx.TraceID().String(),
-			SpanID:  spanCtx.SpanID().String(),
-		}
-
-		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseInitializing
-		statusUpdate.Status.Ready = false
-		statusUpdate.Status.Status = "Initializing"
-		statusUpdate.Status.StatusDetail = "Initializing"
-		if err := r.Status().Update(ctx, statusUpdate); err != nil {
-			logger.Error(err, "Failed to update TaskRun status")
-			return ctrl.Result{}, err
-		}
-
-		// Don't end the span - it will be ended when we reach FinalAnswer
-		return ctrl.Result{Requeue: true}, nil
+		return r.initializePhaseAndSpan(ctx, statusUpdate)
 	}
 
 	// Step 1: Validate Task and Agent

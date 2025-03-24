@@ -4,6 +4,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+type TaskStatusType string
+
+const (
+	TaskStatusPending TaskStatusType = "Pending"
+	TaskStatusReady   TaskStatusType = "Ready"
+	TaskStatusError   TaskStatusType = "Error"
+)
+
 // TaskSpec defines the desired state of Task
 type TaskSpec struct {
 	// AgentRef references the agent that will execute this task
@@ -31,7 +39,7 @@ type TaskStatus struct {
 
 	// Status indicates the current status of the task
 	// +kubebuilder:validation:Enum=Ready;Error;Pending
-	Status string `json:"status,omitempty"`
+	Status TaskStatusType `json:"status,omitempty"`
 
 	// StatusDetail provides additional details about the current status
 	StatusDetail string `json:"statusDetail,omitempty"`
