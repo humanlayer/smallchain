@@ -192,6 +192,11 @@ func (r *TaskRunReconciler) processToolCalls(ctx context.Context, taskRun *kubec
 	}
 
 	logger.Info("Found tool calls", "count", len(toolCallList.Items))
+	if len(toolCallList.Items) == 0 {
+		logger.Info("No tool calls found, something is very wrong")
+		r.recorder.Event(taskRun, corev1.EventTypeWarning, "ToolCallsPendingWithNoToolCalls", "TaskRun is in ToolCallsPending phase but no tool calls were found")
+		return ctrl.Result{}, fmt.Errorf("TaskRun %q is in ToolCallsPending phase but no tool calls were found", taskRun.Name)
+	}
 
 	// Check if all tool calls are complete
 	allComplete := true
@@ -221,6 +226,7 @@ func (r *TaskRunReconciler) processToolCalls(ctx context.Context, taskRun *kubec
 		statusUpdate.Status.Ready = true
 		statusUpdate.Status.Status = StatusReady
 		statusUpdate.Status.StatusDetail = "All tool calls completed, ready to send tool results to LLM"
+		r.recorder.Event(taskRun, corev1.EventTypeNormal, "AllToolCallsCompleted", "All tool calls completed, ready to send tool results to LLM")
 
 		if err := r.Status().Update(ctx, statusUpdate); err != nil {
 			logger.Error(err, "Failed to update TaskRun status")
@@ -373,6 +379,7 @@ func (r *TaskRunReconciler) processLLMResponse(ctx context.Context, output *kube
 		statusUpdate.Status.Status = StatusReady
 		statusUpdate.Status.StatusDetail = "LLM response received, tool calls pending"
 		statusUpdate.Status.Error = ""
+		r.recorder.Event(taskRun, corev1.EventTypeNormal, "ToolCallsPending", "LLM response received, tool calls pending")
 
 		// Update the parent's status before creating tool call objects.
 		if err := r.Status().Update(ctx, statusUpdate); err != nil {
@@ -427,7 +434,7 @@ func (r *TaskRunReconciler) createToolCalls(ctx context.Context, taskRun *kubech
 		logger.Info("Created TaskRunToolCall", "name", newName)
 		r.recorder.Event(taskRun, corev1.EventTypeNormal, "ToolCallCreated", "Created TaskRunToolCall "+newName)
 	}
-	return ctrl.Result{}, nil
+	return ctrl.Result{RequeueAfter: time.Second * 5}, nil
 }
 
 // initializePhaseAndSpan initializes the TaskRun phase and starts tracing
@@ -524,6 +531,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// Step 7: Collect tools from all sources
 	tools := r.collectTools(ctx, agent)
 
+	r.recorder.Event(&taskRun, corev1.EventTypeNormal, "SendingContextWindowToLLM", "Sending context window to LLM")
 	// Step 8: Send the prompt to the LLM
 	output, err := llmClient.SendRequest(ctx, taskRun.Status.ContextWindow, tools)
 	if err != nil {

@@ -26,7 +26,6 @@ import (
 	"time"
 
 	. "github.com/onsi/ginkgo/v2" //nolint:golint,revive
-	. "github.com/onsi/gomega"
 	"k8s.io/client-go/tools/record"
 )
 
@@ -265,14 +264,26 @@ func ExpectRecorder(recorder *record.FakeRecorder) *eventAssertion {
 }
 
 // ToEmitEventContaining completes the fluent assertion chain and checks for the event
-func (a *eventAssertion) ToEmitEventContaining(substring string) {
-	Eventually(func() bool {
+func (a *eventAssertion) ToEmitEventContaining(substrings ...string) {
+	var found []string
+
+	timeout := time.After(10 * time.Second)
+	for {
 		select {
 		case event := <-a.eventRecorder.Events:
-			_, _ = fmt.Fprintf(GinkgoWriter, "Checking if event %q contains %q\n", event, substring)
-			return strings.Contains(event, substring)
-		default:
-			return false
+			for _, substring := range substrings {
+				_, _ = fmt.Fprintf(GinkgoWriter, "Checking if event %q contains %q\n", event, substring)
+				if strings.Contains(event, substring) {
+					_, _ = fmt.Fprintf(GinkgoWriter, "Found substring %q in event %q\n", substring, event)
+					found = append(found, substring)
+					break
+				}
+			}
+			if len(found) == len(substrings) {
+				return
+			}
+		case <-timeout:
+			Fail("Expected event(s) containing substrings: " + strings.Join(substrings, ", ") + "found: " + strings.Join(found, ", "))
 		}
-	}, 5*time.Second, 100*time.Millisecond).Should(BeTrue())
+	}
 }
