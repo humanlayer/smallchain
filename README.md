@@ -67,14 +67,6 @@ To run KubeChain locally on macos, you'll also need:
 ### Setting Up a Local Cluster
 
 
-> [!IMPORTANT]
-> For better visibility when running tutorial, we recommend starting 
-> a stream to watch all the events as they're happening,
-> for example:
-> 
-> ```bash
-> kubectl get events --watch
-> ```
 
 1. **Create a Kind cluster**
 
@@ -91,6 +83,16 @@ kubectl create secret generic openai \
 ```
 
 ### Deploying KubeChain
+
+
+> [!TIP]
+> For better visibility when running tutorial, we recommend starting 
+> a stream to watch all the events as they're happening,
+> for example:
+> 
+> ```bash
+> kubectl get events --watch
+> ```
 
 Deploy the KubeChain operator to your cluster:
 
