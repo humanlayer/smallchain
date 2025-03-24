@@ -31,7 +31,9 @@ KubeChain is a cloud-native orchestrator for AI Agents built on Kubernetes. It s
   - [Deploying KubeChain](#deploying-kubechain)
   - [Creating Your First Agent](#creating-your-first-agent)
   - [Running Your First Task](#running-your-first-task)
-  - [Monitoring Resources](#monitoring-resources)
+  - [Inspecting the TaskRun more closely](#inspecting-the-taskrun-more-closely)
+  - [Adding Tools with MCP](#adding-tools-with-mcp)
+  - [Cleaning Up](#cleaning-up)
 - [Architecture](#architecture)
   - [Core Objects](#core-objects)
 - [Contributing](#contributing)
@@ -54,17 +56,30 @@ KubeChain is a cloud-native orchestrator for AI Agents built on Kubernetes. It s
 
 To run KubeChain, you'll need:
 
-- **kubectl** - Command-line tool for Kubernetes
-- **kind** - For running local Kubernetes clusters
-- **OpenAI API Key** - For LLM functionality
-- **Docker** - For building and running container images
+- **kubectl** - Command-line tool for Kubernetes `brew install kubectl`
+- **OpenAI API Key** - For LLM functionality https://platform.openai.com
+
+To run KubeChain locally on macos, you'll also need:
+
+- **kind** - For running local Kubernetes clusters `brew install kind` (other cluster options should work too)
+- **Docker** - For building and running container images `brew install --cask docker`
 
 ### Setting Up a Local Cluster
+
+
+> [!IMPORTANT]
+> For better visibility when running tutorial, we recommend starting 
+> a stream to watch all the events as they're happening,
+> for example:
+> 
+> ```bash
+> kubectl get events --watch
+> ```
 
 1. **Create a Kind cluster**
 
 ```bash
-kind create cluster --config kubechain-example/kind/kind-config.yaml
+kind create cluster
 ```
 
 2. **Add your OpenAI API key as a Kubernetes secret**
@@ -394,7 +409,9 @@ Status:
     Role:         user
     Content:      The Moon does not have a capital. It is a natural satellite of Earth and lacks any governmental structure or human habitation that would necessitate a capital city.
     Role:         assistant
-  Output:         The Moon does not have a capital. It is a natural satellite of Earth and lacks any governmental structure or human habitation that would necessitate a capital city.
+  Output:         The Moon does not have a capital. It is a natural satellite of Earth and
+      lacks any governmental structure or human habitation that would necessitate
+      a capital city.
   Phase:          FinalAnswer
   Ready:          true
   Status:         Ready
@@ -545,7 +562,7 @@ metadata:
 spec:
   agentRef:
     name: my-assistant
-  message: "What is on the front page of news.google.com?"
+  message: "What is on the front page of planetscale.com?"
 EOF
 ```
 
@@ -571,13 +588,13 @@ kubectl delete secret openai
 Remove the operator, resources and custom resource definitions:
 
 ```
-kustomize build kubechain/config/default | kubectl delete --ignore-not-found=true -f -
+kubectl delete -f https://raw.githubusercontent.com/humanlayer/smallchain/refs/heads/main/kubechain/config/release/latest.yaml
 ```
 
 If you made a kind cluster, you can delete it with:
 
 ```
-kind delete cluster --name kubechain-local
+kind delete cluster 
 ```
 
 ## Key Features

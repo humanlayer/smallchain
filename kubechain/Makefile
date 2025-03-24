@@ -120,7 +120,7 @@ docker-push: ## Push docker image with the manager.
 
 .PHONY: docker-load-kind
 docker-load-kind: docker-build ## Load the docker image into kind.
-	kind load docker-image ${IMG} --name kubechain-example-cluster
+	kind load docker-image ${IMG} 
 
 # PLATFORMS defines the target platforms for the manager image be built to provide support to multiple
 # architectures. (i.e. make docker-buildx IMG=myregistry/mypoperator:0.0.1). To use this option you need to:
