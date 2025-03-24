@@ -620,6 +620,29 @@ func (r *TaskRunToolCallReconciler) handleUnsupportedToolType(ctx context.Contex
 	return ctrl.Result{}, err
 }
 
+// getMCPServer gets the MCPServer for a tool and checks if it requires approval
+func (r *TaskRunToolCallReconciler) getMCPServer(ctx context.Context, trtc *kubechainv1alpha1.TaskRunToolCall) (*kubechainv1alpha1.MCPServer, bool, error) {
+	logger := log.FromContext(ctx)
+
+	// Check if this is an MCP tool
+	serverName, _, isMCP := isMCPTool(trtc.Spec.ToolRef.Name)
+	if !isMCP {
+		return nil, false, nil
+	}
+
+	// Get the MCPServer
+	var mcpServer kubechainv1alpha1.MCPServer
+	if err := r.Get(ctx, client.ObjectKey{
+		Namespace: trtc.Namespace,
+		Name:      serverName,
+	}, &mcpServer); err != nil {
+		logger.Error(err, "Failed to get MCPServer", "serverName", serverName)
+		return nil, false, err
+	}
+
+	return &mcpServer, mcpServer.Spec.ApprovalContactChannel != nil, nil
+}
+
 // Reconcile processes TaskRunToolCall objects.
 func (r *TaskRunToolCallReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
@@ -646,8 +669,28 @@ func (r *TaskRunToolCallReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, nil
 	}
 
-	// Step 3: Check if this is an MCP tool
 	serverName, mcpToolName, isMCP := isMCPTool(trtc.Spec.ToolRef.Name)
+
+	if isMCP {
+		// Step 3: Check if this is an MCP tool and needs approval
+		mcpServer, needsApproval, err := r.getMCPServer(ctx, &trtc)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+
+		if needsApproval {
+			trtc.Status.Status = "AwaitingHumanApproval"
+			trtc.Status.StatusDetail = fmt.Sprintf("Waiting for human approval via contact channel %s", mcpServer.Spec.ApprovalContactChannel.Name)
+			r.recorder.Event(&trtc, corev1.EventTypeNormal, "AwaitingHumanApproval",
+				fmt.Sprintf("Tool execution requires approval via contact channel %s", mcpServer.Spec.ApprovalContactChannel.Name))
+
+			if err := r.Status().Update(ctx, &trtc); err != nil {
+				logger.Error(err, "Failed to update TaskRunToolCall status")
+				return ctrl.Result{}, err
+			}
+			return ctrl.Result{}, nil
+		}
+	}
 
 	// Step 4: Parse arguments
 	args, err := r.parseArguments(ctx, &trtc)
