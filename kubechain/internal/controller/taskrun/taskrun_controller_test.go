@@ -15,6 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	"github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
 	kubechain "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
 	"github.com/humanlayer/smallchain/kubechain/internal/llmclient"
 	"github.com/humanlayer/smallchain/kubechain/test/utils"
@@ -351,8 +352,8 @@ var _ = Describe("TaskRun Controller", func() {
 		})
 	})
 	Context("Initializing -> ReadyForLLM", func() {
-		FIt("moves to ReadyForLLM if the task is ready", func() {
-			_, _, agent, task, teardown := setupSuiteObjects(ctx)
+		It("moves to ReadyForLLM if the task is ready", func() {
+			_, _, _, _, teardown := setupSuiteObjects(ctx)
 			defer teardown()
 
 			taskRun := testTaskRun.SetupWithStatus(ctx, kubechain.TaskRunStatus{
@@ -374,15 +375,15 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(taskRun.Status.StatusDetail).To(ContainSubstring("Ready to send to LLM"))
 			Expect(taskRun.Status.ContextWindow).To(HaveLen(2))
 			Expect(taskRun.Status.ContextWindow[0].Role).To(Equal("system"))
-			Expect(taskRun.Status.ContextWindow[0].Content).To(ContainSubstring(agent.Spec.System))
+			Expect(taskRun.Status.ContextWindow[0].Content).To(ContainSubstring(testAgent.system))
 			Expect(taskRun.Status.ContextWindow[1].Role).To(Equal("user"))
-			Expect(taskRun.Status.ContextWindow[1].Content).To(ContainSubstring(task.Spec.Message))
+			Expect(taskRun.Status.ContextWindow[1].Content).To(ContainSubstring(testTask.message))
 			ExpectRecorder(recorder).ToEmitEventContaining("ValidationSucceeded")
 		})
 	})
 	Context("Pending -> ReadyForLLM", func() {
 		It("moves to ReadyForLLM if upstream dependencies are ready", func() {
-			_, _, agent, task, teardown := setupSuiteObjects(ctx)
+			_, _, _, _, teardown := setupSuiteObjects(ctx)
 			defer teardown()
 
 			taskRun := testTaskRun.SetupWithStatus(ctx, kubechain.TaskRunStatus{
@@ -403,17 +404,107 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(taskRun.Status.StatusDetail).To(ContainSubstring("Ready to send to LLM"))
 			Expect(taskRun.Status.ContextWindow).To(HaveLen(2))
 			Expect(taskRun.Status.ContextWindow[0].Role).To(Equal("system"))
-			Expect(taskRun.Status.ContextWindow[0].Content).To(ContainSubstring(agent.Spec.System))
+			Expect(taskRun.Status.ContextWindow[0].Content).To(ContainSubstring(testAgent.system))
 			Expect(taskRun.Status.ContextWindow[1].Role).To(Equal("user"))
-			Expect(taskRun.Status.ContextWindow[1].Content).To(ContainSubstring(task.Spec.Message))
+			Expect(taskRun.Status.ContextWindow[1].Content).To(ContainSubstring(testTask.message))
 			ExpectRecorder(recorder).ToEmitEventContaining("ValidationSucceeded")
 		})
 	})
 	Context("ReadyForLLM -> LLMFinalAnswer", func() {
-		It("moves to LLMFinalAnswer if the LLM is ready", func() {})
+		FIt("moves to LLMFinalAnswer after getting a response from the LLM", func() {
+			_, _, _, _, teardown := setupSuiteObjects(ctx)
+			defer teardown()
+
+			taskRun := testTaskRun.SetupWithStatus(ctx, kubechain.TaskRunStatus{
+				Phase: kubechain.TaskRunPhaseReadyForLLM,
+				ContextWindow: []kubechain.Message{
+					{
+						Role:    "system",
+						Content: testAgent.system,
+					},
+					{
+						Role:    "user",
+						Content: testTask.message,
+					},
+				},
+			})
+			defer testTaskRun.Teardown(ctx)
+
+			reconciler, recorder := reconciler()
+			mockLLMClient := &llmclient.MockRawOpenAIClient{
+				Response: &v1alpha1.Message{
+					Role:    "assistant",
+					Content: "The moon is a natural satellite of the Earth and lacks any formal government or capital.",
+				},
+			}
+			reconciler.newLLMClient = func(apiKey string) (llmclient.OpenAIClient, error) {
+				return mockLLMClient, nil
+			}
+
+			result, err := reconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{Name: testTaskRun.name, Namespace: "default"},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeFalse())
+
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTaskRun.name, Namespace: "default"}, taskRun)).To(Succeed())
+			Expect(taskRun.Status.Phase).To(Equal(kubechain.TaskRunPhaseFinalAnswer))
+			Expect(taskRun.Status.StatusDetail).To(ContainSubstring("LLM final response received"))
+			Expect(taskRun.Status.Output).To(Equal("The moon is a natural satellite of the Earth and lacks any formal government or capital."))
+			Expect(taskRun.Status.ContextWindow).To(HaveLen(3))
+			Expect(taskRun.Status.ContextWindow[2].Role).To(Equal("assistant"))
+			Expect(taskRun.Status.ContextWindow[2].Content).To(ContainSubstring("The moon is a natural satellite of the Earth and lacks any formal government or capital."))
+			ExpectRecorder(recorder).ToEmitEventContaining("LLMFinalAnswer")
+
+			Expect(mockLLMClient.Calls).To(HaveLen(1))
+			Expect(mockLLMClient.Calls[0].Messages).To(HaveLen(2))
+			Expect(mockLLMClient.Calls[0].Messages[0].Role).To(Equal("system"))
+			Expect(mockLLMClient.Calls[0].Messages[0].Content).To(ContainSubstring(testAgent.system))
+			Expect(mockLLMClient.Calls[0].Messages[1].Role).To(Equal("user"))
+			Expect(mockLLMClient.Calls[0].Messages[1].Content).To(ContainSubstring(testTask.message))
+		})
+	})
+	Context("ReadyForLLM -> Error", func() {
+		It("moves to Error if the LLM returns an error", func() {})
+	})
+	Context("Error -> ErrorBackoff", func() {
+		It("moves to ErrorBackoff if the error is retryable", func() {})
+	})
+	Context("Error -> Error", func() {
+		It("Stays in Error if the error is not retryable", func() {})
+	})
+	Context("ErrorBackoff -> ReadyForLLM", func() {
+		It("moves to ReadyForLLM after the backoff period", func() {})
 	})
 	Context("ReadyForLLM -> ToolCallsPending", func() {
-		It("moves to ToolCallsPending if the LLM is not ready", func() {})
+		It("moves to ToolCallsPending if the LLM returns tool calls", func() {
+			// _, _, _, _, teardown := setupSuiteObjects(ctx)
+			// defer teardown()
+
+			// taskRun := testTaskRun.SetupWithStatus(ctx, kubechain.TaskRunStatus{
+			// 	Phase: kubechain.TaskRunPhaseReadyForLLM,
+			// })
+			// defer testTaskRun.Teardown(ctx)
+
+			// reconciler, recorder := reconciler()
+			// mockLLMClient := &llmclient.MockRawOpenAIClient{
+			// 	Response: &v1alpha1.Message{
+			// 		Role: "assistant",
+			// 		ToolCalls: []v1alpha1.ToolCall{
+			// 			{
+			// 				ID:       "1",
+			// 				Function: v1alpha1.ToolCallFunction{Name: "fetch__fetch", Arguments: `{"url": "https://api.example.com/data"}`},
+			// 			},
+			// 		},
+			// 	},
+			// }
+
+			// result, err := reconciler.Reconcile(ctx, reconcile.Request{
+			// 	NamespacedName: types.NamespacedName{Name: testTaskRun.name, Namespace: "default"},
+			// })
+			// Expect(err).NotTo(HaveOccurred())
+			// Expect(result.Requeue).To(BeTrue())
+		})
 	})
 	Context("ToolCallsPending -> LLMFinalAnswer", func() {
 		It("moves to LLMFinalAnswer if the LLM is ready", func() {})
