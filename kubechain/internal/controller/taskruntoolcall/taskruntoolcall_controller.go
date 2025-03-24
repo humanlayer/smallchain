@@ -620,14 +620,14 @@ func (r *TaskRunToolCallReconciler) handleUnsupportedToolType(ctx context.Contex
 	return ctrl.Result{}, err
 }
 
-// checkMCPServerApprovalChannel checks if the tool is an MCP tool and if its server requires approval
-func (r *TaskRunToolCallReconciler) checkMCPServerApprovalChannel(ctx context.Context, trtc *kubechainv1alpha1.TaskRunToolCall) (bool, error) {
+// getMCPServer gets the MCPServer for a tool and checks if it requires approval
+func (r *TaskRunToolCallReconciler) getMCPServer(ctx context.Context, trtc *kubechainv1alpha1.TaskRunToolCall) (*kubechainv1alpha1.MCPServer, bool, error) {
 	logger := log.FromContext(ctx)
 
 	// Check if this is an MCP tool
 	serverName, _, isMCP := isMCPTool(trtc.Spec.ToolRef.Name)
 	if !isMCP {
-		return false, nil
+		return nil, false, nil
 	}
 
 	// Get the MCPServer
@@ -637,25 +637,10 @@ func (r *TaskRunToolCallReconciler) checkMCPServerApprovalChannel(ctx context.Co
 		Name:      serverName,
 	}, &mcpServer); err != nil {
 		logger.Error(err, "Failed to get MCPServer", "serverName", serverName)
-		return false, err
+		return nil, false, err
 	}
 
-	// Check if the server has an approval contact channel
-	if mcpServer.Spec.ApprovalContactChannel != nil {
-		// Update TaskRunToolCall status to await approval
-		trtc.Status.Status = "AwaitingHumanApproval"
-		trtc.Status.StatusDetail = fmt.Sprintf("Waiting for human approval via contact channel %s", mcpServer.Spec.ApprovalContactChannel.Name)
-		r.recorder.Event(trtc, corev1.EventTypeNormal, "AwaitingHumanApproval",
-			fmt.Sprintf("Tool execution requires approval via contact channel %s", mcpServer.Spec.ApprovalContactChannel.Name))
-
-		if err := r.Status().Update(ctx, trtc); err != nil {
-			logger.Error(err, "Failed to update TaskRunToolCall status")
-			return true, err
-		}
-		return true, nil
-	}
-
-	return false, nil
+	return &mcpServer, mcpServer.Spec.ApprovalContactChannel != nil, nil
 }
 
 // Reconcile processes TaskRunToolCall objects.
@@ -684,11 +669,27 @@ func (r *TaskRunToolCallReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, nil
 	}
 
-	// Step 3: Check if this is an MCP tool and needs approval
-	if needsApproval, err := r.checkMCPServerApprovalChannel(ctx, &trtc); err != nil {
-		return ctrl.Result{}, err
-	} else if needsApproval {
-		return ctrl.Result{}, nil
+	serverName, mcpToolName, isMCP := isMCPTool(trtc.Spec.ToolRef.Name)
+
+	if isMCP {
+		// Step 3: Check if this is an MCP tool and needs approval
+		mcpServer, needsApproval, err := r.getMCPServer(ctx, &trtc)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+
+		if needsApproval {
+			trtc.Status.Status = "AwaitingHumanApproval"
+			trtc.Status.StatusDetail = fmt.Sprintf("Waiting for human approval via contact channel %s", mcpServer.Spec.ApprovalContactChannel.Name)
+			r.recorder.Event(&trtc, corev1.EventTypeNormal, "AwaitingHumanApproval",
+				fmt.Sprintf("Tool execution requires approval via contact channel %s", mcpServer.Spec.ApprovalContactChannel.Name))
+
+			if err := r.Status().Update(ctx, &trtc); err != nil {
+				logger.Error(err, "Failed to update TaskRunToolCall status")
+				return ctrl.Result{}, err
+			}
+			return ctrl.Result{}, nil
+		}
 	}
 
 	// Step 4: Parse arguments
@@ -697,21 +698,18 @@ func (r *TaskRunToolCallReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, err
 	}
 
-	// Step 5: Check if this is an MCP tool
-	serverName, mcpToolName, isMCP := isMCPTool(trtc.Spec.ToolRef.Name)
-
-	// Step 6: Handle MCP tool execution if applicable
+	// Step 5: Handle MCP tool execution if applicable
 	if isMCP && r.MCPManager != nil {
 		return r.processMCPTool(ctx, &trtc, serverName, mcpToolName, args)
 	}
 
-	// Step 7: Get traditional Tool resource
+	// Step 6: Get traditional Tool resource
 	tool, toolType, err := r.getTraditionalTool(ctx, &trtc)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
-	// Step 8: Process based on tool type
+	// Step 7: Process based on tool type
 	switch toolType {
 	case "delegateToAgent":
 		return r.processDelegateToAgent(ctx, &trtc)
