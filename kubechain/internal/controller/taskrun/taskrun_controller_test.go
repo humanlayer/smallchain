@@ -21,7 +21,130 @@ import (
 	"github.com/humanlayer/smallchain/kubechain/test/utils"
 )
 
+type TestTask struct {
+	name      string
+	agentName string
+	task      *kubechainv1alpha1.Task
+}
+
+func (t *TestTask) Setup(ctx context.Context) *kubechainv1alpha1.Task {
+	task := &kubechainv1alpha1.Task{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      t.name,
+			Namespace: "default",
+		},
+		Spec: kubechainv1alpha1.TaskSpec{
+			AgentRef: kubechainv1alpha1.LocalObjectReference{
+				Name: t.agentName,
+			},
+			Message: "what is the capital of the moon?",
+		},
+	}
+	err := k8sClient.Create(ctx, task)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(k8sClient.Get(ctx, types.NamespacedName{Name: t.name, Namespace: "default"}, task)).To(Succeed())
+	t.task = task
+	return task
+}
+
+func (t *TestTask) Teardown(ctx context.Context) {
+	Expect(k8sClient.Delete(ctx, t.task)).To(Succeed())
+}
+
+type TestTaskRun struct {
+	name     string
+	taskName string
+	taskRun  *kubechainv1alpha1.TaskRun
+}
+
+func (t *TestTaskRun) Setup(ctx context.Context) *kubechainv1alpha1.TaskRun {
+	taskRun := &kubechainv1alpha1.TaskRun{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      t.name,
+			Namespace: "default",
+		},
+		Spec: kubechainv1alpha1.TaskRunSpec{
+			TaskRef: kubechainv1alpha1.LocalObjectReference{
+				Name: t.taskName,
+			},
+		},
+	}
+	err := k8sClient.Create(ctx, taskRun)
+	Expect(err).NotTo(HaveOccurred())
+
+	Expect(k8sClient.Get(ctx, types.NamespacedName{Name: t.name, Namespace: "default"}, taskRun)).To(Succeed())
+	t.taskRun = taskRun
+	return taskRun
+}
+
+func (t *TestTaskRun) Teardown(ctx context.Context) {
+	Expect(k8sClient.Delete(ctx, t.taskRun)).To(Succeed())
+}
+
+var testTask = &TestTask{
+	name:      "test-task",
+	agentName: "test-agent",
+}
+
+var testTaskRun = &TestTaskRun{
+	name:     "test-taskrun",
+	taskName: testTask.name,
+}
+
+func reconciler() (*TaskRunReconciler, *record.FakeRecorder) {
+	recorder := record.NewFakeRecorder(10)
+	reconciler := &TaskRunReconciler{
+		Client:   k8sClient,
+		Scheme:   k8sClient.Scheme(),
+		recorder: recorder,
+	}
+	return reconciler, recorder
+}
+
 var _ = Describe("TaskRun Controller", func() {
+	Context("'' -> Initializing", func() {
+		ctx := context.Background()
+		FIt("moves to Initializing and sets a span context", func() {
+			testTask.Setup(ctx)
+			defer testTask.Teardown(ctx)
+
+			taskRun := testTaskRun.Setup(ctx)
+			defer testTaskRun.Teardown(ctx)
+
+			reconciler, _ := reconciler()
+
+			result, err := reconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{Name: testTaskRun.name, Namespace: "default"},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeTrue())
+
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTaskRun.name, Namespace: "default"}, taskRun)).To(Succeed())
+
+			Expect(taskRun.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunPhaseInitializing))
+			Expect(taskRun.Status.SpanContext).NotTo(BeNil())
+			Expect(taskRun.Status.SpanContext.TraceID).NotTo(BeEmpty())
+			Expect(taskRun.Status.SpanContext.SpanID).NotTo(BeEmpty())
+		})
+	})
+	Context("Initializing -> Pending", func() {
+		It("moves to pending if upstream dependencies are not ready", func() {})
+	})
+	Context("Pending -> ReadyForLLM", func() {
+		It("moves to ReadyForLLM if upstream dependencies are ready", func() {})
+	})
+	Context("ReadyForLLM -> LLMFinalAnswer", func() {
+		It("moves to LLMFinalAnswer if the LLM is ready", func() {})
+	})
+	Context("ReadyForLLM -> ToolCallsPending", func() {
+		It("moves to ToolCallsPending if the LLM is not ready", func() {})
+	})
+	Context("ToolCallsPending -> LLMFinalAnswer", func() {
+		It("moves to LLMFinalAnswer if the LLM is ready", func() {})
+	})
+	Context("LLMFinalAnswer -> Completed", func() {
+		It("moves to completed if the LLM final answer is received", func() {})
+	})
 	Context("When reconciling a resource", func() {
 		const resourceName = "test-taskrun"
 		const taskName = "test-task"

@@ -235,6 +235,7 @@ spec:
                 - Ready
                 - Error
                 - Pending
+                - Initializing
                 type: string
               statusDetail:
                 description: StatusDetail provides additional details about the current
