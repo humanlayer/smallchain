@@ -283,7 +283,10 @@ func (a *eventAssertion) ToEmitEventContaining(substrings ...string) {
 				return
 			}
 		case <-timeout:
-			Fail("Expected event(s) containing substrings: " + strings.Join(substrings, ", ") + "found: " + strings.Join(found, ", "))
+			Fail(fmt.Sprintf("Expected event(s) containing substrings: %s found: %s",
+				strings.Join(substrings, ", "),
+				strings.Join(found, ", "),
+			))
 		}
 	}
 }

@@ -197,7 +197,7 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Requeue).To(BeFalse())
 
-			By("ensuring the taskrun status is updated iwth the llm final answer")
+			By("ensuring the taskrun status is updated with the llm final answer")
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTaskRun.name, Namespace: "default"}, taskRun)).To(Succeed())
 			Expect(taskRun.Status.Phase).To(Equal(kubechain.TaskRunPhaseFinalAnswer))
 			Expect(taskRun.Status.StatusDetail).To(ContainSubstring("LLM final response received"))
@@ -270,7 +270,7 @@ var _ = Describe("TaskRun Controller", func() {
 			By("ensuring the tool call was created")
 			toolCalls := &kubechain.TaskRunToolCallList{}
 			Expect(k8sClient.List(ctx, toolCalls, client.InNamespace("default"))).To(Succeed())
-			Expect(len(toolCalls.Items)).To(Equal(1))
+			Expect(toolCalls.Items).To(HaveLen(1))
 			Expect(toolCalls.Items[0].Spec.ToolRef.Name).To(Equal("fetch__fetch"))
 			Expect(toolCalls.Items[0].Spec.Arguments).To(Equal(`{"url": "https://api.example.com/data"}`))
 

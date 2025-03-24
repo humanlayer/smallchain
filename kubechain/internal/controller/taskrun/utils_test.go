@@ -284,6 +284,7 @@ var testTaskRunToolCall = &TestTaskRunToolCall{
 	name: "test-taskrun-toolcall",
 }
 
+// nolint:golint,unparam
 func setupSuiteObjects(ctx context.Context) (secret *corev1.Secret, llm *kubechain.LLM, agent *kubechain.Agent, task *kubechain.Task, teardown func()) {
 	secret = testSecret.Setup(ctx)
 	llm = testLLM.SetupWithStatus(ctx, kubechain.LLMStatus{
