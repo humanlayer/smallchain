@@ -18,6 +18,7 @@ package contactchannel
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/mail"
@@ -44,8 +45,7 @@ var (
 	channelTypeEmail = "email"
 
 	// API endpoints - variables so they can be overridden in tests
-	slackAPIEndpoint = "https://slack.com/api/auth.test"
-	humanLayerAPIURL = "https://api.humanlayer.dev/humanlayer/v1/function_calls"
+	humanLayerAPIURL = "https://api.humanlayer.dev/humanlayer/v1/project"
 
 	// Event reasons
 	eventReasonInitializing        = "Initializing"
@@ -65,38 +65,11 @@ type ContactChannelReconciler struct {
 // +kubebuilder:rbac:groups=kubechain.humanlayer.dev,resources=contactchannels/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
-// validateSlackToken verifies that the provided Slack token is valid by making an auth.test API call
-func (r *ContactChannelReconciler) validateSlackToken(token string) error {
-	req, err := http.NewRequest("GET", slackAPIEndpoint, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to make request: %w", err)
-	}
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			fmt.Printf("Error closing response body: %v\n", err)
-		}
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("invalid Slack token (status code: %d)", resp.StatusCode)
-	}
-
-	return nil
-}
-
-// validateHumanLayerAPIKey checks if the HumanLayer API key is valid
-func (r *ContactChannelReconciler) validateHumanLayerAPIKey(apiKey string) error {
+// validateHumanLayerAPIKey checks if the HumanLayer API key is valid and gets project info
+func (r *ContactChannelReconciler) validateHumanLayerAPIKey(apiKey string) (string, error) {
 	req, err := http.NewRequest("GET", humanLayerAPIURL, nil)
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+		return "", fmt.Errorf("failed to create request: %w", err)
 	}
 
 	req.Header.Set("Authorization", "Bearer "+apiKey)
@@ -104,7 +77,7 @@ func (r *ContactChannelReconciler) validateHumanLayerAPIKey(apiKey string) error
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to make request: %w", err)
+		return "", fmt.Errorf("failed to make request: %w", err)
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
@@ -114,13 +87,24 @@ func (r *ContactChannelReconciler) validateHumanLayerAPIKey(apiKey string) error
 
 	// For HumanLayer API, a 401 would indicate invalid token
 	if resp.StatusCode == http.StatusUnauthorized {
-		return fmt.Errorf("invalid HumanLayer API key")
+		return "", fmt.Errorf("invalid HumanLayer API key")
 	}
 
-	// The endpoint might return other status codes even with valid token
-	// since we're doing a GET without a proper body, but as long as
-	// it's not a 401, we consider the token valid
-	return nil
+	// Read the project details response
+	var responseMap map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&responseMap); err != nil {
+		return "", fmt.Errorf("failed to decode project response: %w", err)
+	}
+
+	// Extract project ID if available
+	projectID := ""
+	if project, ok := responseMap["id"]; ok {
+		if id, ok := project.(string); ok {
+			projectID = id
+		}
+	}
+
+	return projectID, nil
 }
 
 // validateEmailAddress checks if the email address is valid
@@ -175,10 +159,14 @@ func (r *ContactChannelReconciler) validateSecret(ctx context.Context, channel *
 		return fmt.Errorf("empty API key provided")
 	}
 
-	// First validate the HumanLayer API key
-	if err := r.validateHumanLayerAPIKey(apiKey); err != nil {
+	// First validate the HumanLayer API key and get project info
+	projectID, err := r.validateHumanLayerAPIKey(apiKey)
+	if err != nil {
 		return err
 	}
+
+	// Store the project ID for status update
+	channel.Status.HumanLayerProject = projectID
 
 	// Also validate channel-specific credential if needed
 	switch channel.Spec.ChannelType {
@@ -217,6 +205,15 @@ func (r *ContactChannelReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		statusUpdate.Status.Status = statusPending
 		statusUpdate.Status.StatusDetail = "Validating configuration"
 		r.recorder.Event(&channel, corev1.EventTypeNormal, eventReasonInitializing, "Starting validation")
+
+		// Update status immediately to show pending state
+		if err := r.Status().Patch(ctx, statusUpdate, client.MergeFrom(&channel)); err != nil {
+			log.Error(err, "Unable to update initial ContactChannel status")
+			return ctrl.Result{}, err
+		}
+
+		// Update our working copy with the patched status
+		channel = *statusUpdate
 	}
 
 	// Validate channel configuration

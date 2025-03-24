@@ -40,7 +40,6 @@ var _ = Describe("ContactChannel Controller", func() {
 
 		ctx := context.Background()
 		var mockHumanLayerServer *httptest.Server
-		var mockSlackServer *httptest.Server
 
 		typeNamespacedName := types.NamespacedName{
 			Name:      resourceName,
@@ -51,16 +50,10 @@ var _ = Describe("ContactChannel Controller", func() {
 			// Set up mock HumanLayer server
 			mockHumanLayerServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.Header.Get("Authorization") == "Bearer valid-humanlayer-key" {
+					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusOK)
-				} else {
-					w.WriteHeader(http.StatusUnauthorized)
-				}
-			}))
-
-			// Set up mock Slack server
-			mockSlackServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.Header.Get("Authorization") == "Bearer valid-slack-token" {
-					w.WriteHeader(http.StatusOK)
+					// Return mock project info
+					_, _ = w.Write([]byte(`{"id": "test-project-id", "name": "Test Project"}`))
 				} else {
 					w.WriteHeader(http.StatusUnauthorized)
 				}
@@ -68,12 +61,10 @@ var _ = Describe("ContactChannel Controller", func() {
 
 			// Override constants for testing
 			humanLayerAPIURL = mockHumanLayerServer.URL
-			slackAPIEndpoint = mockSlackServer.URL
 		})
 
 		AfterEach(func() {
 			mockHumanLayerServer.Close()
-			mockSlackServer.Close()
 
 			By("Cleanup the test secret")
 			secret := &corev1.Secret{}

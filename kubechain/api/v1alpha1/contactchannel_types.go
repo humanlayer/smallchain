@@ -79,6 +79,9 @@ type ContactChannelStatus struct {
 
 	// StatusDetail provides additional details about the current status
 	StatusDetail string `json:"statusDetail,omitempty"`
+
+	// HumanLayerProject is the project ID from HumanLayer API
+	HumanLayerProject string `json:"humanLayerProject,omitempty"`
 }
 
 // +kubebuilder:object:root=true
