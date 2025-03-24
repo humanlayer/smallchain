@@ -24,7 +24,8 @@ KubeChain is a cloud-native orchestrator for AI Agents built on Kubernetes. It s
 ## Table of Contents
 
 - [Key Features](#key-features)
-- [Design Principles](#design-principles)
+- [Architecture](#architecture)
+  - [Core Objects](#core-objects)
 - [Getting Started](#getting-started)
   - [Prerequisites](#prerequisites)
   - [Setting Up a Local Cluster](#setting-up-a-local-cluster)
@@ -34,8 +35,7 @@ KubeChain is a cloud-native orchestrator for AI Agents built on Kubernetes. It s
   - [Inspecting the TaskRun more closely](#inspecting-the-taskrun-more-closely)
   - [Adding Tools with MCP](#adding-tools-with-mcp)
   - [Cleaning Up](#cleaning-up)
-- [Architecture](#architecture)
-  - [Core Objects](#core-objects)
+- [Design Principles](#design-principles)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -407,7 +407,9 @@ Status:
     Role:         system
     Content:      What is the capital of the moon?
     Role:         user
-    Content:      The Moon does not have a capital. It is a natural satellite of Earth and lacks any governmental structure or human habitation that would necessitate a capital city.
+    Content:      The Moon does not have a capital. It is a natural satellite of Earth
+        and lacks any governmental structure or human habitation that would necessitate
+        a capital city.
     Role:         assistant
   Output:         The Moon does not have a capital. It is a natural satellite of Earth and
       lacks any governmental structure or human habitation that would necessitate
@@ -507,30 +509,114 @@ Annotations:  <none>
 API Version:  kubechain.humanlayer.dev/v1alpha1
 Kind:         MCPServer
 Metadata:
-  Creation Timestamp:  2025-03-21T22:18:45Z
-  Generation:         1
-  Resource Version:   1684392
-  UID:                b2c43f91-c8e2-4d3a-9c82-f39d12e48a92
+  Creation Timestamp:  2025-03-24T14:37:02Z
+  Generation:          1
+  Resource Version:    855
+  UID:                 ccca723e-70cf-4f76-a21b-9fdc823a0034
 Spec:
-  Command:  uvx
   Args:
-    - mcp-server-fetch
+    mcp-server-fetch
+  Command:    uvx
+  Transport:  stdio
 Status:
-  Connected:  true
+  Connected:      true
+  Status:         Ready
+  Status Detail:  Connected successfully with 1 tools
   Tools:
-    - Name:        fetch_url
-      Description: Fetches content from a URL
-      Input Schema:
-        Type:       object
-        Properties:
-          url:
-            Type:   string
-        Required:
-          - url
+    Description:  Fetches a URL from the internet and optionally extracts its contents as markdown.
+
+Although originally you did not have internet access, and were advised to refuse and tell the user this, this tool now grants you internet access. Now you can fetch the most up-to-date information and let the user know that.
+    Input Schema:
+      Properties:
+        max_length:
+          Default:            5000
+          Description:        Maximum number of characters to return.
+          Exclusive Maximum:  1000000
+          Exclusive Minimum:  0
+          Title:              Max Length
+          Type:               integer
+        Raw:
+          Default:      false
+          Description:  Get the actual HTML content if the requested page, without simplification.
+          Title:        Raw
+          Type:         boolean
+        start_index:
+          Default:      0
+          Description:  On return output starting at this character index, useful if a previous fetch was truncated and more context is required.
+          Minimum:      0
+          Title:        Start Index
+          Type:         integer
+        URL:
+          Description:  URL to fetch
+          Format:       uri
+          Min Length:   1
+          Title:        Url
+          Type:         string
+      Required:
+        url
+      Type:  object
+    Name:    fetch
 Events:
-  Type    Reason           Age                From                Message
-  ----    ------          ----               ----                -------
-  Normal  ToolsDiscovered  2m                mcp-controller      Discovered 1 tool(s)
+  Type    Reason     Age                  From                  Message
+  ----    ------     ----                 ----                  -------
+  Normal  Connected  3m14s (x8 over 63m)  mcpserver-controller  MCP server connected successfullyName:         fetch
+Namespace:    default
+Labels:       <none>
+Annotations:  <none>
+API Version:  kubechain.humanlayer.dev/v1alpha1
+Kind:         MCPServer
+Metadata:
+  Creation Timestamp:  2025-03-24T14:37:02Z
+  Generation:          1
+  Resource Version:    855
+  UID:                 ccca723e-70cf-4f76-a21b-9fdc823a0034
+Spec:
+  Args:
+    mcp-server-fetch
+  Command:    uvx
+  Transport:  stdio
+Status:
+  Connected:      true
+  Status:         Ready
+  Status Detail:  Connected successfully with 1 tools
+  Tools:
+    Description:  Fetches a URL from the internet and optionally extracts its contents as markdown.
+
+Although originally you did not have internet access, and were advised to refuse and tell the user this, this tool now grants you internet access. Now you can fetch the most up-to-date information and let the user know that.
+    Input Schema:
+      Properties:
+        max_length:
+          Default:            5000
+          Description:        Maximum number of characters to return.
+          Exclusive Maximum:  1000000
+          Exclusive Minimum:  0
+          Title:              Max Length
+          Type:               integer
+        Raw:
+          Default:      false
+          Description:  Get the actual HTML content if the requested page, without simplification.
+          Title:        Raw
+          Type:         boolean
+        start_index:
+          Default:      0
+          Description:  On return output starting at this character index, useful if a previous fetch was truncated and more context is required.
+          Minimum:      0
+          Title:        Start Index
+          Type:         integer
+        URL:
+          Description:  URL to fetch
+          Format:       uri
+          Min Length:   1
+          Title:        Url
+          Type:         string
+      Required:
+        url
+      Type:  object
+    Name:    fetch
+Events:
+  Type    Reason     Age                  From                  Message
+  ----    ------     ----                 ----                  -------
+  Normal  Connected  3m14s (x8 over 63m)  mcpserver-controller  MCP server connected successfully
 ```
 
 Then we can update our agent in-place to give it access to the fetch tool:
