@@ -4,6 +4,31 @@ metadata:
   labels:
     app.kubernetes.io/name: kubechain
     app.kubernetes.io/managed-by: kustomize
-  name: contactchannel-sample
+  name: slack-channel-sample
 spec:
-  # TODO(user): Add fields here
+  channelType: slack
+  apiKeyFrom:
+    secretKeyRef:
+      name: humanlayer-api-key
+      key: api-key
+  slackConfig:
+    channelOrUserID: "C01234ABCDE"  # Replace with actual Slack channel ID
+    contextAboutChannelOrUser: "A channel used for approving deployment requests"
+---
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: ContactChannel
+metadata:
+  labels:
+    app.kubernetes.io/name: kubechain
+    app.kubernetes.io/managed-by: kustomize
+  name: email-channel-sample
+spec:
+  channelType: email
+  apiKeyFrom:
+    secretKeyRef:
+      name: humanlayer-api-key
+      key: api-key
+  emailConfig:
+    address: "approvals@example.com"
+    contextAboutUser: "The approval team for production deployments"
+    subject: "Action Required: Deployment Approval"

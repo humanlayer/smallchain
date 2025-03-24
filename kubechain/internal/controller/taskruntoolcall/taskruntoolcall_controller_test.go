@@ -6,6 +6,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
@@ -175,10 +176,36 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 
 		It("should transition to AwaitingHumanApproval when MCP tool's server has approval contact channel", func() {
 			By("creating a contact channel")
+
+			// Create a mock secret first
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-secret",
+					Namespace: "default",
+				},
+				Data: map[string][]byte{
+					"api-key": []byte("test-key"),
+				},
+			}
+			_ = k8sClient.Delete(ctx, secret) // Delete if exists
+			Expect(k8sClient.Create(ctx, secret)).To(Succeed())
+
 			contactChannel := &kubechainv1alpha1.ContactChannel{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-contact-channel",
 					Namespace: "default",
+				},
+				Spec: kubechainv1alpha1.ContactChannelSpec{
+					ChannelType: "slack",
+					APIKeyFrom: kubechainv1alpha1.APIKeySource{
+						SecretKeyRef: kubechainv1alpha1.SecretKeyRef{
+							Name: "test-secret",
+							Key:  "api-key",
+						},
+					},
+					SlackConfig: &kubechainv1alpha1.SlackChannelConfig{
+						ChannelOrUserID: "C12345678",
+					},
 				},
 				Status: kubechainv1alpha1.ContactChannelStatus{
 					Ready:  true,
@@ -274,6 +301,7 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 			Expect(k8sClient.Delete(ctx, contactChannel)).To(Succeed())
 			Expect(k8sClient.Delete(ctx, mcpServer)).To(Succeed())
 			Expect(k8sClient.Delete(ctx, tool)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, secret)).To(Succeed())
 		})
 	})
 })
