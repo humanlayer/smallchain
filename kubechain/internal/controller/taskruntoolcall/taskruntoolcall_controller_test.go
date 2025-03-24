@@ -172,5 +172,108 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 			By("checking that a validation failed event was created")
 			utils.ExpectRecorder(eventRecorder).ToEmitEventContaining("ExecutionFailed")
 		})
+
+		It("should transition to AwaitingHumanApproval when MCP tool's server has approval contact channel", func() {
+			By("creating a contact channel")
+			contactChannel := &kubechainv1alpha1.ContactChannel{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-contact-channel",
+					Namespace: "default",
+				},
+				Status: kubechainv1alpha1.ContactChannelStatus{
+					Ready:  true,
+					Status: "Ready",
+				},
+			}
+			Expect(k8sClient.Create(ctx, contactChannel)).To(Succeed())
+
+			By("creating an MCPServer with approval contact channel")
+			mcpServer := &kubechainv1alpha1.MCPServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-mcp-server",
+					Namespace: "default",
+				},
+				Spec: kubechainv1alpha1.MCPServerSpec{
+					Transport: "stdio",
+					ApprovalContactChannel: &kubechainv1alpha1.LocalObjectReference{
+						Name: "test-contact-channel",
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, mcpServer)).To(Succeed())
+
+			By("creating an MCP tool")
+			tool := &kubechainv1alpha1.Tool{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-mcp-server-test-tool",
+					Namespace: "default",
+				},
+				Spec: kubechainv1alpha1.ToolSpec{
+					ToolType:    "function",
+					Name:        "test-mcp-server__test-tool",
+					Description: "A tool that requires human approval",
+					Execute: kubechainv1alpha1.ToolExecute{
+						Builtin: &kubechainv1alpha1.BuiltinToolSpec{
+							Name: "add",
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, tool)).To(Succeed())
+
+			By("creating the taskruntoolcall")
+			trtc := &kubechainv1alpha1.TaskRunToolCall{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName,
+					Namespace: "default",
+				},
+				Spec: kubechainv1alpha1.TaskRunToolCallSpec{
+					TaskRunRef: kubechainv1alpha1.LocalObjectReference{
+						Name: "parent-taskrun",
+					},
+					ToolRef: kubechainv1alpha1.LocalObjectReference{
+						Name: "test-mcp-server__test-tool",
+					},
+					Arguments: `{"a": 2, "b": 3}`,
+				},
+			}
+			Expect(k8sClient.Create(ctx, trtc)).To(Succeed())
+
+			By("reconciling the taskruntoolcall")
+			eventRecorder := record.NewFakeRecorder(10)
+			reconciler := &TaskRunToolCallReconciler{
+				Client:   k8sClient,
+				Scheme:   k8sClient.Scheme(),
+				recorder: eventRecorder,
+			}
+
+			// First reconciliation (but not the contrition variety) - should initialize status
+			_, err := reconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Second reconciliation - should transition to AwaitingHumanApproval
+			_, err = reconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("checking the taskruntoolcall status")
+			updatedTRTC := &kubechainv1alpha1.TaskRunToolCall{}
+			err = k8sClient.Get(ctx, typeNamespacedName, updatedTRTC)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedTRTC.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunToolCallPhasePending))
+			Expect(updatedTRTC.Status.Status).To(Equal("AwaitingHumanApproval"))
+			Expect(updatedTRTC.Status.StatusDetail).To(Equal("Waiting for human approval via contact channel test-contact-channel"))
+
+			By("checking that appropriate events were emitted")
+			utils.ExpectRecorder(eventRecorder).ToEmitEventContaining("AwaitingHumanApproval")
+
+			By("Cleanup")
+			Expect(k8sClient.Delete(ctx, contactChannel)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, mcpServer)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, tool)).To(Succeed())
+		})
 	})
 })
