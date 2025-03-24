@@ -379,9 +379,9 @@ kubectl get taskrun -o jsonpath='{.items[*].status.output}'
 
 and you'll see 
 
-```
-The Moon does not have a capital. It is a natural satellite of Earth and lacks any governmental structure or human habitation that would necessitate a capital city.
-```
+
+> The Moon does not have a capital. It is a natural satellite of Earth and lacks any governmental structure or human habitation that would necessitate a capital city.
+
 
 ### Inspecting the TaskRun more closely
 
