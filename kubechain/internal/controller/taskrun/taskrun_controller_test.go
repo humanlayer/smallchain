@@ -21,9 +21,138 @@ import (
 	. "github.com/humanlayer/smallchain/kubechain/test/utils"
 )
 
+type TestSecret struct {
+	name   string
+	secret *corev1.Secret
+}
+
+func (t *TestSecret) Setup(ctx context.Context) *corev1.Secret {
+	By("creating the secret")
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      t.name,
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"api-key": []byte("test-api-key"),
+		},
+	}
+	err := k8sClient.Create(ctx, secret)
+	Expect(err).NotTo(HaveOccurred())
+	t.secret = secret
+	return secret
+}
+
+func (t *TestSecret) Teardown(ctx context.Context) {
+	By("deleting the secret")
+	Expect(k8sClient.Delete(ctx, t.secret)).To(Succeed())
+}
+
+var testSecret = &TestSecret{
+	name: "test-secret",
+}
+
+type TestLLM struct {
+	name string
+	llm  *kubechain.LLM
+}
+
+func (t *TestLLM) Setup(ctx context.Context) *kubechain.LLM {
+	By("creating the llm")
+	llm := &kubechain.LLM{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      t.name,
+			Namespace: "default",
+		},
+		Spec: kubechain.LLMSpec{
+			Provider: "openai",
+			APIKeyFrom: kubechain.APIKeySource{
+				SecretKeyRef: kubechain.SecretKeyRef{
+					Name: testSecret.name,
+					Key:  "api-key",
+				},
+			},
+		},
+	}
+	err := k8sClient.Create(ctx, llm)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(k8sClient.Get(ctx, types.NamespacedName{Name: t.name, Namespace: "default"}, llm)).To(Succeed())
+	t.llm = llm
+	return llm
+}
+
+func (t *TestLLM) SetupWithStatus(ctx context.Context, status kubechain.LLMStatus) *kubechain.LLM {
+	llm := t.Setup(ctx)
+	llm.Status = status
+	Expect(k8sClient.Status().Update(ctx, llm)).To(Succeed())
+	t.llm = llm
+	return llm
+}
+
+func (t *TestLLM) Teardown(ctx context.Context) {
+	By("deleting the llm")
+	Expect(k8sClient.Delete(ctx, t.llm)).To(Succeed())
+}
+
+var testLLM = &TestLLM{
+	name: "test-llm",
+}
+
+type TestAgent struct {
+	name       string
+	llmName    string
+	system     string
+	mcpServers []kubechain.LocalObjectReference
+	agent      *kubechain.Agent
+}
+
+func (t *TestAgent) Setup(ctx context.Context) *kubechain.Agent {
+	By("creating the agent")
+	agent := &kubechain.Agent{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: t.name,
+
+			Namespace: "default",
+		},
+		Spec: kubechain.AgentSpec{
+			LLMRef: kubechain.LocalObjectReference{
+				Name: t.llmName,
+			},
+			System:     t.system,
+			MCPServers: t.mcpServers,
+		},
+	}
+	err := k8sClient.Create(ctx, agent)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(k8sClient.Get(ctx, types.NamespacedName{Name: t.name, Namespace: "default"}, agent)).To(Succeed())
+	t.agent = agent
+	return agent
+}
+
+func (t *TestAgent) SetupWithStatus(ctx context.Context, status kubechain.AgentStatus) *kubechain.Agent {
+	agent := t.Setup(ctx)
+	agent.Status = status
+	Expect(k8sClient.Status().Update(ctx, agent)).To(Succeed())
+	t.agent = agent
+	return agent
+}
+
+func (t *TestAgent) Teardown(ctx context.Context) {
+	By("deleting the agent")
+	Expect(k8sClient.Delete(ctx, t.agent)).To(Succeed())
+}
+
+var testAgent = &TestAgent{
+	name:       "test-agent",
+	llmName:    testLLM.name,
+	system:     "you are a testing assistant",
+	mcpServers: []kubechain.LocalObjectReference{},
+}
+
 type TestTask struct {
 	name      string
 	agentName string
+	message   string
 	task      *kubechain.Task
 }
 
@@ -38,7 +167,7 @@ func (t *TestTask) Setup(ctx context.Context) *kubechain.Task {
 			AgentRef: kubechain.LocalObjectReference{
 				Name: t.agentName,
 			},
-			Message: "what is the capital of the moon?",
+			Message: t.message,
 		},
 	}
 	err := k8sClient.Create(ctx, task)
@@ -105,11 +234,35 @@ func (t *TestTaskRun) Teardown(ctx context.Context) {
 var testTask = &TestTask{
 	name:      "test-task",
 	agentName: "test-agent",
+	message:   "what is the capital of the moon?",
 }
 
 var testTaskRun = &TestTaskRun{
 	name:     "test-taskrun",
 	taskName: testTask.name,
+}
+
+func setupSuiteObjects(ctx context.Context) (secret *corev1.Secret, llm *kubechain.LLM, agent *kubechain.Agent, task *kubechain.Task, teardown func()) {
+	secret = testSecret.Setup(ctx)
+	llm = testLLM.SetupWithStatus(ctx, kubechain.LLMStatus{
+		Status: "Ready",
+		Ready:  true,
+	})
+	agent = testAgent.SetupWithStatus(ctx, kubechain.AgentStatus{
+		Status: "Ready",
+		Ready:  true,
+	})
+	task = testTask.SetupWithStatus(ctx, kubechain.TaskStatus{
+		Status: "Ready",
+		Ready:  true,
+	})
+	teardown = func() {
+		testSecret.Teardown(ctx)
+		testLLM.Teardown(ctx)
+		testAgent.Teardown(ctx)
+		testTask.Teardown(ctx)
+	}
+	return secret, llm, agent, task, teardown
 }
 
 func reconciler() (*TaskRunReconciler, *record.FakeRecorder) {
@@ -197,8 +350,64 @@ var _ = Describe("TaskRun Controller", func() {
 			ExpectRecorder(recorder).ToEmitEventContaining("TaskNotReady")
 		})
 	})
+	Context("Initializing -> ReadyForLLM", func() {
+		FIt("moves to ReadyForLLM if the task is ready", func() {
+			_, _, agent, task, teardown := setupSuiteObjects(ctx)
+			defer teardown()
+
+			taskRun := testTaskRun.SetupWithStatus(ctx, kubechain.TaskRunStatus{
+				Phase: kubechain.TaskRunPhaseInitializing,
+			})
+			defer testTaskRun.Teardown(ctx)
+
+			reconciler, recorder := reconciler()
+
+			result, err := reconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{Name: testTaskRun.name, Namespace: "default"},
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeTrue())
+
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTaskRun.name, Namespace: "default"}, taskRun)).To(Succeed())
+			Expect(taskRun.Status.Phase).To(Equal(kubechain.TaskRunPhaseReadyForLLM))
+			Expect(taskRun.Status.StatusDetail).To(ContainSubstring("Ready to send to LLM"))
+			Expect(taskRun.Status.ContextWindow).To(HaveLen(2))
+			Expect(taskRun.Status.ContextWindow[0].Role).To(Equal("system"))
+			Expect(taskRun.Status.ContextWindow[0].Content).To(ContainSubstring(agent.Spec.System))
+			Expect(taskRun.Status.ContextWindow[1].Role).To(Equal("user"))
+			Expect(taskRun.Status.ContextWindow[1].Content).To(ContainSubstring(task.Spec.Message))
+			ExpectRecorder(recorder).ToEmitEventContaining("ValidationSucceeded")
+		})
+	})
 	Context("Pending -> ReadyForLLM", func() {
-		It("moves to ReadyForLLM if upstream dependencies are ready", func() {})
+		It("moves to ReadyForLLM if upstream dependencies are ready", func() {
+			_, _, agent, task, teardown := setupSuiteObjects(ctx)
+			defer teardown()
+
+			taskRun := testTaskRun.SetupWithStatus(ctx, kubechain.TaskRunStatus{
+				Phase: kubechain.TaskRunPhasePending,
+			})
+			defer testTaskRun.Teardown(ctx)
+
+			reconciler, recorder := reconciler()
+
+			result, err := reconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{Name: testTaskRun.name, Namespace: "default"},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeTrue())
+
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTaskRun.name, Namespace: "default"}, taskRun)).To(Succeed())
+			Expect(taskRun.Status.Phase).To(Equal(kubechain.TaskRunPhaseReadyForLLM))
+			Expect(taskRun.Status.StatusDetail).To(ContainSubstring("Ready to send to LLM"))
+			Expect(taskRun.Status.ContextWindow).To(HaveLen(2))
+			Expect(taskRun.Status.ContextWindow[0].Role).To(Equal("system"))
+			Expect(taskRun.Status.ContextWindow[0].Content).To(ContainSubstring(agent.Spec.System))
+			Expect(taskRun.Status.ContextWindow[1].Role).To(Equal("user"))
+			Expect(taskRun.Status.ContextWindow[1].Content).To(ContainSubstring(task.Spec.Message))
+			ExpectRecorder(recorder).ToEmitEventContaining("ValidationSucceeded")
+		})
 	})
 	Context("ReadyForLLM -> LLMFinalAnswer", func() {
 		It("moves to LLMFinalAnswer if the LLM is ready", func() {})

@@ -147,11 +147,11 @@ func (r *TaskRunReconciler) validateTaskAndAgent(ctx context.Context, taskRun *k
 	return task, &agent, ctrl.Result{}, nil
 }
 
-// initializeTaskRun sets up the initial state of a TaskRun with the correct context and phase
-func (r *TaskRunReconciler) initializeTaskRun(ctx context.Context, taskRun *kubechainv1alpha1.TaskRun, statusUpdate *kubechainv1alpha1.TaskRun, task *kubechainv1alpha1.Task, agent *kubechainv1alpha1.Agent) (ctrl.Result, error) {
+// prepareForLLM sets up the initial state of a TaskRun with the correct context and phase
+func (r *TaskRunReconciler) prepareForLLM(ctx context.Context, taskRun *kubechainv1alpha1.TaskRun, statusUpdate *kubechainv1alpha1.TaskRun, task *kubechainv1alpha1.Task, agent *kubechainv1alpha1.Agent) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
-	if statusUpdate.Status.Phase == "" || statusUpdate.Status.Phase == kubechainv1alpha1.TaskRunPhasePending {
+	if statusUpdate.Status.Phase == kubechainv1alpha1.TaskRunPhaseInitializing || statusUpdate.Status.Phase == kubechainv1alpha1.TaskRunPhasePending {
 		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseReadyForLLM
 		statusUpdate.Status.Ready = true
 		statusUpdate.Status.ContextWindow = []kubechainv1alpha1.Message{
@@ -484,7 +484,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	// Step 2: Initialize Phase if necessary
-	if result, err := r.initializeTaskRun(ctx, &taskRun, statusUpdate, task, agent); err != nil || !result.IsZero() {
+	if result, err := r.prepareForLLM(ctx, &taskRun, statusUpdate, task, agent); err != nil || !result.IsZero() {
 		return result, err
 	}
 
