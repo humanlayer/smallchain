@@ -485,6 +485,8 @@ and you'll see
 
 > The Moon does not have a capital. It is a natural satellite of Earth and lacks any governmental structure or human habitation that would necessitate a capital city.
 
+More broadly, the taskrun is a component of the LLM / Agent / Task relationship.
+
 ```mermaid
 flowchart RL
     Agent
@@ -785,15 +787,18 @@ EOF
 You should see some events in the output of 
 
 ```
-kubectl get events
+kubectl get events --watch
 ```
 
 ```
-0s          Normal    ValidationSucceeded       task/fetch-task                                      Task validation successful
-0s          Normal    ValidationSucceeded       taskrun/fetch-task-1                                 Task validated successfully
-0s          Normal    ToolCallCreated           taskrun/fetch-task-1                                 Created TaskRunToolCall fetch-task-1-toolcall-01
-0s          Normal    ExecutionSucceeded        taskruntoolcall/fetch-task-1-toolcall-01             MCP tool "fetch__fetch" executed successfully
-0s          Normal    LLMFinalAnswer            taskrun/fetch-task-1                                 LLM response received successfully
+0s          Normal   ValidationSucceeded         taskrun/fetch-task-1                                 Task validated successfully
+0s          Normal   SendingContextWindowToLLM   taskrun/fetch-task-1                                 Sending context window to LLM
+0s          Normal   ToolCallsPending            taskrun/fetch-task-1                                 LLM response received, tool calls pending
+0s          Normal   ToolCallCreated             taskrun/fetch-task-1                                 Created TaskRunToolCall fetch-task-1-toolcall-01
+0s          Normal   ExecutionSucceeded          taskruntoolcall/fetch-task-1-toolcall-01             MCP tool "fetch__fetch" executed successfully
+0s          Normal   AllToolCallsCompleted       taskrun/fetch-task-1                                 All tool calls completed, ready to send tool results to LLM
+0s          Normal   SendingContextWindowToLLM   taskrun/fetch-task-1                                 Sending context window to LLM
+0s          Normal   LLMFinalAnswer              taskrun/fetch-task-1                                 LLM response received successfully
 ```
 
 
@@ -801,7 +806,32 @@ kubectl get events
 kubectl get taskrun fetch-task-1 -o jsonpath='{.status.output}'
 ```
 
-> The front page of PlanetScale.com highlights their new feature: blazing fast NVMe drives with unlimited IOPS available through [PlanetScale Metal](https://www.planetscale.com/metal). This platform, backed by Vitess, aims to simplify achieving a shared-nothing architecture with explicit sharding, providing horizontal scale, performance, and simplified operations for businesses of all sizes.
+> The URL [https://swapi.dev/api/people/1](https://swapi.dev/api/people/1) contains the following data about a Star Wars character:
+> 
+> - **Name**: Luke Skywalker
+> - **Height**: 172 cm
+> - **Mass**: 77 kg
+> - **Hair Color**: Blond
+> - **Skin Color**: Fair
+> - **Eye Color**: Blue
+> - **Birth Year**: 19BBY
+> - **Gender**: Male
+> - **Homeworld**: [Link to Homeworld](https://swapi.dev/api/planets/1/)
+> - **Films**: Appeared in several films, linked as:
+>   - [Film 1](https://swapi.dev/api/films/1/)
+>   - [Film 2](https://swapi.dev/api/films/2/)
+>   - [Film 3](https://swapi.dev/api/films/3/)
+>   - [Film 6](https://swapi.dev/api/films/6/)
+> - **Species**: None listed
+> - **Vehicles**:
+>   - [Vehicle 14](https://swapi.dev/api/vehicles/14/)
+>   - [Vehicle 30](https://swapi.dev/api/vehicles/30/)
+> - **Starships**:
+>   - [Starship 12](https://swapi.dev/api/starships/12/)
+>   - [Starship 22](https://swapi.dev/api/starships/22/)
+> - **Created**: 2014-12-09T13:50:51.644000Z
+> - **Edited**: 2014-12-20T21:17:56.891000Z
+> - **URL**: [https://swapi.dev/api/people/1/](https://swapi.dev/api/people/1/
 
 and you can describe the taskrun to see the full context window and tool-calling turns
 
@@ -916,16 +946,16 @@ Annotations:  <none>
 API Version:  kubechain.humanlayer.dev/v1alpha1
 Kind:         TaskRun
 Metadata:
-  Creation Timestamp:  2025-03-24T16:30:06Z
+  Creation Timestamp:  2025-03-25T22:32:30Z
   Generation:          1
   Owner References:
     API Version:     kubechain.humanlayer.dev/v1alpha1
     Controller:      true
     Kind:            Task
     Name:            fetch-task
-    UID:             430ba269-a214-4ba6-9ab8-16c90204a607
-  Resource Version:  1972
-  UID:               547e3d81-4101-454b-b47a-fb5dcc379d99
+    UID:             b461354c-f4c7-4cd3-93ec-7546c892d10e
+  Resource Version:  1731
+  UID:               e57a39a2-4c6f-42db-80f0-d48f9bd1d5b4
 Spec:
   Task Ref:
     Name:  fetch-task
@@ -934,40 +964,90 @@ Status:
     Content:  You are a helpful assistant. Your job is to help the user with their tasks.
 
     Role:     system
-    Content:  What is on the front page of planetscale.com?
+    Content:  what is the data at https://swapi.dev/api/people/1?
     Role:     user
     Content:
     Role:     assistant
     Tool Calls:
       Function:
-        Arguments:  {"url":"https://www.planetscale.com","max_length":500}
+        Arguments:  {"url":"https://swapi.dev/api/people/1"}
         Name:       fetch__fetch
-      Id:           call_I6ERhMGu5GPzon2ItXwnWnbu
+      Id:           call_sLHvRHebP7YkpLUsAdKiF6u0
       Type:         function
-    Content:        Contents of https://www.planetscale.com/:
-⚡ Blazing fast NVMe drives with unlimited IOPS now available. [Read about PlanetScale Metal](/blog/announcing-metal) ⚡
-
-Backed by Vitess, our cloud platform makes achieving a shared-nothing architecture with explicit sharding simpler than ever. PlanetScale’s platform delivers horizontal scale, performance, and simplified operations no matter the size your business.
-
-[PlanetScale Metal](/metal)’s blazing fast NVMe drives unlock **unlimited IOPS**, bringing data center performance to the cloud. We
-
-<error>Content truncated. Call the fetch tool with a start_index of 500 to get more content.</error>
+    Content:        Content type application/json cannot be simplified to markdown, but here is the raw content:
+Contents of https://swapi.dev/api/people/1:
+{"name":"Luke Skywalker","height":"172","mass":"77","hair_color":"blond","skin_color":"fair","eye_color":"blue","birth_year":"19BBY","gender":"male","homeworld":"https://swapi.dev/api/planets/1/","films":["https://swapi.dev/api/films/1/","https://swapi.dev/api/films/2/","https://swapi.dev/api/films/3/","https://swapi.dev/api/films/6/"],"species":[],"vehicles":["https://swapi.dev/api/vehicles/14/","https://swapi.dev/api/vehicles/30/"],"starships":["https://swapi.dev/api/starships/12/","https://swapi.dev/api/starships/22/"],"created":"2014-12-09T13:50:51.644000Z","edited":"2014-12-20T21:17:56.891000Z","url":"https://swapi.dev/api/people/1/"}
     Role:          tool
-    Tool Call Id:  call_I6ERhMGu5GPzon2ItXwnWnbu
-    Content:       The front page of PlanetScale.com highlights their new feature: blazing fast NVMe drives with unlimited IOPS available through [PlanetScale Metal](https://www.planetscale.com/metal). This platform, backed by Vitess, aims to simplify achieving a shared-nothing architecture with explicit sharding, providing horizontal scale, performance, and simplified operations for businesses of all sizes.
-    Role:          assistant
-  Output:          The front page of PlanetScale.com highlights their new feature: blazing fast NVMe drives with unlimited IOPS available through [PlanetScale Metal](https://www.planetscale.com/metal). This platform, backed by Vitess, aims to simplify achieving a shared-nothing architecture with explicit sharding, providing horizontal scale, performance, and simplified operations for businesses of all sizes.
-  Phase:           FinalAnswer
-  Ready:           true
-  Status:          Ready
-  Status Detail:   LLM final response received
+    Tool Call Id:  call_sLHvRHebP7YkpLUsAdKiF6u0
+    Content:       The URL [https://swapi.dev/api/people/1](https://swapi.dev/api/people/1) contains the following data about a Star Wars character:
+
+- **Name**: Luke Skywalker
+- **Height**: 172 cm
+- **Mass**: 77 kg
+- **Hair Color**: Blond
+- **Skin Color**: Fair
+- **Eye Color**: Blue
+- **Birth Year**: 19BBY
+- **Gender**: Male
+- **Homeworld**: [Link to Homeworld](https://swapi.dev/api/planets/1/)
+- **Films**: Appeared in several films, linked as:
+  - [Film 1](https://swapi.dev/api/films/1/)
+  - [Film 2](https://swapi.dev/api/films/2/)
+  - [Film 3](https://swapi.dev/api/films/3/)
+  - [Film 6](https://swapi.dev/api/films/6/)
+- **Species**: None listed
+- **Vehicles**:
+  - [Vehicle 14](https://swapi.dev/api/vehicles/14/)
+  - [Vehicle 30](https://swapi.dev/api/vehicles/30/)
+- **Starships**:
+  - [Starship 12](https://swapi.dev/api/starships/12/)
+  - [Starship 22](https://swapi.dev/api/starships/22/)
+- **Created**: 2014-12-09T13:50:51.644000Z
+- **Edited**: 2014-12-20T21:17:56.891000Z
+- **URL**: [https://swapi.dev/api/people/1/](https://swapi.dev/api/people/1/)
+    Role:  assistant
+  Output:  The URL [https://swapi.dev/api/people/1](https://swapi.dev/api/people/1) contains the following data about a Star Wars character:
+
+- **Name**: Luke Skywalker
+- **Height**: 172 cm
+- **Mass**: 77 kg
+- **Hair Color**: Blond
+- **Skin Color**: Fair
+- **Eye Color**: Blue
+- **Birth Year**: 19BBY
+- **Gender**: Male
+- **Homeworld**: [Link to Homeworld](https://swapi.dev/api/planets/1/)
+- **Films**: Appeared in several films, linked as:
+  - [Film 1](https://swapi.dev/api/films/1/)
+  - [Film 2](https://swapi.dev/api/films/2/)
+  - [Film 3](https://swapi.dev/api/films/3/)
+  - [Film 6](https://swapi.dev/api/films/6/)
+- **Species**: None listed
+- **Vehicles**:
+  - [Vehicle 14](https://swapi.dev/api/vehicles/14/)
+  - [Vehicle 30](https://swapi.dev/api/vehicles/30/)
+- **Starships**:
+  - [Starship 12](https://swapi.dev/api/starships/12/)
+  - [Starship 22](https://swapi.dev/api/starships/22/)
+- **Created**: 2014-12-09T13:50:51.644000Z
+- **Edited**: 2014-12-20T21:17:56.891000Z
+- **URL**: [https://swapi.dev/api/people/1/](https://swapi.dev/api/people/1/)
+  Phase:  FinalAnswer
+  Ready:  true
+  Span Context:
+    Span ID:      6f20c4536fa90bdc
+    Trace ID:     aab3bbe4e9ea84218ee0a848b5958dcb
+  Status:         Ready
+  Status Detail:  LLM final response received
 Events:
-  Type    Reason               Age    From                Message
-  ----    ------               ----   ----                -------
-  Normal  Waiting              3m12s  taskrun-controller  Waiting for task "fetch-task" to become ready
-  Normal  ValidationSucceeded  3m12s  taskrun-controller  Task validated successfully
-  Normal  ToolCallCreated      3m11s  taskrun-controller  Created TaskRunToolCall fetch-task-1-toolcall-01
-  Normal  LLMFinalAnswer       3m5s   taskrun-controller  LLM response received successfully
+  Type    Reason                     Age                  From                Message
+  ----    ------                     ----                 ----                -------
+  Normal  ValidationSucceeded        114s                 taskrun-controller  Task validated successfully
+  Normal  ToolCallsPending           114s                 taskrun-controller  LLM response received, tool calls pending
+  Normal  ToolCallCreated            114s                 taskrun-controller  Created TaskRunToolCall fetch-task-1-toolcall-01
+  Normal  SendingContextWindowToLLM  109s (x2 over 114s)  taskrun-controller  Sending context window to LLM
+  Normal  AllToolCallsCompleted      109s                 taskrun-controller  All tool calls completed, ready to send tool results to LLM
+  Normal  LLMFinalAnswer             105s                 taskrun-controller  LLM response received successfully
 ```
 
 That's it! Go add your favorite MCPs and start running durable agents in Kubernetes!
