@@ -19,7 +19,6 @@ package llm
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"time"
 
 	"github.com/tmc/langchaingo/llms"
@@ -282,32 +281,6 @@ func (r *LLMReconciler) validateProviderConfig(ctx context.Context, llm *kubecha
 	return nil
 }
 
-func (r *LLMReconciler) validateOpenAIKey(apiKey string) error {
-	req, err := http.NewRequest("GET", "https://api.openai.com/v1/models", nil)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to make request: %w", err)
-	}
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			fmt.Printf("Error closing response body: %v\n", err)
-		}
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("invalid API key (status code: %d)", resp.StatusCode)
-	}
-
-	return nil
-}
-
 func (r *LLMReconciler) validateSecret(ctx context.Context, llm *kubechainv1alpha1.LLM) (string, error) {
 	// All providers require API keys
 	if llm.Spec.APIKeyFrom == nil {
@@ -327,12 +300,6 @@ func (r *LLMReconciler) validateSecret(ctx context.Context, llm *kubechainv1alph
 	apiKey, exists := secret.Data[key]
 	if !exists {
 		return "", fmt.Errorf("key %q not found in secret", key)
-	}
-
-	if llm.Spec.Provider == "openai" {
-		if err := r.validateOpenAIKey(string(apiKey)); err != nil {
-			return "", fmt.Errorf("OpenAI API key validation failed: %w", err)
-		}
 	}
 
 	return string(apiKey), nil
