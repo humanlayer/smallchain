@@ -25,6 +25,10 @@ type MCPServerManager struct {
 	client      ctrlclient.Client // Kubernetes client for accessing resources
 }
 
+type MCPManagerInterface interface {
+	CallTool(ctx context.Context, serverName, toolName string, args map[string]interface{}) (string, error)
+}
+
 // MCPConnection represents a connection to an MCP server
 type MCPConnection struct {
 	// ServerName is the name of the MCPServer resource
