@@ -223,7 +223,7 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 	})
 
 	// Tests for approval workflow
-	Context("Pending -> AwaitingHumanApproval (MCP Tool)", func() {
+	Context("Pending -> AwaitingHumanApproval (MCP Tool) -> Ready:Succeeded", func() {
 		It("transitions to AwaitingHumanApproval when MCPServer has approval channel", func() {
 			// Note setupTestApprovalResources sets up the MCP server, MCP tool, and TaskRunToolCall
 			trtc, teardown := setupTestApprovalResources(ctx)
@@ -237,9 +237,10 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 			}
 
 			reconciler.HLClient = &humanlayer.MockHumanLayerClient{
-				ShouldFail:  false,
-				StatusCode:  200,
-				ReturnError: nil,
+				ShouldFail:           false,
+				StatusCode:           200,
+				ReturnError:          nil,
+				ShouldReturnApproval: true,
 			}
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{
@@ -272,6 +273,32 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 			By("checking that appropriate events were emitted")
 			utils.ExpectRecorder(recorder).ToEmitEventContaining("AwaitingHumanApproval")
 			Expect(updatedTRTC.Status.Status).To(Equal(kubechainv1alpha1.TaskRunToolCallStatusTypeAwaitingHumanApproval))
+
+			By("reconciling the taskrunttoolcall again to check if it is approved")
+			reconciler.MCPManager = &MockMCPManager{
+				NeedsApproval: false,
+			}
+			result, err = reconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      trtc.Name,
+					Namespace: trtc.Namespace,
+				},
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeFalse())
+
+			By("checking the taskruntoolcall status is set to Ready:Succeeded")
+			updatedTRTC = &kubechainv1alpha1.TaskRunToolCall{}
+			err = k8sClient.Get(ctx, types.NamespacedName{
+				Name:      trtc.Name,
+				Namespace: trtc.Namespace,
+			}, updatedTRTC)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedTRTC.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunToolCallPhaseSucceeded))
+			Expect(updatedTRTC.Status.Status).To(Equal(kubechainv1alpha1.TaskRunToolCallStatusTypeReady))
+			Expect(updatedTRTC.Status.Result).To(Equal("5")) // From our mock implementation
 		})
 	})
 
