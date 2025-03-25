@@ -122,7 +122,7 @@ var _ = Describe("Task Controller", func() {
 			err = k8sClient.Get(ctx, typeNamespacedName, updatedTask)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedTask.Status.Ready).To(BeTrue())
-			Expect(updatedTask.Status.Status).To(Equal("Ready"))
+			Expect(updatedTask.Status.Status).To(Equal(kubechainv1alpha1.TaskStatusReady))
 			Expect(updatedTask.Status.StatusDetail).To(Equal("Task Run Created"))
 
 			By("checking that TaskRun creation event was created")
@@ -167,7 +167,7 @@ var _ = Describe("Task Controller", func() {
 			err = k8sClient.Get(ctx, typeNamespacedName, updatedTask)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedTask.Status.Ready).To(BeFalse())
-			Expect(updatedTask.Status.Status).To(Equal("Error"))
+			Expect(updatedTask.Status.Status).To(Equal(kubechainv1alpha1.TaskStatusError))
 			Expect(updatedTask.Status.StatusDetail).To(ContainSubstring(`"nonexistent-agent" not found`))
 
 			By("checking that a failure event was created")

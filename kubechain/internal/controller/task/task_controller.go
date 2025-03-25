@@ -71,7 +71,7 @@ func (r *TaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	if err := r.validateAgent(ctx, &task); err != nil {
 		logger.Error(err, "Agent validation failed")
 		statusUpdate.Status.Ready = false
-		statusUpdate.Status.Status = "Error"
+		statusUpdate.Status.Status = kubechainv1alpha1.TaskStatusError
 		statusUpdate.Status.StatusDetail = err.Error()
 		r.recorder.Event(&task, corev1.EventTypeWarning, "ValidationFailed", err.Error())
 		if updateErr := r.Status().Update(ctx, statusUpdate); updateErr != nil {
@@ -125,7 +125,7 @@ func (r *TaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	}
 
 	statusUpdate.Status.Ready = true
-	statusUpdate.Status.Status = "Ready"
+	statusUpdate.Status.Status = kubechainv1alpha1.TaskStatusReady
 	statusUpdate.Status.StatusDetail = "Task Run Created"
 	r.recorder.Event(&task, corev1.EventTypeNormal, "ValidationSucceeded", "Task validation successful")
 
@@ -137,7 +137,9 @@ func (r *TaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 
 	logger.Info("Successfully reconciled task",
 		"name", task.Name,
-		"ready", statusUpdate.Status.Ready)
+		"ready", statusUpdate.Status.Ready,
+		"status", statusUpdate.Status.Status,
+		"statusDetail", statusUpdate.Status.StatusDetail)
 	return ctrl.Result{}, nil
 }
 
