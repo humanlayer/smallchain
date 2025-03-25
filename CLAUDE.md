@@ -7,11 +7,6 @@ The root-level Makefile provides convenient commands for managing the entire pro
 ### Pattern-Matching Commands
 - `make kubechain-<command>`: Run any target from the kubechain Makefile (e.g., `make kubechain-fmt`)
 - `make example-<command>`: Run any target from the kubechain-example Makefile (e.g., `make example-kind-up`)
-- `make ts-<command>`: Run any npm script from the ts directory (e.g., `make ts-build`)
-
-### Composite Commands
-- `make build`: Build both kubechain and ts components
-- `make test`: Run tests for both kubechain and ts components
 
 ### Cluster Management
 - `make cluster-up`: Create the Kind cluster
@@ -55,15 +50,6 @@ You can run these commands directly in the kubechain directory or use the patter
 - Run tests: `cd kubechain && make test` or `make kubechain-test`
 - Run single test: `cd kubechain && go test -v ./internal/controller/llm -run TestLLMController`
 - Run e2e tests: `cd kubechain && make test-e2e` or `make kubechain-test-e2e`
-
-## TypeScript Commands
-
-You can run these commands directly in the ts directory or use the pattern-matching syntax from the root:
-
-- Build: `cd ts && npm run build` or `make ts-build`
-- Dev mode: `cd ts && npm run dev` or `make ts-dev`
-- Run tests: `cd ts && npm test` or `make ts-test`
-- Run single test: `cd ts && npm test -- -t "ChainService constructor"`
 
 ## Makefiles Overview
 
@@ -185,20 +171,6 @@ Alternatively, clean up components individually:
 - When creating new resources, use `kubebuilder create api --group kubechain --version v1alpha1 --kind YourResource --namespaced true --resource true --controller true`
 - Ensure the PROJECT file contains entries for all resources before running `make manifests`
 - Follow the detailed guidance in the [Kubebuilder Guide](/kubechain/docs/kubebuilder-guide.md)
-
-### TypeScript
-- Use 2-space indentation
-- No semicolons (per prettier config)
-- Double quotes for strings
-- Strong typing with TypeScript interfaces
-- Use ES6+ features (arrow functions, destructuring)
-- Jest for testing
-
-### General
-- Descriptive variable/function names (camelCase in TS, CamelCase for exported Go)
-- Use consistent error handling patterns within each language
-- Add tests for new functionality
-- Keep functions small and focused
 
 ### Markdown
 - When writing markdown code blocks, do not indent the block, just use backticks to offset the code
