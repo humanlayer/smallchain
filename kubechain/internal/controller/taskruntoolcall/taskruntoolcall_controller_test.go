@@ -143,80 +143,79 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 			utils.ExpectRecorder(recorder).ToEmitEventContaining("ExecutionFailed")
 		})
 
-	})
+		// Tests for MCP tools without approval requirement
+		Context("Pending -> Succeeded (MCP Tool)", func() {
+			It("successfully executes an MCP tool without requiring approval", func() {
+				// Setup MCP server without approval channel
+				testSecret.Setup(ctx)
+				mcpServer := &TestMCPServer{
+					name:                   "test-mcp-no-approval",
+					needsApproval:          false,
+					approvalContactChannel: "",
+				}
+				mcpServer.SetupWithStatus(ctx, kubechainv1alpha1.MCPServerStatus{
+					Connected: true,
+					Status:    "Ready",
+				})
+				defer mcpServer.Teardown(ctx)
 
-	// Tests for MCP tools without approval requirement
-	Context("Pending -> Succeeded (MCP Tool)", func() {
-		It("successfully executes an MCP tool without requiring approval", func() {
-			// Setup MCP server without approval channel
-			testSecret.Setup(ctx)
-			mcpServer := &TestMCPServer{
-				name:                   "test-mcp-no-approval",
-				needsApproval:          false,
-				approvalContactChannel: "",
-			}
-			mcpServer.SetupWithStatus(ctx, kubechainv1alpha1.MCPServerStatus{
-				Connected: true,
-				Status:    "Ready",
-			})
-			defer mcpServer.Teardown(ctx)
+				// Setup MCP tool
+				mcpTool := &TestMCPTool{
+					name:        "test-mcp-no-approval-tool",
+					mcpServer:   mcpServer.name,
+					mcpToolName: "test-tool",
+				}
+				tool := mcpTool.SetupWithStatus(ctx, kubechainv1alpha1.ToolStatus{
+					Ready:  true,
+					Status: "Ready",
+				})
+				defer mcpTool.Teardown(ctx)
 
-			// Setup MCP tool
-			mcpTool := &TestMCPTool{
-				name:        "test-mcp-no-approval-tool",
-				mcpServer:   mcpServer.name,
-				mcpToolName: "test-tool",
-			}
-			tool := mcpTool.SetupWithStatus(ctx, kubechainv1alpha1.ToolStatus{
-				Ready:  true,
-				Status: "Ready",
-			})
-			defer mcpTool.Teardown(ctx)
+				// Create TaskRunToolCall with MCP tool reference
+				taskRunToolCall := &TestTaskRunToolCall{
+					name:      "test-mcp-no-approval-trtc",
+					toolName:  tool.Spec.Name,
+					arguments: `{"a": 2, "b": 3}`,
+				}
+				trtc := taskRunToolCall.SetupWithStatus(ctx, kubechainv1alpha1.TaskRunToolCallStatus{
+					Phase:        kubechainv1alpha1.TaskRunToolCallPhasePending,
+					Status:       "Pending",
+					StatusDetail: "Ready for execution",
+					StartTime:    &metav1.Time{Time: time.Now().Add(-1 * time.Minute)},
+				})
+				defer taskRunToolCall.Teardown(ctx)
 
-			// Create TaskRunToolCall with MCP tool reference
-			taskRunToolCall := &TestTaskRunToolCall{
-				name:      "test-mcp-no-approval-trtc",
-				toolName:  tool.Spec.Name,
-				arguments: `{"a": 2, "b": 3}`,
-			}
-			trtc := taskRunToolCall.SetupWithStatus(ctx, kubechainv1alpha1.TaskRunToolCallStatus{
-				Phase:        kubechainv1alpha1.TaskRunToolCallPhasePending,
-				Status:       "Pending",
-				StatusDetail: "Ready for execution",
-				StartTime:    &metav1.Time{Time: time.Now().Add(-1 * time.Minute)},
-			})
-			defer taskRunToolCall.Teardown(ctx)
+				By("reconciling the taskruntoolcall that uses MCP tool without approval")
+				reconciler, recorder := reconciler()
 
-			By("reconciling the taskruntoolcall that uses MCP tool without approval")
-			reconciler, recorder := reconciler()
+				reconciler.MCPManager = &MockMCPManager{
+					NeedsApproval: false, // This test specifically doesn't want approval
+				}
 
-			reconciler.MCPManager = &MockMCPManager{
-				NeedsApproval: false, // This test specifically doesn't want approval
-			}
+				_, err := reconciler.Reconcile(ctx, reconcile.Request{
+					NamespacedName: types.NamespacedName{
+						Name:      trtc.Name,
+						Namespace: trtc.Namespace,
+					},
+				})
 
-			_, err := reconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: types.NamespacedName{
+				Expect(err).NotTo(HaveOccurred())
+
+				By("checking the taskruntoolcall status is set to Succeeded")
+				updatedTRTC := &kubechainv1alpha1.TaskRunToolCall{}
+				err = k8sClient.Get(ctx, types.NamespacedName{
 					Name:      trtc.Name,
 					Namespace: trtc.Namespace,
-				},
+				}, updatedTRTC)
+
+				Expect(err).NotTo(HaveOccurred())
+				Expect(updatedTRTC.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunToolCallPhaseSucceeded))
+				Expect(updatedTRTC.Status.Status).To(Equal("Ready"))
+				Expect(updatedTRTC.Status.Result).To(Equal("5")) // From our mock implementation
+
+				By("checking that appropriate events were emitted")
+				utils.ExpectRecorder(recorder).ToEmitEventContaining("ExecutionSucceeded")
 			})
-
-			Expect(err).NotTo(HaveOccurred())
-
-			By("checking the taskruntoolcall status is set to Succeeded")
-			updatedTRTC := &kubechainv1alpha1.TaskRunToolCall{}
-			err = k8sClient.Get(ctx, types.NamespacedName{
-				Name:      trtc.Name,
-				Namespace: trtc.Namespace,
-			}, updatedTRTC)
-
-			Expect(err).NotTo(HaveOccurred())
-			Expect(updatedTRTC.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunToolCallPhaseSucceeded))
-			Expect(updatedTRTC.Status.Status).To(Equal("Ready"))
-			Expect(updatedTRTC.Status.Result).To(Equal("5")) // From our mock implementation
-
-			By("checking that appropriate events were emitted")
-			utils.ExpectRecorder(recorder).ToEmitEventContaining("ExecutionSucceeded")
 		})
 	})
 })
