@@ -1,15 +1,14 @@
 # SmallChain Root Makefile
-# Orchestrates commands from kubechain, kubechain-example, and ts directories
+# Orchestrates commands from kubechain and kubechain-example directories
 
 # Define directories
 KUBECHAIN_DIR = kubechain
 EXAMPLE_DIR = kubechain-example
-TS_DIR = ts
 
 .PHONY: help build test cluster-up cluster-down build-operator deploy-operator undeploy-operator \
         deploy-samples undeploy-samples deploy-ui deploy-otel undeploy-otel \
         test-operator test-e2e setup-all clean-all \
-        kubechain-% example-% ts-%
+        kubechain-% example-%
 
 ##@ General Commands
 
@@ -24,14 +23,11 @@ kubechain-%: ## Run any kubechain Makefile target: make kubechain-<target>
 example-%: ## Run any kubechain-example Makefile target: make example-<target>
 	$(MAKE) -C $(EXAMPLE_DIR) $*
 
-ts-%: ## Run any ts npm script: make ts-<script>
-	npm --prefix $(TS_DIR) run $*
-
 ##@ Composite Commands
 
-build: kubechain-build ts-build ## Build both kubechain and ts components
+build: kubechain-build ## Build kubechain components
 
-test: kubechain-test ts-test ## Run tests for both kubechain and ts components
+test: kubechain-test ## Run tests for kubechain components
 
 ##@ Cluster Management
 
@@ -100,4 +96,3 @@ clean-all: undeploy-samples undeploy-operator undeploy-otel cluster-down ## Clea
 .PHONY: githooks
 githooks:
 	ln -s ${PWD}/hack/git_pre_push.sh ${PWD}/.git/hooks/pre-push
-
