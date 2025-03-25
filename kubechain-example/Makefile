@@ -1,14 +1,14 @@
 # Makefile for kubechain-example
 
 # Cluster name and configuration
-CLUSTER_NAME = kubechain-example-cluster
+CLUSTER_NAME = kind
 KIND_CONFIG = kind/kind-config.yaml
 OTEL_CONFIG = otel/otel-config.yaml
 
 # Environment variable to customize NodePort range (if supported by your setup)
 export KIND_NODE_PORT_RANGE = 30000-35000
 
-.PHONY: kind-up kind-down operator-build operator-deploy ui-deploy otel-deploy prometheus-deploy grafana-deploy tempo-deploy loki-up loki-down otel-stack otel-stack-down all
+.PHONY: kind-up kind-down operator-deploy-local operator-deploy ui-deploy otel-deploy prometheus-deploy grafana-deploy tempo-deploy loki-up loki-down otel-stack otel-stack-down all
 
 kind-up:
 	@echo "Creating kind cluster '$(CLUSTER_NAME)'..."
@@ -18,14 +18,11 @@ kind-down:
 	@echo "Deleting kind cluster '$(CLUSTER_NAME)'..."
 	kind delete cluster --name $(CLUSTER_NAME)
 
-operator-build:
-	@echo "Building kubechain operator Docker image..."
-	docker build -t humanlayer/kubechain:latest ../kubechain
+operator-deploy-local:
+	@$(MAKE) -C ../kubechain deploy-local-kind
 
 operator-deploy:
-	@echo "Deploying kubechain operator to cluster..."
-	kubectl apply -f ../kubechain/config/crd/bases
-	kubectl apply -f ../kubechain/config/manager/manager.yaml
+	kubectl apply -f https://raw.githubusercontent.com/humanlayer/smallchain/refs/heads/main/kubechain/config/release/latest.yaml
 
 ui-deploy:
 	@echo "Deploying kubechain-ui to cluster..."

@@ -5,4 +5,4 @@ kind: Kustomization
 images:
 - name: controller
   newName: controller
-  newTag: v0.1.11
+  newTag: "202503251521"
