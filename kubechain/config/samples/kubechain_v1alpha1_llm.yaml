@@ -1,3 +1,5 @@
+---
+# OpenAI Example
 apiVersion: kubechain.humanlayer.dev/v1alpha1
 kind: LLM
 metadata:
@@ -8,4 +10,102 @@ spec:
     secretKeyRef:
       name: openai
       key: OPENAI_API_KEY
-  maxTokens: 1000
+  baseConfig:
+    model: "gpt-4o"
+    temperature: "0.7"
+    maxTokens: 1000
+  providerConfig:
+    openaiConfig:
+      organization: "org-123456"
+---
+# Anthropic Example
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: LLM
+metadata:
+  name: claude-3-5-sonnet
+spec:
+  provider: anthropic
+  apiKeyFrom:
+    secretKeyRef:
+      name: anthropic
+      key: ANTHROPIC_API_KEY
+  baseConfig:
+    model: "claude-3-5-sonnet-20240620"
+    temperature: "0.5"
+    maxTokens: 2000
+---
+# Vertex Example
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: LLM
+metadata:
+  name: gemini-pro
+spec:
+  provider: vertex
+  apiKeyFrom:
+    secretKeyRef:
+      name: vertex-credentials
+      key: service-account-json
+  baseConfig:
+    model: "gemini-pro"
+    temperature: "0.4"
+    maxTokens: 1500
+  providerConfig:
+    vertexConfig:
+      cloudProject: "my-gcp-project"
+      cloudLocation: "us-central1"
+---
+# Bedrock Example
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: LLM
+metadata:
+  name: claude-instant-bedrock
+spec:
+  provider: bedrock
+  baseConfig:
+    model: "anthropic.claude-instant-v1"
+    temperature: "0.5"
+    maxTokens: 1000
+  providerConfig:
+    bedrockConfig:
+      awsRegion: "us-west-2"
+---
+# Cloudflare Example
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: LLM
+metadata:
+  name: cloudflare-worker-ai
+spec:
+  provider: cloudflare
+  apiKeyFrom:
+    secretKeyRef:
+      name: cloudflare
+      key: CLOUDFLARE_API_TOKEN
+  baseConfig:
+    model: "@cf/meta/llama-3-8b-instruct"
+    temperature: "0.6"
+    maxTokens: 800
+  providerConfig:
+    cloudflareConfig:
+      accountId: "abcdef123456"
+---
+# Mistral Example
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: LLM
+metadata:
+  name: mistral-large
+spec:
+  provider: mistral
+  apiKeyFrom:
+    secretKeyRef:
+      name: mistral
+      key: MISTRAL_API_KEY
+  baseConfig:
+    model: "mistral-large-latest"
+    temperature: "0.7"
+    maxTokens: 1000
+    topP: "0.95"
+  providerConfig:
+    mistralConfig:
+      maxRetries: 3
+      timeout: 60
+      randomSeed: 42
