@@ -7,11 +7,6 @@ The root-level Makefile provides convenient commands for managing the entire pro
 ### Pattern-Matching Commands
 - `make kubechain-<command>`: Run any target from the kubechain Makefile (e.g., `make kubechain-fmt`)
 - `make example-<command>`: Run any target from the kubechain-example Makefile (e.g., `make example-kind-up`)
-- `make ts-<command>`: Run any npm script from the ts directory (e.g., `make ts-build`)
-
-### Composite Commands
-- `make build`: Build both kubechain and ts components
-- `make test`: Run tests for both kubechain and ts components
 
 ### Cluster Management
 - `make cluster-up`: Create the Kind cluster
@@ -55,15 +50,6 @@ You can run these commands directly in the kubechain directory or use the patter
 - Run tests: `cd kubechain && make test` or `make kubechain-test`
 - Run single test: `cd kubechain && go test -v ./internal/controller/llm -run TestLLMController`
 - Run e2e tests: `cd kubechain && make test-e2e` or `make kubechain-test-e2e`
-
-## TypeScript Commands
-
-You can run these commands directly in the ts directory or use the pattern-matching syntax from the root:
-
-- Build: `cd ts && npm run build` or `make ts-build`
-- Dev mode: `cd ts && npm run dev` or `make ts-dev`
-- Run tests: `cd ts && npm test` or `make ts-test`
-- Run single test: `cd ts && npm test -- -t "ChainService constructor"`
 
 ## Makefiles Overview
 
@@ -186,20 +172,137 @@ Alternatively, clean up components individually:
 - Ensure the PROJECT file contains entries for all resources before running `make manifests`
 - Follow the detailed guidance in the [Kubebuilder Guide](/kubechain/docs/kubebuilder-guide.md)
 
-### TypeScript
-- Use 2-space indentation
-- No semicolons (per prettier config)
-- Double quotes for strings
-- Strong typing with TypeScript interfaces
-- Use ES6+ features (arrow functions, destructuring)
-- Jest for testing
-
-### General
-- Descriptive variable/function names (camelCase in TS, CamelCase for exported Go)
-- Use consistent error handling patterns within each language
-- Add tests for new functionality
-- Keep functions small and focused
-
-
 ### Markdown
 - When writing markdown code blocks, do not indent the block, just use backticks to offset the code
+
+## Testing Guidelines
+
+Testing is a critical part of the development process, especially for Kubernetes controllers that manage complex state machines. This section outlines best practices for testing controllers, developing end-to-end tests, and mocking external dependencies.
+
+### Kubernetes Controller Testing
+- Use state-based testing to verify controller behavior
+- Test each state transition independently
+- Organize tests with focused, modular test setup
+- Use test fixtures for consistent resource creation
+- Write tests that serve as documentation of controller behavior
+
+#### State-Based Testing Approach
+- Controllers in Kubernetes are state machines; tests should reflect this
+- Organize tests by state transitions with Context blocks named "StateA -> StateB"
+- Each test should focus on a single state transition, not complete workflows
+- Use per-test setup/teardown with defer pattern rather than BeforeEach/AfterEach
+- Create modular test fixtures that can set up resources in specific states
+
+Example state transition test structure:
+```go
+Context("'' -> Initializing", func() {
+    It("moves to Initializing and sets required fields", func() {
+        // Set up resources needed for this specific test
+        resource := testFixture.Setup(ctx)
+        defer testFixture.Teardown(ctx)
+
+        // Execute reconciliation
+        result, err := reconciler.Reconcile(ctx, request)
+        
+        // Verify reconciliation was successful
+        Expect(err).NotTo(HaveOccurred())
+        
+        // Verify expected state transition
+        Expect(resource.Status.Phase).To(Equal(ExpectedPhase))
+        Expect(resource.Status.RequiredField).NotTo(BeNil())
+    })
+})
+```
+
+#### Test Fixture Pattern
+- Create test fixture structs for each resource type with Setup/Teardown methods
+- Implement SetupWithStatus methods to create resources in specific states
+- Provide sensible defaults for test resources
+- Implement helper functions like setupSuiteObjects to create dependency chains
+- Use reconciler factory functions to simplify test setup
+
+Example test fixture:
+```go
+type TestResource struct {
+    name     string
+    resource *kubechain.Resource
+}
+
+func (t *TestResource) Setup(ctx context.Context) *kubechain.Resource {
+    // Create the resource with default values
+    resource := &kubechain.Resource{
+        ObjectMeta: metav1.ObjectMeta{
+            Name:      t.name,
+            Namespace: "default",
+        },
+        Spec: kubechain.ResourceSpec{
+            // Default values
+        },
+    }
+    Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+    t.resource = resource
+    return resource
+}
+
+func (t *TestResource) SetupWithStatus(ctx context.Context, status kubechain.ResourceStatus) *kubechain.Resource {
+    resource := t.Setup(ctx)
+    resource.Status = status
+    Expect(k8sClient.Status().Update(ctx, resource)).To(Succeed())
+    t.resource = resource
+    return resource
+}
+
+func (t *TestResource) Teardown(ctx context.Context) {
+    // Delete resource and handle potential errors (e.g., if already deleted)
+    err := k8sClient.Delete(ctx, t.resource)
+    if err != nil && !apierrors.IsNotFound(err) {
+        Expect(err).NotTo(HaveOccurred())
+    }
+}
+```
+
+#### Organizing Tests by State Transitions
+- Map out all valid state transitions for your controller
+- Create a Context block for each state transition
+- Include both happy path and error path transitions
+- Use descriptive names for Context blocks that clearly show the transition
+- When testing a multi-step workflow, break it into individual state transitions
+
+Examples of state transition Context blocks:
+- `Context("'' -> Initializing")` - Initial reconciliation
+- `Context("Initializing -> Ready")` - Normal progression
+- `Context("Initializing -> Error")` - Error handling
+- `Context("Error -> ErrorBackoff")` - Recovery attempts
+- `Context("Ready -> Updating")` - Changes after ready state
+
+#### Test Implementation Best Practices
+- Use descriptive By() statements to explain test steps
+- Ensure each test verifies both the state and any side effects
+- Assert on specific fields that should change during the transition
+- Test event recording when events are part of the controller behavior
+- Verify controller return values (Requeue, RequeueAfter)
+- For tool calls or API interactions, use mock clients with verification
+- Separate resource setup from test assertions
+
+#### Avoid in Controller Tests
+- Do not test multiple state transitions in a single test
+- Avoid monolithic BeforeEach/AfterEach with shared test state
+- Don't create resources that aren't needed for the specific test
+- Don't test implementation details, focus on behavior
+- Avoid testing the complete end-to-end flow in a single test
+
+### End-to-End Testing
+- Use E2E tests for verifying complete workflows across multiple controllers
+- Keep unit tests focused on single-controller behavior
+- Test controller collaborations, not just individual controllers
+- Include full reconciliation cycles and verify expected steady state
+- Test actual resource creation and status propagation
+
+### Mocking External Dependencies
+- Mock external API calls and HTTP services in controller tests
+- Implement mock clients that return predetermined responses
+- Verify calls to external services with expectations on arguments
+- Use mock secrets for credentials in tests
+- Consider using controller runtime fake clients for complex scenarios
+- Use the `gomock` package (github.com/golang/mock/gomock) for generating mocks of interfaces
+- For HTTP services, use httptest package from the standard library
