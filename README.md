@@ -831,7 +831,7 @@ kubectl get taskrun fetch-task-1 -o jsonpath='{.status.output}'
 >   - [Starship 22](https://swapi.dev/api/starships/22/)
 > - **Created**: 2014-12-09T13:50:51.644000Z
 > - **Edited**: 2014-12-20T21:17:56.891000Z
-> - **URL**: [https://swapi.dev/api/people/1/](https://swapi.dev/api/people/1/
+> - **URL**: [https://swapi.dev/api/people/1/](https://swapi.dev/api/people/1/)
 
 and you can describe the taskrun to see the full context window and tool-calling turns
 
