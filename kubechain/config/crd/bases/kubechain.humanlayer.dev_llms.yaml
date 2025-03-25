@@ -54,9 +54,8 @@ spec:
             description: LLMSpec defines the desired state of LLM
             properties:
               apiKeyFrom:
-                description: |-
-                  APIKeyFrom references the secret containing the API key or credentials
-                  Not required for providers like Bedrock that use AWS SDK credentials
+                description: APIKeyFrom references the secret containing the API key
+                  or credentials
                 properties:
                   secretKeyRef:
                     description: SecretKeyRef references a key in a secret
@@ -120,11 +119,8 @@ spec:
                 - openai
                 - anthropic
                 - mistral
-                - cohere
                 - google
                 - vertex
-                - bedrock
-                - cloudflare
                 type: string
               providerConfig:
                 description: ProviderConfig holds provider-specific configuration
@@ -137,27 +133,6 @@ spec:
                           AnthropicBetaHeader adds the Anthropic Beta header to support extended options
                           Common values include "max-tokens-3-5-sonnet-2024-07-15" for extended token limits
                         type: string
-                    type: object
-                  bedrockConfig:
-                    description: BedrockConfig for Bedrock-specific options
-                    properties:
-                      awsRegion:
-                        description: AWSRegion is the AWS region for Bedrock
-                        type: string
-                    required:
-                    - awsRegion
-                    type: object
-                  cloudflareConfig:
-                    description: CloudflareConfig for Cloudflare-specific options
-                    properties:
-                      accountId:
-                        description: AccountID is the Cloudflare account ID
-                        type: string
-                    required:
-                    - accountId
-                    type: object
-                  cohereConfig:
-                    description: CohereConfig for Cohere-specific options
                     type: object
                   googleConfig:
                     description: GoogleConfig for Google AI-specific options

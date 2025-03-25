@@ -56,40 +56,6 @@ spec:
       cloudProject: "my-gcp-project"
       cloudLocation: "us-central1"
 ---
-# Bedrock Example
-apiVersion: kubechain.humanlayer.dev/v1alpha1
-kind: LLM
-metadata:
-  name: claude-instant-bedrock
-spec:
-  provider: bedrock
-  baseConfig:
-    model: "anthropic.claude-instant-v1"
-    temperature: "0.5"
-    maxTokens: 1000
-  providerConfig:
-    bedrockConfig:
-      awsRegion: "us-west-2"
----
-# Cloudflare Example
-apiVersion: kubechain.humanlayer.dev/v1alpha1
-kind: LLM
-metadata:
-  name: cloudflare-worker-ai
-spec:
-  provider: cloudflare
-  apiKeyFrom:
-    secretKeyRef:
-      name: cloudflare
-      key: CLOUDFLARE_API_TOKEN
-  baseConfig:
-    model: "@cf/meta/llama-3-8b-instruct"
-    temperature: "0.6"
-    maxTokens: 800
-  providerConfig:
-    cloudflareConfig:
-      accountId: "abcdef123456"
----
 # Mistral Example
 apiVersion: kubechain.humanlayer.dev/v1alpha1
 kind: LLM

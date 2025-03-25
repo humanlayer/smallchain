@@ -104,13 +104,6 @@ type VertexConfig struct {
 	CloudLocation string `json:"cloudLocation"`
 }
 
-// BedrockConfig for Bedrock-specific options
-type BedrockConfig struct {
-	// AWSRegion is the AWS region for Bedrock
-	// +kubebuilder:validation:Required
-	AWSRegion string `json:"awsRegion"`
-}
-
 // MistralConfig for Mistral-specific options
 type MistralConfig struct {
 	// MaxRetries sets the maximum number of retries for API calls
@@ -126,11 +119,6 @@ type MistralConfig struct {
 	RandomSeed *int `json:"randomSeed,omitempty"`
 }
 
-// CohereConfig for Cohere-specific options
-type CohereConfig struct {
-	// No additional options currently needed beyond base config
-}
-
 // GoogleConfig for Google AI-specific options
 type GoogleConfig struct {
 	// CloudProject is the Google Cloud project ID
@@ -140,34 +128,23 @@ type GoogleConfig struct {
 	CloudLocation string `json:"cloudLocation,omitempty"`
 }
 
-// CloudflareConfig for Cloudflare-specific options
-type CloudflareConfig struct {
-	// AccountID is the Cloudflare account ID
-	// +kubebuilder:validation:Required
-	AccountID string `json:"accountId"`
-}
-
 // ProviderConfig holds provider-specific configurations
 type ProviderConfig struct {
-	OpenAIConfig     *OpenAIConfig     `json:"openaiConfig,omitempty"`
-	AnthropicConfig  *AnthropicConfig  `json:"anthropicConfig,omitempty"`
-	VertexConfig     *VertexConfig     `json:"vertexConfig,omitempty"`
-	BedrockConfig    *BedrockConfig    `json:"bedrockConfig,omitempty"`
-	MistralConfig    *MistralConfig    `json:"mistralConfig,omitempty"`
-	CohereConfig     *CohereConfig     `json:"cohereConfig,omitempty"`
-	GoogleConfig     *GoogleConfig     `json:"googleConfig,omitempty"`
-	CloudflareConfig *CloudflareConfig `json:"cloudflareConfig,omitempty"`
+	OpenAIConfig    *OpenAIConfig    `json:"openaiConfig,omitempty"`
+	AnthropicConfig *AnthropicConfig `json:"anthropicConfig,omitempty"`
+	VertexConfig    *VertexConfig    `json:"vertexConfig,omitempty"`
+	MistralConfig   *MistralConfig   `json:"mistralConfig,omitempty"`
+	GoogleConfig    *GoogleConfig    `json:"googleConfig,omitempty"`
 }
 
 // LLMSpec defines the desired state of LLM
 type LLMSpec struct {
 	// Provider is the LLM provider name
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Enum=openai;anthropic;mistral;cohere;google;vertex;bedrock;cloudflare;
+	// +kubebuilder:validation:Enum=openai;anthropic;mistral;google;vertex;
 	Provider string `json:"provider"`
 
 	// APIKeyFrom references the secret containing the API key or credentials
-	// Not required for providers like Bedrock that use AWS SDK credentials
 	APIKeyFrom *APIKeySource `json:"apiKeyFrom,omitempty"`
 
 	// BaseConfig holds common configuration options

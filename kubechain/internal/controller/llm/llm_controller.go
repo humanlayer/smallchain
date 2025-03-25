@@ -24,9 +24,6 @@ import (
 
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/anthropic"
-	"github.com/tmc/langchaingo/llms/bedrock"
-	"github.com/tmc/langchaingo/llms/cloudflare"
-	"github.com/tmc/langchaingo/llms/cohere"
 	"github.com/tmc/langchaingo/llms/googleai"
 	"github.com/tmc/langchaingo/llms/googleai/vertex"
 	"github.com/tmc/langchaingo/llms/mistral"
@@ -233,19 +230,6 @@ func (r *LLMReconciler) validateProviderConfig(ctx context.Context, llm *kubecha
 			return nil
 		}
 
-	case "cohere":
-		if llm.Spec.APIKeyFrom == nil {
-			return fmt.Errorf("apiKeyFrom is required for cohere")
-		}
-		providerOpts := []cohere.Option{cohere.WithToken(apiKey)}
-		if llm.Spec.BaseConfig.BaseURL != "" {
-			providerOpts = append(providerOpts, cohere.WithBaseURL(llm.Spec.BaseConfig.BaseURL))
-		}
-		if llm.Spec.BaseConfig.Model != "" {
-			providerOpts = append(providerOpts, cohere.WithModel(llm.Spec.BaseConfig.Model))
-		}
-		model, err = cohere.New(providerOpts...)
-
 	case "google":
 		if llm.Spec.APIKeyFrom == nil {
 			return fmt.Errorf("apiKeyFrom is required for google")
@@ -280,40 +264,6 @@ func (r *LLMReconciler) validateProviderConfig(ctx context.Context, llm *kubecha
 			providerOpts = append(providerOpts, googleai.WithDefaultModel(llm.Spec.BaseConfig.Model))
 		}
 		model, err = vertex.New(ctx, providerOpts...)
-
-	case "bedrock":
-		if llm.Spec.ProviderConfig.BedrockConfig == nil {
-			return fmt.Errorf("bedrockConfig is required for bedrock")
-		}
-		providerOpts := []bedrock.Option{}
-		if llm.Spec.BaseConfig.Model != "" {
-			providerOpts = append(providerOpts, bedrock.WithModel(llm.Spec.BaseConfig.Model))
-		}
-		// Set AWS region from provider config
-		region := llm.Spec.ProviderConfig.BedrockConfig.AWSRegion
-		// This is a simplified approach - in a full implementation,
-		// you would properly configure the AWS SDK with the region
-		_ = region // Using region as needed for AWS SDK initialization
-		model, err = bedrock.New(providerOpts...)
-
-	case "cloudflare":
-		if llm.Spec.APIKeyFrom == nil {
-			return fmt.Errorf("apiKeyFrom is required for cloudflare")
-		}
-		if llm.Spec.ProviderConfig.CloudflareConfig == nil {
-			return fmt.Errorf("cloudflareConfig is required for cloudflare")
-		}
-		providerOpts := []cloudflare.Option{
-			cloudflare.WithToken(apiKey),
-			cloudflare.WithAccountID(llm.Spec.ProviderConfig.CloudflareConfig.AccountID),
-		}
-		if llm.Spec.BaseConfig.BaseURL != "" {
-			providerOpts = append(providerOpts, cloudflare.WithServerURL(llm.Spec.BaseConfig.BaseURL))
-		}
-		if llm.Spec.BaseConfig.Model != "" {
-			providerOpts = append(providerOpts, cloudflare.WithModel(llm.Spec.BaseConfig.Model))
-		}
-		model, err = cloudflare.New(providerOpts...)
 
 	default:
 		return fmt.Errorf("unsupported provider: %s", llm.Spec.Provider)
@@ -359,12 +309,7 @@ func (r *LLMReconciler) validateOpenAIKey(apiKey string) error {
 }
 
 func (r *LLMReconciler) validateSecret(ctx context.Context, llm *kubechainv1alpha1.LLM) (string, error) {
-	// Bedrock uses AWS SDK credentials, no secret required
-	if llm.Spec.Provider == "bedrock" && llm.Spec.APIKeyFrom == nil {
-		return "", nil
-	}
-
-	// For providers that require API keys
+	// All providers require API keys
 	if llm.Spec.APIKeyFrom == nil {
 		return "", fmt.Errorf("apiKeyFrom is required for provider %s", llm.Spec.Provider)
 	}

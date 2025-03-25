@@ -9,11 +9,8 @@ Kubechain supports the following LLM providers:
 - OpenAI
 - Anthropic
 - Vertex AI (Google Cloud)
-- Bedrock (AWS)
 - Mistral
-- Cohere
 - Google AI
-- Cloudflare Workers AI
 
 ## LLM Configuration Structure
 
@@ -26,10 +23,9 @@ metadata:
   name: my-llm
 spec:
   # Required: The LLM provider name
-  provider: openai  # One of: openai, anthropic, vertex, bedrock, mistral, cohere, google, cloudflare
+  provider: openai  # One of: openai, anthropic, vertex, mistral, google
 
-  # Optional for Bedrock (which uses AWS SDK credentials)
-  # Required for all other providers
+  # Required for all providers
   apiKeyFrom:
     secretKeyRef:
       name: my-secret
@@ -56,13 +52,7 @@ spec:
       cloudProject: "my-gcp-project"
       cloudLocation: "us-central1"
     
-    bedrockConfig:
-      awsRegion: "us-west-2"
-    
-    cloudflareConfig:
-      accountId: "abcdef123456"
-    
-    # Other provider configs (anthropicConfig, mistralConfig, cohereConfig, googleConfig)
+    # Available provider configs: openaiConfig, anthropicConfig, vertexConfig, mistralConfig, googleConfig
 ```
 
 ## Provider-Specific Requirements
@@ -121,18 +111,6 @@ spec:
 
 Vertex AI requires a Google Cloud service account with appropriate permissions. The `apiKeyFrom` secret should contain the full service account JSON credentials, not just an API key. Both `cloudProject` and `cloudLocation` are required parameters for Vertex AI, unlike regular Google AI where they're optional.
 
-### AWS Bedrock
-
-```yaml
-spec:
-  provider: bedrock
-  # No apiKeyFrom - uses AWS SDK credentials from environment/IAM
-  baseConfig:
-    model: "anthropic.claude-instant-v1"
-  providerConfig:
-    bedrockConfig:
-      awsRegion: "us-west-2"  # Required: AWS region where Bedrock is available
-```
 
 ### Mistral
 
@@ -155,19 +133,6 @@ spec:
       randomSeed: 42      # Optional: Seed for deterministic sampling
 ```
 
-### Cohere
-
-```yaml
-spec:
-  provider: cohere
-  apiKeyFrom:
-    secretKeyRef:
-      name: cohere
-      key: COHERE_API_KEY
-  baseConfig:
-    model: "command"
-    temperature: "0.7"
-```
 
 ### Google AI
 
@@ -192,40 +157,22 @@ spec:
 
 Google AI uses a standard API key for authentication. The TopK parameter is particularly useful with Google's models for controlling output diversity by limiting the number of tokens considered during sampling.
 
-### Cloudflare
-
-```yaml
-spec:
-  provider: cloudflare
-  apiKeyFrom:
-    secretKeyRef:
-      name: cloudflare
-      key: CLOUDFLARE_API_TOKEN
-  baseConfig:
-    model: "@cf/meta/llama-3-8b-instruct"
-  providerConfig:
-    cloudflareConfig:
-      accountId: "abcdef123456"  # Required: Your Cloudflare account ID
-```
 
 ## Credential Handling
 
 Each provider has different credential requirements:
 
-| Provider   | Credential Type      | Secret Key Reference                         |
-|------------|----------------------|---------------------------------------------|
-| OpenAI     | API Key              | `apiKeyFrom.secretKeyRef`                   |
-| Anthropic  | API Key              | `apiKeyFrom.secretKeyRef`                   |
-| Vertex     | Service Account JSON | `apiKeyFrom.secretKeyRef`                   |
-| Bedrock    | AWS SDK Credentials  | Not required (uses AWS SDK/environment/IAM) |
-| Mistral    | API Key              | `apiKeyFrom.secretKeyRef`                   |
-| Cohere     | API Key              | `apiKeyFrom.secretKeyRef`                   |
-| Google     | API Key              | `apiKeyFrom.secretKeyRef`                   |
-| Cloudflare | API Token            | `apiKeyFrom.secretKeyRef`                   |
+| Provider   | Credential Type      | Secret Key Reference       |
+|------------|----------------------|---------------------------|
+| OpenAI     | API Key              | `apiKeyFrom.secretKeyRef` |
+| Anthropic  | API Key              | `apiKeyFrom.secretKeyRef` |
+| Vertex     | Service Account JSON | `apiKeyFrom.secretKeyRef` |
+| Mistral    | API Key              | `apiKeyFrom.secretKeyRef` |
+| Google     | API Key              | `apiKeyFrom.secretKeyRef` |
 
 ### Secret Examples
 
-OpenAI/Anthropic/Mistral/Cohere/Google/Cloudflare:
+OpenAI/Anthropic/Mistral/Google:
 ```yaml
 apiVersion: v1
 kind: Secret
@@ -246,5 +193,3 @@ type: Opaque
 data:
   service-account-json: base64-encoded-service-account-json
 ```
-
-AWS Bedrock doesn't require a secret, as it uses AWS SDK credentials.
