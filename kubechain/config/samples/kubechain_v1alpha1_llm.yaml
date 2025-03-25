@@ -49,6 +49,8 @@ spec:
     model: "gemini-pro"
     temperature: "0.4"
     maxTokens: 1500
+    topP: "0.95"
+    topK: 40
   providerConfig:
     vertexConfig:
       cloudProject: "my-gcp-project"
@@ -109,3 +111,25 @@ spec:
       maxRetries: 3
       timeout: 60
       randomSeed: 42
+---
+# Google AI Example
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: LLM
+metadata:
+  name: google-gemini
+spec:
+  provider: google
+  apiKeyFrom:
+    secretKeyRef:
+      name: google
+      key: GOOGLE_API_KEY
+  baseConfig:
+    model: "gemini-pro"
+    temperature: "0.7"
+    maxTokens: 2048
+    topP: "0.95"
+    topK: 40
+  providerConfig:
+    googleConfig:
+      cloudProject: "my-gcp-project"
+      cloudLocation: "us-central1"

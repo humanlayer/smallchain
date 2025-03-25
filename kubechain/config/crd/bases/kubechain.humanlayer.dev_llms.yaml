@@ -103,6 +103,11 @@ spec:
                       to 1.0)
                     pattern: ^0(\.[0-9]+)?|1(\.0+)?$
                     type: string
+                  topK:
+                    description: TopK controls diversity by limiting the top K tokens
+                      to sample from
+                    minimum: 1
+                    type: integer
                   topP:
                     description: TopP controls diversity via nucleus sampling (0.0
                       to 1.0)

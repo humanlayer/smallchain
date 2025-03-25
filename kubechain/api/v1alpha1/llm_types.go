@@ -57,6 +57,10 @@ type BaseConfig struct {
 	// +kubebuilder:validation:Pattern=^(0(\.[0-9]+)?|1(\.0+)?)$
 	TopP string `json:"topP,omitempty"`
 
+	// TopK controls diversity by limiting the top K tokens to sample from
+	// +kubebuilder:validation:Minimum=1
+	TopK *int `json:"topK,omitempty"`
+
 	// FrequencyPenalty reduces repetition by penalizing frequent tokens
 	// +kubebuilder:validation:Pattern=^-?[0-2](\.[0-9]+)?$
 	FrequencyPenalty string `json:"frequencyPenalty,omitempty"`

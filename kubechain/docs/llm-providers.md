@@ -41,6 +41,10 @@ spec:
     baseUrl: "https://..."  # Optional API endpoint URL
     temperature: "0.7"      # Temperature (0.0-1.0)
     maxTokens: 1000         # Maximum tokens to generate
+    topP: "0.95"            # Controls diversity via nucleus sampling (0.0-1.0)
+    topK: 40                # Controls diversity by limiting top K tokens to sample from
+    frequencyPenalty: "0.5" # Reduces repetition by penalizing frequent tokens (-2.0 to 2.0)
+    presencePenalty: "0.0"  # Reduces repetition by penalizing tokens that appear at all (-2.0 to 2.0)
 
   # Provider-specific configuration
   providerConfig:
@@ -105,11 +109,17 @@ spec:
       key: service-account-json  # Contains GCP service account JSON
   baseConfig:
     model: "gemini-pro"
+    temperature: "0.7"
+    maxTokens: 2048
+    topP: "0.95"
+    topK: 40
   providerConfig:
     vertexConfig:
       cloudProject: "my-gcp-project"  # Required: GCP project ID
       cloudLocation: "us-central1"    # Required: GCP region
 ```
+
+Vertex AI requires a Google Cloud service account with appropriate permissions. The `apiKeyFrom` secret should contain the full service account JSON credentials, not just an API key. Both `cloudProject` and `cloudLocation` are required parameters for Vertex AI, unlike regular Google AI where they're optional.
 
 ### AWS Bedrock
 
@@ -170,11 +180,17 @@ spec:
       key: GOOGLE_API_KEY
   baseConfig:
     model: "gemini-pro"
+    temperature: "0.7"
+    maxTokens: 2048
+    topP: "0.95"
+    topK: 40    # Particularly useful for Google's models
   providerConfig:
     googleConfig:
-      cloudProject: "my-gcp-project"  # Optional 
-      cloudLocation: "us-central1"    # Optional
+      cloudProject: "my-gcp-project"  # Optional: GCP project ID
+      cloudLocation: "us-central1"    # Optional: GCP region
 ```
+
+Google AI uses a standard API key for authentication. The TopK parameter is particularly useful with Google's models for controlling output diversity by limiting the number of tokens considered during sampling.
 
 ### Cloudflare
 

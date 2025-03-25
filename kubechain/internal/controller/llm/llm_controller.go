@@ -104,6 +104,10 @@ func (r *LLMReconciler) validateProviderConfig(ctx context.Context, llm *kubecha
 			commonOpts = append(commonOpts, llms.WithTopP(topP))
 		}
 	}
+	// Add TopK if configured
+	if llm.Spec.BaseConfig.TopK != nil {
+		commonOpts = append(commonOpts, llms.WithTopK(*llm.Spec.BaseConfig.TopK))
+	}
 	// Add FrequencyPenalty if configured
 	if llm.Spec.BaseConfig.FrequencyPenalty != "" {
 		// Parse FrequencyPenalty string to float64
@@ -216,7 +220,18 @@ func (r *LLMReconciler) validateProviderConfig(ctx context.Context, llm *kubecha
 			}
 		}
 
+		// Create the Mistral model with the provider options
 		model, err = mistral.New(providerOpts...)
+
+		// Pass any common options to the model during generation test
+		if len(commonOpts) > 0 {
+			commonOpts = append(commonOpts, llms.WithMaxTokens(1), llms.WithTemperature(0))
+			_, err = llms.GenerateFromSinglePrompt(ctx, model, "test", commonOpts...)
+			if err != nil {
+				return fmt.Errorf("mistral validation failed with options: %w", err)
+			}
+			return nil
+		}
 
 	case "cohere":
 		if llm.Spec.APIKeyFrom == nil {
