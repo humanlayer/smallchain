@@ -288,12 +288,6 @@ func (t *TestMCPServer) Teardown(ctx context.Context) {
 }
 
 // MockMCPManager is a struct that mocks the essential MCPServerManager functionality for testing
-// MCPManagerInterface defines the minimum interface our mock needs to implement
-type MCPManagerInterface interface {
-	CallTool(ctx context.Context, serverName, toolName string, args map[string]interface{}) (string, error)
-}
-
-// MockMCPManager is a struct that mocks the essential MCPServerManager functionality for testing
 type MockMCPManager struct {
 	NeedsApproval bool // Flag to control if mock MCP tools need approval
 }
@@ -368,10 +362,6 @@ func reconciler() (*TaskRunToolCallReconciler, *record.FakeRecorder) {
 	By("creating a test reconciler")
 	recorder := record.NewFakeRecorder(10)
 
-	mockManager := &MockMCPManager{
-		NeedsApproval: false,
-	}
-
 	reconciler := &TaskRunToolCallReconciler{
 		Client:   k8sClient,
 		Scheme:   k8sClient.Scheme(),
@@ -379,7 +369,9 @@ func reconciler() (*TaskRunToolCallReconciler, *record.FakeRecorder) {
 	}
 
 	// Set the MCPManager field directly using type assertion
-	reconciler.MCPManager = interface{}(mockManager).(MCPManagerInterface)
+	reconciler.MCPManager = &MockMCPManager{
+		NeedsApproval: false,
+	}
 
 	return reconciler, recorder
 }
