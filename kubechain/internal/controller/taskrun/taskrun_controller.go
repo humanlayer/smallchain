@@ -72,7 +72,7 @@ func (r *TaskRunReconciler) validateTaskAndAgent(ctx context.Context, taskRun *k
 	if err != nil {
 		r.recorder.Event(taskRun, corev1.EventTypeWarning, "TaskValidationFailed", err.Error())
 		if apierrors.IsNotFound(err) {
-			logger.Info("Task %q not found", taskRun.Spec.TaskRef.Name)
+			logger.Info("Task not found", "task", taskRun.Spec.TaskRef.Name)
 			statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseFailed
 			statusUpdate.Status.Error = fmt.Sprintf("Task %q not found", taskRun.Spec.TaskRef.Name)
 			statusUpdate.Status.StatusDetail = fmt.Sprintf("Task %q not found", taskRun.Spec.TaskRef.Name)
