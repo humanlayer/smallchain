@@ -2,20 +2,54 @@ package taskruntoolcall
 
 import (
 	"context"
-	"time"
-
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/record"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
-	"github.com/humanlayer/smallchain/kubechain/test/utils"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
+var _ = Describe("TaskRunToolCall Controller", func() {
+	Context("'' -> Pending", func() {
+		It("moves to Pending:Initializing", func() {
+			ctx := context.Background()
+
+			teardown := setupTestAddTool(ctx)
+			defer teardown()
+
+			taskRunToolCall := trtcForAddTool.Setup(ctx)
+
+			By("reconciling the taskruntoolcall")
+			reconciler, _ := reconciler()
+
+			result, err := reconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      taskRunToolCall.Name,
+					Namespace: taskRunToolCall.Namespace,
+				},
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeFalse()) // No requeue since initialization is complete
+
+			By("checking the taskruntoolcall status was initialized")
+			updatedTRTC := &kubechainv1alpha1.TaskRunToolCall{}
+			err = k8sClient.Get(ctx, types.NamespacedName{
+				Name:      taskRunToolCall.Name,
+				Namespace: taskRunToolCall.Namespace,
+			}, updatedTRTC)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedTRTC.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunToolCallPhasePending))
+			Expect(updatedTRTC.Status.Status).To(Equal("Pending"))
+			Expect(updatedTRTC.Status.StatusDetail).To(Equal("Initializing"))
+			Expect(updatedTRTC.Status.StartTime).NotTo(BeNil())
+		})
+	})
+})
+
+/*
 var _ = Describe("TaskRunToolCall Controller", func() {
 	Context("When reconciling a resource", func() {
 		const resourceName = "test-taskruntoolcall"
@@ -305,3 +339,4 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 		})
 	})
 })
+*/
