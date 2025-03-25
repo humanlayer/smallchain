@@ -59,7 +59,7 @@ func (t *TestLLM) Setup(ctx context.Context) *kubechain.LLM {
 		},
 		Spec: kubechain.LLMSpec{
 			Provider: "openai",
-			APIKeyFrom: kubechain.APIKeySource{
+			APIKeyFrom: &kubechain.APIKeySource{
 				SecretKeyRef: kubechain.SecretKeyRef{
 					Name: testSecret.name,
 					Key:  "api-key",
