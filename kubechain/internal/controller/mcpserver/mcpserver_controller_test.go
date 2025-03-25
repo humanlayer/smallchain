@@ -10,11 +10,20 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
 	"github.com/humanlayer/smallchain/kubechain/internal/mcpmanager"
 	"github.com/humanlayer/smallchain/kubechain/test/utils"
 )
+
+func teardownMCPServer(ctx context.Context, mcpServer *kubechainv1alpha1.MCPServer) {
+	Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, mcpServer))).To(Succeed())
+}
+
+func teardownContactChannel(ctx context.Context, contactChannel *kubechainv1alpha1.ContactChannel) {
+	Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, contactChannel))).To(Succeed())
+}
 
 // MockMCPServerManager is a mock implementation of the MCPServerManager for testing
 type MockMCPServerManager struct {
@@ -90,7 +99,7 @@ var _ = Describe("MCPServer Controller", func() {
 			}
 
 			Expect(k8sClient.Create(ctx, mcpServer)).To(Succeed())
-			defer k8sClient.Delete(ctx, mcpServer)
+			defer teardownMCPServer(ctx, mcpServer)
 
 			mcpServerLookupKey := types.NamespacedName{Name: MCPServerName, Namespace: MCPServerNamespace}
 			createdMCPServer := &kubechainv1alpha1.MCPServer{}
@@ -140,9 +149,6 @@ var _ = Describe("MCPServer Controller", func() {
 					len(createdMCPServer.Status.Tools) == 1 &&
 					createdMCPServer.Status.Status == "Ready"
 			}, time.Second*10, time.Millisecond*250).Should(BeTrue())
-
-			By("Cleaning up the MCPServer")
-			Expect(k8sClient.Delete(ctx, mcpServer)).To(Succeed())
 		})
 
 		It("Should handle invalid MCP server specs", func() {
@@ -161,7 +167,7 @@ var _ = Describe("MCPServer Controller", func() {
 			}
 
 			Expect(k8sClient.Create(ctx, invalidMCPServer)).To(Succeed())
-			defer k8sClient.Delete(ctx, invalidMCPServer)
+			defer teardownMCPServer(ctx, invalidMCPServer)
 
 			invalidMCPServerLookupKey := types.NamespacedName{Name: "invalid-mcpserver", Namespace: MCPServerNamespace}
 			createdInvalidMCPServer := &kubechainv1alpha1.MCPServer{}
@@ -195,9 +201,6 @@ var _ = Describe("MCPServer Controller", func() {
 				return !createdInvalidMCPServer.Status.Connected &&
 					createdInvalidMCPServer.Status.Status == "Error"
 			}, time.Second*10, time.Millisecond*250).Should(BeTrue())
-
-			By("Cleaning up the invalid MCPServer")
-			Expect(k8sClient.Delete(ctx, invalidMCPServer)).To(Succeed())
 		})
 
 		It("Should error if the approval contact channel is non-existent", func() {
@@ -219,7 +222,7 @@ var _ = Describe("MCPServer Controller", func() {
 			}
 
 			Expect(k8sClient.Create(ctx, mcpServer)).To(Succeed())
-			defer k8sClient.Delete(ctx, mcpServer)
+			defer teardownMCPServer(ctx, mcpServer)
 
 			By("Creating a controller with a mock manager")
 			recorder := record.NewFakeRecorder(10)
@@ -245,9 +248,6 @@ var _ = Describe("MCPServer Controller", func() {
 			Expect(createdMCPServer.Status.StatusDetail).To(ContainSubstring("ContactChannel \"non-existent-channel\" not found"))
 			By("Checking that the event was emitted")
 			utils.ExpectRecorder(recorder).ToEmitEventContaining("ContactChannelNotFound")
-
-			By("Cleaning up the MCPServer")
-			Expect(k8sClient.Delete(ctx, mcpServer)).To(Succeed())
 		})
 
 		It("Should stay in pending if the approval contact channel is not ready", func() {
@@ -269,7 +269,7 @@ var _ = Describe("MCPServer Controller", func() {
 			}
 
 			Expect(k8sClient.Create(ctx, mcpServer)).To(Succeed())
-			defer k8sClient.Delete(ctx, mcpServer)
+			defer teardownMCPServer(ctx, mcpServer)
 
 			By("Creating the contact channel in not-ready state")
 			contactChannel := &kubechainv1alpha1.ContactChannel{
@@ -296,6 +296,7 @@ var _ = Describe("MCPServer Controller", func() {
 				},
 			}
 			Expect(k8sClient.Create(ctx, contactChannel)).To(Succeed())
+			defer teardownContactChannel(ctx, contactChannel)
 
 			By("Reconciling the MCPServer with not-ready contact channel")
 			recorder := record.NewFakeRecorder(10)
@@ -319,10 +320,6 @@ var _ = Describe("MCPServer Controller", func() {
 			Expect(createdMCPServer.Status.Status).To(Equal("Pending"))
 			Expect(createdMCPServer.Status.StatusDetail).To(ContainSubstring("ContactChannel \"test-channel\" is not ready"))
 			utils.ExpectRecorder(recorder).ToEmitEventContaining("ContactChannelNotReady")
-
-			By("Cleaning up the MCPServer and ContactChannel")
-			Expect(k8sClient.Delete(ctx, mcpServer)).To(Succeed())
-			Expect(k8sClient.Delete(ctx, contactChannel)).To(Succeed())
 		})
 	})
 })
