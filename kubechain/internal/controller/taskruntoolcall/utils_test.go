@@ -19,23 +19,23 @@ var addTool = &TestTool{
 	toolType: "function",
 }
 
-var testContactChannel = &TestContactChannel{
-	name:        "test-contact-channel",
-	channelType: "slack",
-	secretName:  testSecret.name,
-}
+// var testContactChannel = &TestContactChannel{
+// 	name:        "test-contact-channel",
+// 	channelType: "slack",
+// 	secretName:  testSecret.name,
+// }
 
-var testMCPServer = &TestMCPServer{
-	name:                   "test-mcp-server",
-	needsApproval:          true,
-	approvalContactChannel: testContactChannel.name,
-}
+// var testMCPServer = &TestMCPServer{
+// 	name:                   "test-mcp-server",
+// 	needsApproval:          true,
+// 	approvalContactChannel: testContactChannel.name,
+// }
 
-var testMCPTool = &TestMCPTool{
-	name:        "test-mcp-server-test-tool",
-	mcpServer:   testMCPServer.name,
-	mcpToolName: "test-tool",
-}
+// var testMCPTool = &TestMCPTool{
+// 	name:        "test-mcp-server-test-tool",
+// 	mcpServer:   testMCPServer.name,
+// 	mcpToolName: "test-tool",
+// }
 
 var trtcForAddTool = &TestTaskRunToolCall{
 	name:      "test-taskruntoolcall",
@@ -240,10 +240,10 @@ func setupTestAddTool(ctx context.Context) func() {
 
 // TestMCPServer represents a test MCPServer resource
 type TestMCPServer struct {
-	name                   string
-	contactChannelName     string
-	needsApproval          bool
-	needsApprovalChecking  bool
+	name string
+	// contactChannelName     string
+	needsApproval bool
+	// needsApprovalChecking  bool
 	approvalContactChannel string
 	mcpServer              *kubechainv1alpha1.MCPServer
 }
