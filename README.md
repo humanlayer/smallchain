@@ -139,7 +139,22 @@ spec:
 EOF
 ```
 
-   Check the created LLM:
+```mermaid
+graph RL
+    LLM
+    Secret
+
+    Credentials --> Secret
+
+    subgraph LLM
+      Provider
+      Credentials
+      ModelParameters
+    end
+
+```
+
+Check the created LLM:
    
 ```bash
 kubectl get llm
@@ -214,6 +229,28 @@ spec:
   system: |
     You are a helpful assistant. Your job is to help the user with their tasks.
 EOF
+```
+
+```mermaid
+graph RL
+    Agent
+    LLM
+    Secret
+
+    LLMRef --> LLM
+    Credentials --> Secret
+
+
+    subgraph LLM
+      Provider
+      Credentials
+      ModelParameters
+    end
+
+    subgraph Agent
+      LLMRef
+      SystemPrompt
+    end
 ```
 
    Check the created Agent:
@@ -294,7 +331,34 @@ spec:
 EOF
 ```
 
-   Check the created Task:
+```mermaid
+graph RL
+    Agent
+    LLM
+    Secret
+
+    LLMRef --> LLM
+    Credentials --> Secret
+    AgentRef --> Agent
+
+
+    subgraph LLM
+      Provider
+      Credentials
+      ModelParameters
+    end
+
+    subgraph Agent
+      LLMRef
+      SystemPrompt
+    end
+
+    subgraph Task
+      AgentRef
+      Message
+    end
+```
+Check the created Task:
    
 ```bash
 kubectl get task
@@ -356,7 +420,46 @@ Events:
 
 </details>
 
-By default, creating a task will create an initial TaskRun to execute the task.
+By default, creating a task will create an initial TaskRun to execute the task. A TaskRun is a single execution of a task by an agent, tracking the context window and final output.
+
+```mermaid
+graph RL
+    Agent
+    LLM
+    Secret
+
+    LLMRef --> LLM
+    Credentials --> Secret
+    AgentRef --> Agent
+    TaskRef --> Task
+
+
+    subgraph LLM
+      Provider
+      Credentials
+      ModelParameters
+    end
+
+    subgraph Agent
+      LLMRef
+      SystemPrompt
+    end
+
+    subgraph Task
+      AgentRef
+      Message
+    end
+
+    subgraph TaskRun
+      TaskRef
+      subgraph ContextWindow
+        direction LR
+        SystemMessage
+        UserMessage
+      end
+    end
+
+```
 
 For now, our task run should complete quickly and return a FinalAnswer.
 
@@ -382,6 +485,47 @@ and you'll see
 
 > The Moon does not have a capital. It is a natural satellite of Earth and lacks any governmental structure or human habitation that would necessitate a capital city.
 
+```mermaid
+flowchart RL
+    Agent
+    LLM
+    Secret
+
+    LLMRef --> LLM
+    Credentials --> Secret
+    AgentRef --> Agent
+    TaskRef --> Task
+
+
+    subgraph LLM
+      Provider
+      Credentials
+      ModelParameters
+    end
+
+    subgraph Agent
+      LLMRef
+      SystemPrompt
+    end
+
+    subgraph Task
+      AgentRef
+      Message
+    end
+
+    subgraph TaskRun
+      TaskRef
+      subgraph ContextWindow
+        direction LR
+        SystemMessage
+        UserMessage
+        AssistantMessage
+      end
+    end
+
+    ContextWindow <--> Provider <--> OpenAI
+
+```
 
 ### Inspecting the TaskRun more closely
 
@@ -594,7 +738,36 @@ spec:
 EOF
 ```
 
-Let's make a new task that uses the fetch tool:
+```mermaid
+graph RL
+    Agent
+    LLM
+    Secret
+
+    LLMRef --> LLM
+    Credentials --> Secret
+
+
+    subgraph LLM
+      Provider
+      Credentials
+      ModelParameters
+    end
+
+    subgraph Agent
+      LLMRef
+      SystemPrompt
+      MCPServers
+    end
+
+    subgraph MCPServer
+      fetch[fetch server]
+    end
+
+    MCPServers --> MCPServer
+```
+
+Let's make a new task that uses the fetch tool. In this case, we'll use https://swapi.dev, a public API for Star Wars data.
 
 ```bash
 cat <<EOF | kubectl apply -f -
@@ -605,7 +778,7 @@ metadata:
 spec:
   agentRef:
     name: my-assistant
-  message: "What is on the front page of planetscale.com?"
+  message: "what is the data at https://swapi.dev/api/people/1? "
 EOF
 ```
 
@@ -634,6 +807,105 @@ and you can describe the taskrun to see the full context window and tool-calling
 
 ```
 kubectl describe taskrun fetch-task-1 
+```
+
+A simplified view of the taskrun:
+
+```mermaid
+flowchart TD
+
+    subgraph LLM
+      Provider
+      Credentials
+    end
+    subgraph MCPServer
+      fetch
+    end
+    subgraph TaskRun
+      subgraph ContextWindow
+        direction LR
+        SystemMessage
+        UserMessage
+        ToolCall-1
+        ToolResponse-1
+        AssistantMessage
+      end
+    end
+    SystemMessage --> UserMessage
+
+    Task2[Task]
+    Agent2[Agent]
+
+    UserMessage --> Task --> Agent --> LLM 
+    Provider --> OpenAI
+    Secret --> Credentials
+    Credentials --> OpenAI
+    OpenAI --> ToolCall-1 
+    ToolCall-1 --> Task2 --> Agent2 --> fetch
+    fetch --> ToolResponse-1
+    ToolResponse-1 --> OpenAI2[OpenAI]
+    OpenAI2 --> AssistantMessage
+```
+
+* * *
+
+Putting another way, the TaskRun controller is responsible for sending the context window to the LLM, and
+for processing the LLM response with the appropriate tool calls from MCP servers.
+
+```mermaid
+flowchart RL
+    Agent
+    LLM
+    Secret
+
+    LLMRef --> LLM
+    Credentials --> Secret
+    AgentRef --> Agent
+    TaskRef --> Task
+
+
+    subgraph LLM
+      Provider
+      Credentials
+      ModelParameters
+    end
+
+    subgraph Agent
+      LLMRef
+      SystemPrompt
+      MCPServers
+    end
+
+    subgraph Task
+      AgentRef
+      Message
+    end
+
+    subgraph MCPServer
+      fetch[fetch server]
+    end
+
+    MCPServers --> MCPServer
+
+
+    subgraph TaskRun
+      TaskRef
+      subgraph ContextWindow
+        direction LR
+        SystemMessage
+        UserMessage
+        ToolCall-1
+        ToolResponse-1
+        ToolCall-2
+        ToolResponse-2
+        AssistantMessage
+      end
+    end
+
+    ContextWindow <--> MCPServer <--> fetch
+    ContextWindow <--> Provider <--> OpenAI
+
+
 ```
 
 ```
