@@ -177,6 +177,8 @@ Alternatively, clean up components individually:
 
 ## Testing Guidelines
 
+Testing is a critical part of the development process, especially for Kubernetes controllers that manage complex state machines. This section outlines best practices for testing controllers, developing end-to-end tests, and mocking external dependencies.
+
 ### Kubernetes Controller Testing
 - Use state-based testing to verify controller behavior
 - Test each state transition independently
@@ -201,6 +203,9 @@ Context("'' -> Initializing", func() {
 
         // Execute reconciliation
         result, err := reconciler.Reconcile(ctx, request)
+        
+        // Verify reconciliation was successful
+        Expect(err).NotTo(HaveOccurred())
         
         // Verify expected state transition
         Expect(resource.Status.Phase).To(Equal(ExpectedPhase))
@@ -248,7 +253,11 @@ func (t *TestResource) SetupWithStatus(ctx context.Context, status kubechain.Res
 }
 
 func (t *TestResource) Teardown(ctx context.Context) {
-    Expect(k8sClient.Delete(ctx, t.resource)).To(Succeed())
+    // Delete resource and handle potential errors (e.g., if already deleted)
+    err := k8sClient.Delete(ctx, t.resource)
+    if err != nil && !apierrors.IsNotFound(err) {
+        Expect(err).NotTo(HaveOccurred())
+    }
 }
 ```
 
@@ -295,3 +304,5 @@ Examples of state transition Context blocks:
 - Verify calls to external services with expectations on arguments
 - Use mock secrets for credentials in tests
 - Consider using controller runtime fake clients for complex scenarios
+- Use the `gomock` package (github.com/golang/mock/gomock) for generating mocks of interfaces
+- For HTTP services, use httptest package from the standard library
