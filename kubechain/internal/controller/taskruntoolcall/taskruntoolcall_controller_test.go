@@ -43,7 +43,7 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedTRTC.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunToolCallPhasePending))
-			Expect(updatedTRTC.Status.Status).To(Equal("Pending"))
+			Expect(updatedTRTC.Status.Status).To(Equal(kubechainv1alpha1.TaskRunToolCallStatusTypePending))
 			Expect(updatedTRTC.Status.StatusDetail).To(Equal("Initializing"))
 			Expect(updatedTRTC.Status.StartTime).NotTo(BeNil())
 		})
@@ -86,7 +86,7 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedTRTC.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunToolCallPhaseSucceeded))
 			Expect(updatedTRTC.Status.Result).To(Equal("5")) // 2 + 3 = 5
-			Expect(updatedTRTC.Status.Status).To(Equal("Ready"))
+			Expect(updatedTRTC.Status.Status).To(Equal(kubechainv1alpha1.TaskRunToolCallStatusTypeReady))
 			Expect(updatedTRTC.Status.StatusDetail).To(Equal("Tool executed successfully"))
 
 			By("checking that execution events were emitted")
@@ -135,7 +135,7 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 			}, updatedTRTC)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(updatedTRTC.Status.Status).To(Equal("Error"))
+			Expect(updatedTRTC.Status.Status).To(Equal(kubechainv1alpha1.TaskRunToolCallStatusTypeError))
 			Expect(updatedTRTC.Status.StatusDetail).To(Equal("Invalid arguments JSON"))
 			Expect(updatedTRTC.Status.Error).NotTo(BeEmpty())
 
@@ -212,13 +212,152 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedTRTC.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunToolCallPhaseSucceeded))
-			Expect(updatedTRTC.Status.Status).To(Equal("Ready"))
+			Expect(updatedTRTC.Status.Status).To(Equal(kubechainv1alpha1.TaskRunToolCallStatusTypeReady))
 			Expect(updatedTRTC.Status.Result).To(Equal("5")) // From our mock implementation
 
 			By("checking that appropriate events were emitted")
 			utils.ExpectRecorder(recorder).ToEmitEventContaining("ExecutionSucceeded")
 		})
 	})
+
+	// Tests for approval workflow
+	Context("Pending -> AwaitingHumanApproval (MCP Tool)", func() {
+		It("transitions to AwaitingHumanApproval when MCPServer has approval channel", func() {
+			// Setup MCP server without approval channel
+			testSecret.Setup(ctx)
+			mcpServer := &TestMCPServer{
+				name:                   "test-mcp-with-approval",
+				needsApproval:          true,
+				approvalContactChannel: "slack",
+			}
+			mcpServer.SetupWithStatus(ctx, kubechainv1alpha1.MCPServerStatus{
+				Connected: true,
+				Status:    "Ready",
+			})
+			defer mcpServer.Teardown(ctx)
+
+			// Setup MCP tool
+			mcpTool := &TestMCPTool{
+				name:        "test-mcp-with-approval-tool",
+				mcpServer:   mcpServer.name,
+				mcpToolName: "test-tool",
+			}
+
+			tool := mcpTool.SetupWithStatus(ctx, kubechainv1alpha1.ToolStatus{
+				Ready:  true,
+				Status: "Ready",
+			})
+			defer mcpTool.Teardown(ctx)
+
+			// Create TaskRunToolCall with MCP tool reference
+			taskRunToolCall := &TestTaskRunToolCall{
+				name:      "test-mcp-with-approval-trtc",
+				toolName:  tool.Spec.Name,
+				arguments: `{"a": 2, "b": 3}`,
+			}
+			trtc := taskRunToolCall.SetupWithStatus(ctx, kubechainv1alpha1.TaskRunToolCallStatus{
+				Phase:        kubechainv1alpha1.TaskRunToolCallPhasePending,
+				Status:       "Pending",
+				StatusDetail: "Ready for execution",
+				StartTime:    &metav1.Time{Time: time.Now().Add(-1 * time.Minute)},
+			})
+			defer taskRunToolCall.Teardown(ctx)
+
+			By("reconciling the taskruntoolcall that uses MCP tool with approval")
+			reconciler, recorder := reconciler()
+
+			reconciler.MCPManager = &MockMCPManager{
+				NeedsApproval: true,
+			}
+
+			result, err := reconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      trtc.Name,
+					Namespace: trtc.Namespace,
+				},
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.RequeueAfter).To(Equal(5 * time.Second)) // Should requeue after 5 seconds
+
+			By("checking the taskruntoolcall status is set to AwaitingHumanApproval")
+			updatedTRTC := &kubechainv1alpha1.TaskRunToolCall{}
+			err = k8sClient.Get(ctx, types.NamespacedName{
+				Name:      trtc.Name,
+				Namespace: trtc.Namespace,
+			}, updatedTRTC)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedTRTC.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunToolCallPhasePending))
+			Expect(updatedTRTC.Status.Status).To(Equal(kubechainv1alpha1.TaskRunToolCallStatusTypeAwaitingHumanApproval))
+			Expect(updatedTRTC.Status.StatusDetail).To(ContainSubstring("Waiting for human approval via contact channel"))
+
+			By("checking that appropriate events were emitted")
+			utils.ExpectRecorder(recorder).ToEmitEventContaining("AwaitingHumanApproval")
+		})
+	})
+
+	/*
+		Context("ErrorRequestingHumanApproval -> ErrorRequestingHumanApproval", func() {
+			It("stays in ErrorRequestingHumanApproval if the error is not retryable", func() {
+				// Setup MCP server without approval channel
+				testSecret.Setup(ctx)
+				mcpServer := &TestMCPServer{
+					name:                   "test-mcp-with-approval",
+					needsApproval:          true,
+					approvalContactChannel: "",
+				}
+				mcpServer.SetupWithStatus(ctx, kubechainv1alpha1.MCPServerStatus{
+					Connected: true,
+					Status:    "Ready",
+				})
+				defer mcpServer.Teardown(ctx)
+
+				// Setup MCP tool
+				mcpTool := &TestMCPTool{
+					name:        "test-mcp-with-approval-tool",
+					mcpServer:   mcpServer.name,
+					mcpToolName: "test-tool",
+				}
+
+				tool := mcpTool.SetupWithStatus(ctx, kubechainv1alpha1.ToolStatus{
+					Ready:  true,
+					Status: "Ready",
+				})
+				defer mcpTool.Teardown(ctx)
+
+				// Create TaskRunToolCall with MCP tool reference
+				taskRunToolCall := &TestTaskRunToolCall{
+					name:      "test-mcp-with-approval-trtc",
+					toolName:  tool.Spec.Name,
+					arguments: `{"a": 2, "b": 3}`,
+				}
+				trtc := taskRunToolCall.SetupWithStatus(ctx, kubechainv1alpha1.TaskRunToolCallStatus{
+					Phase:        kubechainv1alpha1.TaskRunToolCallPhasePending,
+					Status:       kubechainv1alpha1.TaskRunToolCallStatusTypeErrorRequestingHumanApproval,
+					StatusDetail: "Ready for execution",
+					StartTime:    &metav1.Time{Time: time.Now().Add(-1 * time.Minute)},
+				})
+				defer taskRunToolCall.Teardown(ctx)
+
+				By("reconciling the taskruntoolcall that uses MCP tool with approval")
+				reconciler, _ := reconciler()
+
+				reconciler.MCPManager = &MockMCPManager{NeedsApproval: true}
+
+				result, err := reconciler.Reconcile(ctx, reconcile.Request{
+					NamespacedName: types.NamespacedName{
+						Name:      trtc.Name,
+						Namespace: trtc.Namespace,
+					},
+				})
+
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result.Requeue).To(BeFalse()) // No requeue since initialization is complete\
+				Expect(trtc.Status.Status).To(Equal(kubechainv1alpha1.TaskRunToolCallStatusTypeErrorRequestingHumanApproval))
+			})
+		})
+	*/
 })
 
 /*

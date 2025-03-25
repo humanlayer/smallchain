@@ -688,7 +688,8 @@ func (r *TaskRunToolCallReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 				logger.Error(err, "Failed to update TaskRunToolCall status")
 				return ctrl.Result{}, err
 			}
-			return ctrl.Result{}, nil
+
+			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 		}
 	}
 
