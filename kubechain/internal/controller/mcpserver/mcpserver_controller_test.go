@@ -90,6 +90,7 @@ var _ = Describe("MCPServer Controller", func() {
 			}
 
 			Expect(k8sClient.Create(ctx, mcpServer)).To(Succeed())
+			defer k8sClient.Delete(ctx, mcpServer)
 
 			mcpServerLookupKey := types.NamespacedName{Name: MCPServerName, Namespace: MCPServerNamespace}
 			createdMCPServer := &kubechainv1alpha1.MCPServer{}
@@ -160,6 +161,7 @@ var _ = Describe("MCPServer Controller", func() {
 			}
 
 			Expect(k8sClient.Create(ctx, invalidMCPServer)).To(Succeed())
+			defer k8sClient.Delete(ctx, invalidMCPServer)
 
 			invalidMCPServerLookupKey := types.NamespacedName{Name: "invalid-mcpserver", Namespace: MCPServerNamespace}
 			createdInvalidMCPServer := &kubechainv1alpha1.MCPServer{}
@@ -217,6 +219,7 @@ var _ = Describe("MCPServer Controller", func() {
 			}
 
 			Expect(k8sClient.Create(ctx, mcpServer)).To(Succeed())
+			defer k8sClient.Delete(ctx, mcpServer)
 
 			By("Creating a controller with a mock manager")
 			recorder := record.NewFakeRecorder(10)
@@ -266,6 +269,7 @@ var _ = Describe("MCPServer Controller", func() {
 			}
 
 			Expect(k8sClient.Create(ctx, mcpServer)).To(Succeed())
+			defer k8sClient.Delete(ctx, mcpServer)
 
 			By("Creating the contact channel in not-ready state")
 			contactChannel := &kubechainv1alpha1.ContactChannel{
