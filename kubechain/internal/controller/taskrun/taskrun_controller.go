@@ -6,6 +6,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
@@ -19,6 +20,7 @@ import (
 	"github.com/humanlayer/smallchain/kubechain/internal/adapters"
 	"github.com/humanlayer/smallchain/kubechain/internal/llmclient"
 	"github.com/humanlayer/smallchain/kubechain/internal/mcpmanager"
+	"go.opentelemetry.io/otel"
 )
 
 const (
@@ -68,16 +70,28 @@ func (r *TaskRunReconciler) validateTaskAndAgent(ctx context.Context, taskRun *k
 	// Get parent Task
 	task, err := r.getTask(ctx, taskRun)
 	if err != nil {
-		logger.Error(err, "Task validation failed")
-		statusUpdate.Status.Ready = false
-		statusUpdate.Status.Status = StatusError
-		statusUpdate.Status.StatusDetail = fmt.Sprintf("Task validation failed: %v", err)
-		statusUpdate.Status.Error = err.Error()
-		r.recorder.Event(taskRun, corev1.EventTypeWarning, "ValidationFailed", err.Error())
+		r.recorder.Event(taskRun, corev1.EventTypeWarning, "TaskValidationFailed", err.Error())
+		if apierrors.IsNotFound(err) {
+			logger.Info("Task not found", "task", taskRun.Spec.TaskRef.Name)
+			statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseFailed
+			statusUpdate.Status.Error = fmt.Sprintf("Task %q not found", taskRun.Spec.TaskRef.Name)
+			statusUpdate.Status.StatusDetail = fmt.Sprintf("Task %q not found", taskRun.Spec.TaskRef.Name)
+			statusUpdate.Status.Status = StatusError
+		} else {
+			logger.Error(err, "Task validation failed")
+			statusUpdate.Status.Ready = false
+			statusUpdate.Status.Status = StatusError
+			statusUpdate.Status.StatusDetail = fmt.Sprintf("Task validation failed: %v", err)
+			statusUpdate.Status.Error = err.Error()
+		}
+
 		if updateErr := r.Status().Update(ctx, statusUpdate); updateErr != nil {
 			logger.Error(updateErr, "Failed to update TaskRun status")
 			return nil, nil, ctrl.Result{}, fmt.Errorf("failed to update taskrun status: %v", err)
 		}
+		// todo dont error if not found, don't requeue
+		// (can use client.IgnoreNotFound(err), but today
+		// the parent method needs err != nil to break control flow properly)
 		return nil, nil, ctrl.Result{}, err
 	}
 
@@ -89,7 +103,7 @@ func (r *TaskRunReconciler) validateTaskAndAgent(ctx context.Context, taskRun *k
 		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhasePending
 		statusUpdate.Status.StatusDetail = fmt.Sprintf("Waiting for task %q to become ready", task.Name)
 		statusUpdate.Status.Error = "" // Clear previous error
-		r.recorder.Event(taskRun, corev1.EventTypeNormal, "Waiting", fmt.Sprintf("Waiting for task %q to become ready", task.Name))
+		r.recorder.Event(taskRun, corev1.EventTypeNormal, "TaskNotReady", fmt.Sprintf("Waiting for task %q to become ready", task.Name))
 		if err := r.Status().Update(ctx, statusUpdate); err != nil {
 			logger.Error(err, "Failed to update TaskRun status")
 			return nil, nil, ctrl.Result{}, err
@@ -133,11 +147,11 @@ func (r *TaskRunReconciler) validateTaskAndAgent(ctx context.Context, taskRun *k
 	return task, &agent, ctrl.Result{}, nil
 }
 
-// initializeTaskRun sets up the initial state of a TaskRun with the correct context and phase
-func (r *TaskRunReconciler) initializeTaskRun(ctx context.Context, taskRun *kubechainv1alpha1.TaskRun, statusUpdate *kubechainv1alpha1.TaskRun, task *kubechainv1alpha1.Task, agent *kubechainv1alpha1.Agent) (ctrl.Result, error) {
+// prepareForLLM sets up the initial state of a TaskRun with the correct context and phase
+func (r *TaskRunReconciler) prepareForLLM(ctx context.Context, taskRun *kubechainv1alpha1.TaskRun, statusUpdate *kubechainv1alpha1.TaskRun, task *kubechainv1alpha1.Task, agent *kubechainv1alpha1.Agent) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
-	if statusUpdate.Status.Phase == "" || statusUpdate.Status.Phase == kubechainv1alpha1.TaskRunPhasePending {
+	if statusUpdate.Status.Phase == kubechainv1alpha1.TaskRunPhaseInitializing || statusUpdate.Status.Phase == kubechainv1alpha1.TaskRunPhasePending {
 		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseReadyForLLM
 		statusUpdate.Status.Ready = true
 		statusUpdate.Status.ContextWindow = []kubechainv1alpha1.Message{
@@ -178,6 +192,11 @@ func (r *TaskRunReconciler) processToolCalls(ctx context.Context, taskRun *kubec
 	}
 
 	logger.Info("Found tool calls", "count", len(toolCallList.Items))
+	if len(toolCallList.Items) == 0 {
+		logger.Info("No tool calls found, something is very wrong")
+		r.recorder.Event(taskRun, corev1.EventTypeWarning, "ToolCallsPendingWithNoToolCalls", "TaskRun is in ToolCallsPending phase but no tool calls were found")
+		return ctrl.Result{}, fmt.Errorf("TaskRun %q is in ToolCallsPending phase but no tool calls were found", taskRun.Name)
+	}
 
 	// Check if all tool calls are complete
 	allComplete := true
@@ -207,6 +226,7 @@ func (r *TaskRunReconciler) processToolCalls(ctx context.Context, taskRun *kubec
 		statusUpdate.Status.Ready = true
 		statusUpdate.Status.Status = StatusReady
 		statusUpdate.Status.StatusDetail = "All tool calls completed, ready to send tool results to LLM"
+		r.recorder.Event(taskRun, corev1.EventTypeNormal, "AllToolCallsCompleted", "All tool calls completed, ready to send tool results to LLM")
 
 		if err := r.Status().Update(ctx, statusUpdate); err != nil {
 			logger.Error(err, "Failed to update TaskRun status")
@@ -359,6 +379,7 @@ func (r *TaskRunReconciler) processLLMResponse(ctx context.Context, output *kube
 		statusUpdate.Status.Status = StatusReady
 		statusUpdate.Status.StatusDetail = "LLM response received, tool calls pending"
 		statusUpdate.Status.Error = ""
+		r.recorder.Event(taskRun, corev1.EventTypeNormal, "ToolCallsPending", "LLM response received, tool calls pending")
 
 		// Update the parent's status before creating tool call objects.
 		if err := r.Status().Update(ctx, statusUpdate); err != nil {
@@ -413,7 +434,35 @@ func (r *TaskRunReconciler) createToolCalls(ctx context.Context, taskRun *kubech
 		logger.Info("Created TaskRunToolCall", "name", newName)
 		r.recorder.Event(taskRun, corev1.EventTypeNormal, "ToolCallCreated", "Created TaskRunToolCall "+newName)
 	}
-	return ctrl.Result{}, nil
+	return ctrl.Result{RequeueAfter: time.Second * 5}, nil
+}
+
+// initializePhaseAndSpan initializes the TaskRun phase and starts tracing
+func (r *TaskRunReconciler) initializePhaseAndSpan(ctx context.Context, statusUpdate *kubechainv1alpha1.TaskRun) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
+
+	// Start tracing the TaskRun
+	tracer := otel.GetTracerProvider().Tracer("taskrun")
+	ctx, span := tracer.Start(ctx, "TaskRun")
+
+	// Store span context in status
+	spanCtx := span.SpanContext()
+	statusUpdate.Status.SpanContext = &kubechainv1alpha1.SpanContext{
+		TraceID: spanCtx.TraceID().String(),
+		SpanID:  spanCtx.SpanID().String(),
+	}
+
+	statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseInitializing
+	statusUpdate.Status.Ready = false
+	statusUpdate.Status.Status = "Initializing"
+	statusUpdate.Status.StatusDetail = "Initializing"
+	if err := r.Status().Update(ctx, statusUpdate); err != nil {
+		logger.Error(err, "Failed to update TaskRun status")
+		return ctrl.Result{}, err
+	}
+
+	// Don't end the span - it will be ended when we reach FinalAnswer
+	return ctrl.Result{Requeue: true}, nil
 }
 
 // Reconcile validates the taskrun's task reference and sends the prompt to the LLM.
@@ -430,6 +479,11 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// Create a copy for status update
 	statusUpdate := taskRun.DeepCopy()
 
+	// Initialize phase if not set
+	if statusUpdate.Status.Phase == "" {
+		return r.initializePhaseAndSpan(ctx, statusUpdate)
+	}
+
 	// Step 1: Validate Task and Agent
 	task, agent, result, err := r.validateTaskAndAgent(ctx, &taskRun, statusUpdate)
 	if err != nil || !result.IsZero() {
@@ -437,7 +491,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	// Step 2: Initialize Phase if necessary
-	if result, err := r.initializeTaskRun(ctx, &taskRun, statusUpdate, task, agent); err != nil || !result.IsZero() {
+	if result, err := r.prepareForLLM(ctx, &taskRun, statusUpdate, task, agent); err != nil || !result.IsZero() {
 		return result, err
 	}
 
@@ -477,6 +531,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// Step 7: Collect tools from all sources
 	tools := r.collectTools(ctx, agent)
 
+	r.recorder.Event(&taskRun, corev1.EventTypeNormal, "SendingContextWindowToLLM", "Sending context window to LLM")
 	// Step 8: Send the prompt to the LLM
 	output, err := llmClient.SendRequest(ctx, taskRun.Status.ContextWindow, tools)
 	if err != nil {
