@@ -21,6 +21,7 @@ import (
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
 	externalapi "github.com/humanlayer/smallchain/kubechain/internal/externalAPI"
 	"github.com/humanlayer/smallchain/kubechain/internal/humanlayer"
+	"github.com/humanlayer/smallchain/kubechain/internal/humanlayerapi"
 	"github.com/humanlayer/smallchain/kubechain/internal/mcpmanager"
 )
 
@@ -43,7 +44,7 @@ type TaskRunToolCallReconciler struct {
 	recorder   record.EventRecorder
 	server     *http.Server
 	MCPManager mcpmanager.MCPManagerInterface
-	HLClient   humanlayer.HumanLayerClientInterface
+	HLClient   humanlayer.HumanLayerClientFactoryInterface
 }
 
 func (r *TaskRunToolCallReconciler) webhookHandler(w http.ResponseWriter, req *http.Request) {
@@ -702,7 +703,7 @@ func (r *TaskRunToolCallReconciler) setStatusError(ctx context.Context, trtcStat
 	return ctrl.Result{}, nil
 }
 
-func (r *TaskRunToolCallReconciler) postToHumanLayer(ctx context.Context, trtc *kubechainv1alpha1.TaskRunToolCall, contactChannel *kubechainv1alpha1.ContactChannel, apiKey string) (int, error) {
+func (r *TaskRunToolCallReconciler) postToHumanLayer(ctx context.Context, trtc *kubechainv1alpha1.TaskRunToolCall, contactChannel *kubechainv1alpha1.ContactChannel, apiKey string) (*humanlayerapi.FunctionCallOutput, int, error) {
 	client := r.HLClient.NewHumanLayerClient()
 
 	switch contactChannel.Spec.ChannelType {
@@ -711,7 +712,7 @@ func (r *TaskRunToolCallReconciler) postToHumanLayer(ctx context.Context, trtc *
 	case "email":
 		client.SetEmailConfig(contactChannel.Spec.EmailConfig)
 	default:
-		return 0, fmt.Errorf("unsupported channel type: %s", contactChannel.Spec.ChannelType)
+		return nil, 0, fmt.Errorf("unsupported channel type: %s", contactChannel.Spec.ChannelType)
 	}
 
 	toolName := trtc.Spec.ToolRef.Name
@@ -728,9 +729,9 @@ func (r *TaskRunToolCallReconciler) postToHumanLayer(ctx context.Context, trtc *
 	client.SetRunID(trtc.Name)
 	client.SetAPIKey(apiKey)
 
-	_, statusCode, err := client.RequestApproval(ctx)
+	functionCall, statusCode, err := client.RequestApproval(ctx)
 
-	return statusCode, err
+	return functionCall, statusCode, err
 }
 
 // Reconcile processes TaskRunToolCall objects.
@@ -773,19 +774,66 @@ func (r *TaskRunToolCallReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			return ctrl.Result{}, err
 		}
 
-		// No approval yet? Get back in the loop.
-		if needsApproval && trtc.Status.Status == kubechainv1alpha1.TaskRunToolCallStatusTypeAwaitingHumanApproval {
-			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
-		}
+		approvalGranted := false
+		trtcNamespace := trtc.Namespace
+		var contactChannel *kubechainv1alpha1.ContactChannel
+		var apiKey string
 
 		if needsApproval {
-
-			trtcNamespace := trtc.Namespace
-			contactChannel, err := r.getContactChannel(ctx, mcpServer, trtcNamespace)
+			contactChannel, err = r.getContactChannel(ctx, mcpServer, trtcNamespace)
 			if err != nil {
 				return r.setStatusError(ctx, kubechainv1alpha1.TaskRunToolCallStatusTypeErrorRequestingHumanApproval, "NoContactChannel", &trtc, err)
 			}
 
+			apiKey, err = r.getHumanLayerAPIKey(ctx, contactChannel.Spec.APIKeyFrom.SecretKeyRef.Name, contactChannel.Spec.APIKeyFrom.SecretKeyRef.Key, trtcNamespace)
+
+			if err != nil || apiKey == "" {
+				return r.setStatusError(ctx, kubechainv1alpha1.TaskRunToolCallStatusTypeErrorRequestingHumanApproval, "NoAPIKey", &trtc, err)
+			}
+		}
+
+		// Check if approved/rejected
+		if needsApproval && trtc.Status.Status == kubechainv1alpha1.TaskRunToolCallStatusTypeAwaitingHumanApproval {
+			client := r.HLClient.NewHumanLayerClient()
+			client.SetCallID(trtc.Status.HumanLayerCallId)
+			client.SetAPIKey(apiKey)
+			functionCall, _, _ := client.GetFunctionCallStatus(ctx)
+
+			status := functionCall.GetStatus()
+
+			// No response yet.
+			if status.RespondedAt.Get() == nil {
+				return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+			}
+
+			approvalGranted = status.GetApproved()
+
+			// approval rejected, end flow
+			if !approvalGranted {
+				trtc.Status.Status = kubechainv1alpha1.TaskRunToolCallStatusTypeError
+				trtc.Status.StatusDetail = "Tool execution rejected"
+				trtc.Status.Result = "Rejected"
+				trtc.Status.Phase = kubechainv1alpha1.TaskRunToolCallPhaseFailed
+
+				if err := r.Status().Update(ctx, &trtc); err != nil {
+					logger.Error(err, "Failed to update TaskRunToolCall status")
+					return ctrl.Result{}, err
+				}
+
+				return ctrl.Result{}, nil
+			}
+
+			if approvalGranted {
+				trtc.Status.Status = kubechainv1alpha1.TaskRunToolCallStatusTypePending
+				trtc.Status.StatusDetail = "Tool execution approved"
+				trtc.Status.Phase = kubechainv1alpha1.TaskRunToolCallPhaseSucceeded
+
+				// TODO: Do we want to update the status here and return? Right now we just let
+				// the rest of execution continue which allows tool execution to occur.
+			}
+		}
+
+		if needsApproval && !approvalGranted {
 			trtc.Status.Status = "AwaitingHumanApproval"
 			trtc.Status.StatusDetail = fmt.Sprintf("Waiting for human approval via contact channel %s", mcpServer.Spec.ApprovalContactChannel.Name)
 			r.recorder.Event(&trtc, corev1.EventTypeNormal, "AwaitingHumanApproval",
@@ -796,25 +844,27 @@ func (r *TaskRunToolCallReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 				return ctrl.Result{}, err
 			}
 
-			apiKey, err := r.getHumanLayerAPIKey(ctx, contactChannel.Spec.APIKeyFrom.SecretKeyRef.Name, contactChannel.Spec.APIKeyFrom.SecretKeyRef.Key, trtcNamespace)
-
-			if err != nil || apiKey == "" {
-				return r.setStatusError(ctx, kubechainv1alpha1.TaskRunToolCallStatusTypeErrorRequestingHumanApproval, "NoAPIKey", &trtc, err)
-			}
-
 			if r.HLClient == nil {
 				err := fmt.Errorf("HLClient not initialized")
 				return r.setStatusError(ctx, kubechainv1alpha1.TaskRunToolCallStatusTypeErrorRequestingHumanApproval, "NoHumanLayerClient", &trtc, err)
 			}
 
-			statusCode, err := r.postToHumanLayer(ctx, &trtc, contactChannel, apiKey)
+			functionCall, statusCode, err := r.postToHumanLayer(ctx, &trtc, contactChannel, apiKey)
 
-			if statusCode != 200 {
+			if err != nil {
 				errorMsg := fmt.Errorf("HumanLayer request failed with status code: %d", statusCode)
 				if err != nil {
 					errorMsg = fmt.Errorf("HumanLayer request failed with status code %d: %v", statusCode, err)
 				}
 				return r.setStatusError(ctx, kubechainv1alpha1.TaskRunToolCallStatusTypeErrorRequestingHumanApproval, "HumanLayerRequestFailed", &trtc, errorMsg)
+			}
+
+			callId := functionCall.GetCallId()
+			trtc.Status.HumanLayerCallId = callId
+
+			if err := r.Status().Update(ctx, &trtc); err != nil {
+				logger.Error(err, "Failed to update TaskRunToolCall status")
+				return ctrl.Result{}, err
 			}
 
 			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
@@ -862,7 +912,7 @@ func (r *TaskRunToolCallReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 
 	if r.HLClient == nil {
-		client, err := humanlayer.NewHumanLayerClient("")
+		client, err := humanlayer.NewHumanLayerClientFactory("")
 		if err != nil {
 			return err
 		}
