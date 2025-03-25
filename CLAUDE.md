@@ -200,6 +200,126 @@ Alternatively, clean up components individually:
 - Add tests for new functionality
 - Keep functions small and focused
 
-
 ### Markdown
 - When writing markdown code blocks, do not indent the block, just use backticks to offset the code
+
+## Testing Guidelines
+
+### Kubernetes Controller Testing
+- Use state-based testing to verify controller behavior
+- Test each state transition independently
+- Organize tests with focused, modular test setup
+- Use test fixtures for consistent resource creation
+- Write tests that serve as documentation of controller behavior
+
+#### State-Based Testing Approach
+- Controllers in Kubernetes are state machines; tests should reflect this
+- Organize tests by state transitions with Context blocks named "StateA -> StateB"
+- Each test should focus on a single state transition, not complete workflows
+- Use per-test setup/teardown with defer pattern rather than BeforeEach/AfterEach
+- Create modular test fixtures that can set up resources in specific states
+
+Example state transition test structure:
+```go
+Context("'' -> Initializing", func() {
+    It("moves to Initializing and sets required fields", func() {
+        // Set up resources needed for this specific test
+        resource := testFixture.Setup(ctx)
+        defer testFixture.Teardown(ctx)
+
+        // Execute reconciliation
+        result, err := reconciler.Reconcile(ctx, request)
+        
+        // Verify expected state transition
+        Expect(resource.Status.Phase).To(Equal(ExpectedPhase))
+        Expect(resource.Status.RequiredField).NotTo(BeNil())
+    })
+})
+```
+
+#### Test Fixture Pattern
+- Create test fixture structs for each resource type with Setup/Teardown methods
+- Implement SetupWithStatus methods to create resources in specific states
+- Provide sensible defaults for test resources
+- Implement helper functions like setupSuiteObjects to create dependency chains
+- Use reconciler factory functions to simplify test setup
+
+Example test fixture:
+```go
+type TestResource struct {
+    name     string
+    resource *kubechain.Resource
+}
+
+func (t *TestResource) Setup(ctx context.Context) *kubechain.Resource {
+    // Create the resource with default values
+    resource := &kubechain.Resource{
+        ObjectMeta: metav1.ObjectMeta{
+            Name:      t.name,
+            Namespace: "default",
+        },
+        Spec: kubechain.ResourceSpec{
+            // Default values
+        },
+    }
+    Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+    t.resource = resource
+    return resource
+}
+
+func (t *TestResource) SetupWithStatus(ctx context.Context, status kubechain.ResourceStatus) *kubechain.Resource {
+    resource := t.Setup(ctx)
+    resource.Status = status
+    Expect(k8sClient.Status().Update(ctx, resource)).To(Succeed())
+    t.resource = resource
+    return resource
+}
+
+func (t *TestResource) Teardown(ctx context.Context) {
+    Expect(k8sClient.Delete(ctx, t.resource)).To(Succeed())
+}
+```
+
+#### Organizing Tests by State Transitions
+- Map out all valid state transitions for your controller
+- Create a Context block for each state transition
+- Include both happy path and error path transitions
+- Use descriptive names for Context blocks that clearly show the transition
+- When testing a multi-step workflow, break it into individual state transitions
+
+Examples of state transition Context blocks:
+- `Context("'' -> Initializing")` - Initial reconciliation
+- `Context("Initializing -> Ready")` - Normal progression
+- `Context("Initializing -> Error")` - Error handling
+- `Context("Error -> ErrorBackoff")` - Recovery attempts
+- `Context("Ready -> Updating")` - Changes after ready state
+
+#### Test Implementation Best Practices
+- Use descriptive By() statements to explain test steps
+- Ensure each test verifies both the state and any side effects
+- Assert on specific fields that should change during the transition
+- Test event recording when events are part of the controller behavior
+- Verify controller return values (Requeue, RequeueAfter)
+- For tool calls or API interactions, use mock clients with verification
+- Separate resource setup from test assertions
+
+#### Avoid in Controller Tests
+- Do not test multiple state transitions in a single test
+- Avoid monolithic BeforeEach/AfterEach with shared test state
+- Don't create resources that aren't needed for the specific test
+- Don't test implementation details, focus on behavior
+- Avoid testing the complete end-to-end flow in a single test
+
+### End-to-End Testing
+- Use E2E tests for verifying complete workflows across multiple controllers
+- Keep unit tests focused on single-controller behavior
+- Test controller collaborations, not just individual controllers
+- Include full reconciliation cycles and verify expected steady state
+- Test actual resource creation and status propagation
+
+### Mocking External Dependencies
+- Mock external API calls and HTTP services in controller tests
+- Implement mock clients that return predetermined responses
+- Verify calls to external services with expectations on arguments
+- Use mock secrets for credentials in tests
+- Consider using controller runtime fake clients for complex scenarios
