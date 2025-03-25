@@ -273,7 +273,11 @@ var _ = Describe("LLM Controller", func() {
 				w.WriteHeader(http.StatusOK)
 
 				// Return appropriate responses based on the provider being tested
-				w.Write([]byte(`{"id":"test-id","choices":[{"message":{"content":"test"}}]}`))
+				_, err := w.Write([]byte(`{"id":"test-id","choices":[{"message":{"content":"test"}}]}`))
+				if err != nil {
+					http.Error(w, "Error writing response", http.StatusInternalServerError)
+					return
+				}
 			}))
 		})
 

@@ -71,7 +71,9 @@ type LLMReconciler struct {
 //		}
 //	}
 
-func (r *LLMReconciler) validateProviderConfig(ctx context.Context, llm *kubechainv1alpha1.LLM, apiKey string) error {
+// validateProviderConfig validates the LLM provider configuration against the actual API
+// TODO: Refactor this function to reduce cyclomatic complexity (currently at 59)
+func (r *LLMReconciler) validateProviderConfig(ctx context.Context, llm *kubechainv1alpha1.LLM, apiKey string) error { //nolint:gocyclo
 	var err error
 	var model llms.Model
 
