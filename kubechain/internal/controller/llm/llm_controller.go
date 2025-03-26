@@ -276,12 +276,12 @@ func (r *LLMReconciler) validateProviderConfig(ctx context.Context, llm *kubecha
 
 	// Validate with a test call
 	validateOptions := []llms.CallOption{llms.WithTemperature(0), llms.WithMaxTokens(1)}
-	
+
 	// Add model option to ensure we validate with the correct model
 	if llm.Spec.BaseConfig.Model != "" {
 		validateOptions = append(validateOptions, llms.WithModel(llm.Spec.BaseConfig.Model))
 	}
-	
+
 	_, err = llms.GenerateFromSinglePrompt(ctx, model, "test", validateOptions...)
 	if err != nil {
 		return fmt.Errorf("%s API validation failed: %w", llm.Spec.Provider, err)

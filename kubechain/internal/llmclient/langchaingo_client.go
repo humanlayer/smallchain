@@ -125,11 +125,21 @@ func convertToLangchainMessages(messages []kubechainv1alpha1.Message) []llms.Mes
 
 		// Add tool response if present
 		if message.ToolCallId != "" {
-			msgContent.Parts = append(msgContent.Parts, llms.ToolCallResponse{
-				ToolCallID: message.ToolCallId,
-				Name:       message.Name,
-				Content:    message.Content,
-			})
+			// For tool role, only have a ToolCallResponse part
+			if role == llms.ChatMessageTypeTool {
+				msgContent.Parts = []llms.ContentPart{
+					llms.ToolCallResponse{
+						ToolCallID: message.ToolCallId,
+						Content:    message.Content,
+					},
+				}
+			} else {
+				// For other roles, append the tool call response
+				msgContent.Parts = append(msgContent.Parts, llms.ToolCallResponse{
+					ToolCallID: message.ToolCallId,
+					Content:    message.Content,
+				})
+			}
 		}
 
 		langchainMessages = append(langchainMessages, msgContent)
