@@ -52,6 +52,9 @@ type TaskRunToolCallStatus struct {
 	// +optional
 	StatusDetail string `json:"statusDetail,omitempty"`
 
+	// HumanLayerCallId is the unique identifier for this function call in HumanLayer
+	HumanLayerCallId string `json:"humanLayerCallId"`
+
 	// Result contains the result of the tool call if completed
 	// +optional
 	Result string `json:"result,omitempty"`
