@@ -1,0 +1,57 @@
+# Remember to add your OpenAI and HumanLayer secrets
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: ContactChannel
+metadata:
+  name: make-fetch-happen-channel
+spec:
+  channelType: slack
+  apiKeyFrom:
+    secretKeyRef:
+      name: humanlayer-api-key
+      key: api-key
+  slackConfig:
+    channelOrUserID: "C07HR5JL15F"  # Replace with actual Slack channel ID
+    contextAboutChannelOrUser: "Channel for approving web fetch operations"
+---
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: LLM
+metadata:
+  name: gpt-4o
+spec:
+  provider: openai
+  apiKeyFrom:
+    secretKeyRef:
+      name: openai
+      key: OPENAI_API_KEY
+---
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: MCPServer
+metadata:
+  name: make-fetch-happen-server
+spec:
+  transport: "stdio"
+  command: "uvx"
+  args: ["mcp-server-fetch"]
+  approvalContactChannel:
+    name: make-fetch-happen-channel
+---
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: Agent
+metadata:
+  name: make-fetch-happen-agent
+spec:
+  llmRef:
+    name: gpt-4o
+  system: |
+    You are a helpful assistant. Your job is to help the user with their tasks.
+  mcpServers:
+    - name: make-fetch-happen-server
+---
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: Task
+metadata:
+  name: make-fetch-happen-task
+spec:
+  agentRef:
+    name: make-fetch-happen-agent
+  message: "What is on the front page of planetscale.com?"
