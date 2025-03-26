@@ -49,7 +49,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
-	"github.com/humanlayer/smallchain/kubechain/internal/otel"
+	kubechainotel "github.com/humanlayer/smallchain/kubechain/internal/otel"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -99,14 +99,14 @@ func main() {
 	flag.Parse()
 
 	ctx := context.Background()
-	tracerProvider, err := otel.InitTracer(ctx)
+	tracerProvider, err := kubechainotel.InitTracer(ctx)
 	if err != nil {
 		setupLog.Error(err, "failed to initialize opentelemetry tracer")
 		os.Exit(1)
 	}
 	defer func() { _ = tracerProvider.Shutdown(ctx) }()
 
-	meterProvider, err := otel.InitMeter(ctx)
+	meterProvider, err := kubechainotel.InitMeter(ctx)
 	if err != nil {
 		setupLog.Error(err, "failed to initialize opentelemetry meter")
 		os.Exit(1)
@@ -268,6 +268,7 @@ func main() {
 		Client:     mgr.GetClient(),
 		Scheme:     mgr.GetScheme(),
 		MCPManager: mcpManagerInstance,
+		Tracer:     tracerProvider.Tracer("taskrun"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "TaskRun")
 		os.Exit(1)
