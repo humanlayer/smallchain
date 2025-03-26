@@ -21,12 +21,14 @@ import (
 	"github.com/humanlayer/smallchain/kubechain/internal/llmclient"
 	"github.com/humanlayer/smallchain/kubechain/internal/mcpmanager"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const (
-	StatusReady   = "Ready"
-	StatusError   = "Error"
-	StatusPending = "Pending"
+	// These constants are kept for backward compatibility during refactoring
+	StatusReady   = kubechainv1alpha1.TaskRunStatusStatusReady
+	StatusError   = kubechainv1alpha1.TaskRunStatusStatusError
+	StatusPending = kubechainv1alpha1.TaskRunStatusStatusPending
 )
 
 // +kubebuilder:rbac:groups=kubechain.humanlayer.dev,resources=taskruns,verbs=get;list;watch;create;update;patch;delete
@@ -43,6 +45,7 @@ type TaskRunReconciler struct {
 	recorder     record.EventRecorder
 	newLLMClient func(apiKey string) (llmclient.OpenAIClient, error)
 	MCPManager   *mcpmanager.MCPServerManager
+	Tracer       trace.Tracer
 }
 
 // getTask fetches the parent Task for this TaskRun
@@ -442,7 +445,10 @@ func (r *TaskRunReconciler) initializePhaseAndSpan(ctx context.Context, statusUp
 	logger := log.FromContext(ctx)
 
 	// Start tracing the TaskRun
-	tracer := otel.GetTracerProvider().Tracer("taskrun")
+	tracer := r.Tracer
+	if tracer == nil {
+		tracer = otel.GetTracerProvider().Tracer("taskrun")
+	}
 	ctx, span := tracer.Start(ctx, "TaskRun")
 
 	// Store span context in status
@@ -454,7 +460,7 @@ func (r *TaskRunReconciler) initializePhaseAndSpan(ctx context.Context, statusUp
 
 	statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseInitializing
 	statusUpdate.Status.Ready = false
-	statusUpdate.Status.Status = "Initializing"
+	statusUpdate.Status.Status = kubechainv1alpha1.TaskRunStatusStatusPending
 	statusUpdate.Status.StatusDetail = "Initializing"
 	if err := r.Status().Update(ctx, statusUpdate); err != nil {
 		logger.Error(err, "Failed to update TaskRun status")

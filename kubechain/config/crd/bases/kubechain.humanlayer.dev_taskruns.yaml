@@ -122,15 +122,11 @@ spec:
                 items:
                   description: Message represents a single message in the conversation
                   properties:
-                    arguments:
-                      description: Arguments is the arguments to pass to the tool
-                        call
-                      type: string
                     content:
                       description: Content is the message content
                       type: string
                     name:
-                      description: Name is the name of the tool call
+                      description: Name is the name of the tool that was called
                       type: string
                     role:
                       description: Role is the role of the message sender (system,
@@ -180,11 +176,6 @@ spec:
                         - type
                         type: object
                       type: array
-                    type:
-                      description: Type is the type of tool call
-                      enum:
-                      - function
-                      type: string
                   required:
                   - content
                   - role
@@ -208,6 +199,7 @@ spec:
                 - ReadyForLLM
                 - SendContextWindowToLLM
                 - ToolCallsPending
+                - CheckingToolCalls
                 - FinalAnswer
                 - ErrorBackoff
                 - Failed
@@ -235,7 +227,6 @@ spec:
                 - Ready
                 - Error
                 - Pending
-                - Initializing
                 type: string
               statusDetail:
                 description: StatusDetail provides additional details about the current
