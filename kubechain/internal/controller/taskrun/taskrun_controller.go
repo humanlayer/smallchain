@@ -82,12 +82,18 @@ func (r *TaskRunReconciler) validateTaskAndAgent(ctx context.Context, taskRun *k
 			statusUpdate.Status.Error = fmt.Sprintf("Task %q not found", taskRun.Spec.TaskRef.Name)
 			statusUpdate.Status.StatusDetail = fmt.Sprintf("Task %q not found", taskRun.Spec.TaskRef.Name)
 			statusUpdate.Status.Status = StatusError
+
+			// End span since we've failed with a terminal error
+			r.endTaskRunSpan(ctx, taskRun, codes.Error, fmt.Sprintf("Task %q not found", taskRun.Spec.TaskRef.Name))
 		} else {
 			logger.Error(err, "Task validation failed")
 			statusUpdate.Status.Ready = false
 			statusUpdate.Status.Status = StatusError
 			statusUpdate.Status.StatusDetail = fmt.Sprintf("Task validation failed: %v", err)
 			statusUpdate.Status.Error = err.Error()
+
+			// End span since we've failed with a terminal error
+			r.endTaskRunSpan(ctx, taskRun, codes.Error, fmt.Sprintf("Task validation failed: %v", err))
 		}
 
 		if updateErr := r.Status().Update(ctx, statusUpdate); updateErr != nil {
@@ -355,6 +361,27 @@ func (r *TaskRunReconciler) collectTools(ctx context.Context, agent *kubechainv1
 	return tools
 }
 
+// endTaskRunSpan ends the parent span for a TaskRun if it exists
+func (r *TaskRunReconciler) endTaskRunSpan(ctx context.Context, taskRun *kubechainv1alpha1.TaskRun, status codes.Code, description string) {
+	// Only try to end span if we have SpanContext info
+	if taskRun.Status.SpanContext == nil || taskRun.Status.SpanContext.TraceID == "" {
+		return
+	}
+
+	// Get tracer
+	tracer := r.Tracer
+	if tracer == nil {
+		tracer = otel.GetTracerProvider().Tracer("taskrun")
+	}
+
+	// Create a fake span for the parent span that we can end
+	// This is a bit of a hack, but we don't have access to the original span
+	// and need to end it properly when the TaskRun reaches a terminal state
+	ctx, span := tracer.Start(ctx, "TaskRun End")
+	span.SetStatus(status, description)
+	span.End()
+}
+
 // processLLMResponse handles the LLM's output and updates status accordingly
 func (r *TaskRunReconciler) processLLMResponse(ctx context.Context, output *kubechainv1alpha1.Message, taskRun *kubechainv1alpha1.TaskRun, statusUpdate *kubechainv1alpha1.TaskRun) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
@@ -372,6 +399,9 @@ func (r *TaskRunReconciler) processLLMResponse(ctx context.Context, output *kube
 		statusUpdate.Status.StatusDetail = "LLM final response received"
 		statusUpdate.Status.Error = ""
 		r.recorder.Event(taskRun, corev1.EventTypeNormal, "LLMFinalAnswer", "LLM response received successfully")
+
+		// End the parent span since we've reached a terminal state
+		r.endTaskRunSpan(ctx, taskRun, codes.Ok, "TaskRun completed successfully with final answer")
 	} else {
 		// tool call branch: create TaskRunToolCall objects for each tool call returned by the LLM.
 		statusUpdate.Status.Output = ""
@@ -526,9 +556,14 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		logger.Error(err, "Failed to create OpenAI client")
 		statusUpdate.Status.Ready = false
 		statusUpdate.Status.Status = StatusError
+		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseFailed
 		statusUpdate.Status.StatusDetail = "Failed to create OpenAI client: " + err.Error()
 		statusUpdate.Status.Error = err.Error()
 		r.recorder.Event(&taskRun, corev1.EventTypeWarning, "OpenAIClientCreationFailed", err.Error())
+
+		// End span since we've failed with a terminal error
+		r.endTaskRunSpan(ctx, &taskRun, codes.Error, "Failed to create OpenAI client: "+err.Error())
+
 		if updateErr := r.Status().Update(ctx, statusUpdate); updateErr != nil {
 			logger.Error(updateErr, "Failed to update TaskRun status")
 			return ctrl.Result{}, updateErr
