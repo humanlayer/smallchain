@@ -267,7 +267,7 @@ func (r *LLMReconciler) validateProviderConfig(ctx context.Context, llm *kubecha
 		model, err = vertex.New(ctx, providerOpts...)
 
 	default:
-		return fmt.Errorf("unsupported provider: %s", llm.Spec.Provider)
+		return fmt.Errorf("unsupported provider: %s. Supported providers are: openai, anthropic, mistral, google, vertex", llm.Spec.Provider)
 	}
 
 	if err != nil {
