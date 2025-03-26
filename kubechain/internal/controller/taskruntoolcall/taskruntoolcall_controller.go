@@ -42,7 +42,7 @@ type TaskRunToolCallReconciler struct {
 	Scheme     *runtime.Scheme
 	recorder   record.EventRecorder
 	server     *http.Server
-	MCPManager *mcpmanager.MCPServerManager
+	MCPManager mcpmanager.MCPManagerInterface
 }
 
 func (r *TaskRunToolCallReconciler) webhookHandler(w http.ResponseWriter, req *http.Request) {
