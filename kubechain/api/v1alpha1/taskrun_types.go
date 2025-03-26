@@ -36,17 +36,11 @@ type Message struct {
 	// +optional
 	ToolCallId string `json:"toolCallId,omitempty"`
 
-	// Name is the name of the tool call
+	// Todo(dex) what is this? This is used in the OpenAI converter but I think this is supposed to be in a ToolCall
+
+	// Name is the name of the tool that was called
 	// +optional
 	Name string `json:"name,omitempty"`
-
-	// Type is the type of tool call
-	// +kubebuilder:validation:Enum=function
-	Type string `json:"type,omitempty"`
-
-	// Arguments is the arguments to pass to the tool call
-	// +optional
-	Arguments string `json:"arguments,omitempty"`
 }
 
 // ToolCall represents a request to call a tool
@@ -90,8 +84,8 @@ type TaskRunStatus struct {
 	Ready bool `json:"ready,omitempty"`
 
 	// Status indicates the current status of the taskrun
-	// +kubebuilder:validation:Enum=Ready;Error;Pending;Initializing
-	Status string `json:"status,omitempty"`
+	// +kubebuilder:validation:Enum=Ready;Error;Pending
+	Status TaskRunStatusStatus `json:"status,omitempty"`
 
 	// StatusDetail provides additional details about the current status
 	StatusDetail string `json:"statusDetail,omitempty"`
@@ -129,8 +123,16 @@ type TaskRunStatus struct {
 	SpanContext *SpanContext `json:"spanContext,omitempty"`
 }
 
+type TaskRunStatusStatus string
+
+const (
+	TaskRunStatusStatusReady   TaskRunStatusStatus = "Ready"
+	TaskRunStatusStatusError   TaskRunStatusStatus = "Error"
+	TaskRunStatusStatusPending TaskRunStatusStatus = "Pending"
+)
+
 // TaskRunPhase represents the phase of a TaskRun
-// +kubebuilder:validation:Enum=Initializing;Pending;ReadyForLLM;SendContextWindowToLLM;ToolCallsPending;FinalAnswer;ErrorBackoff;Failed
+// +kubebuilder:validation:Enum=Initializing;Pending;ReadyForLLM;SendContextWindowToLLM;ToolCallsPending;CheckingToolCalls;FinalAnswer;ErrorBackoff;Failed
 type TaskRunPhase string
 
 const (
@@ -144,6 +146,8 @@ const (
 	TaskRunPhaseSendContextWindowToLLM TaskRunPhase = "SendContextWindowToLLM"
 	// TaskRunPhaseToolCallsPending indicates the TaskRun has pending tool calls
 	TaskRunPhaseToolCallsPending TaskRunPhase = "ToolCallsPending"
+	// TaskRunPhaseCheckingToolCalls indicates the TaskRun is checking if tool calls are complete
+	TaskRunPhaseCheckingToolCalls TaskRunPhase = "CheckingToolCalls"
 	// TaskRunPhaseFinalAnswer indicates the TaskRun has received final answer
 	TaskRunPhaseFinalAnswer TaskRunPhase = "FinalAnswer"
 	// TaskRunPhaseErrorBackoff indicates the TaskRun has failed and is in error backoff

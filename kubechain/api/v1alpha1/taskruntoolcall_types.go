@@ -55,6 +55,10 @@ type TaskRunToolCallStatus struct {
 	// CompletionTime is when the tool call completed
 	// +optional
 	CompletionTime *metav1.Time `json:"completionTime,omitempty"`
+
+	// SpanContext contains OpenTelemetry span context information
+	// +optional
+	SpanContext *SpanContext `json:"spanContext,omitempty"`
 }
 
 // TaskRunToolCallPhase represents the phase of a TaskRunToolCall
