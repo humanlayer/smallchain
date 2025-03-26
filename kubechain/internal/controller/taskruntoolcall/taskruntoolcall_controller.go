@@ -680,6 +680,7 @@ func (r *TaskRunToolCallReconciler) getHumanLayerAPIKey(ctx context.Context, sec
 	return apiKey, nil
 }
 
+//nolint:unparam
 func (r *TaskRunToolCallReconciler) setStatusError(ctx context.Context, trtcStatus kubechainv1alpha1.TaskRunToolCallStatusType, eventType string, trtc *kubechainv1alpha1.TaskRunToolCall, err error) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 	trtc.Status.Status = trtcStatus
@@ -747,7 +748,7 @@ func (r *TaskRunToolCallReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	// Do not pass GO, do not collect $200, if we've errored
-	if trtc.Status.Status == "ErrorRequestingHumanApproval" {
+	if trtc.Status.Status == kubechainv1alpha1.TaskRunToolCallStatusTypeErrorRequestingHumanApproval {
 		return ctrl.Result{}, nil
 	}
 
@@ -769,7 +770,7 @@ func (r *TaskRunToolCallReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		}
 
 		// No approval yet? Get back in the loop.
-		if needsApproval && trtc.Status.Status == "AwaitingHumanApproval" {
+		if needsApproval && trtc.Status.Status == kubechainv1alpha1.TaskRunToolCallStatusTypeAwaitingHumanApproval {
 			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 		}
 
@@ -777,7 +778,6 @@ func (r *TaskRunToolCallReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 			trtcNamespace := trtc.Namespace
 			contactChannel, err := r.getContactChannel(ctx, mcpServer, trtcNamespace)
-
 			if err != nil {
 				return r.setStatusError(ctx, kubechainv1alpha1.TaskRunToolCallStatusTypeErrorRequestingHumanApproval, "NoContactChannel", &trtc, err)
 			}
@@ -859,7 +859,6 @@ func (r *TaskRunToolCallReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	if r.HLClient == nil {
 		client, err := humanlayer.NewHumanLayerClient("")
-
 		if err != nil {
 			return err
 		}
