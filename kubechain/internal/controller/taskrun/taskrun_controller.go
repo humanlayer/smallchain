@@ -21,12 +21,16 @@ import (
 	"github.com/humanlayer/smallchain/kubechain/internal/llmclient"
 	"github.com/humanlayer/smallchain/kubechain/internal/mcpmanager"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const (
-	StatusReady   = "Ready"
-	StatusError   = "Error"
-	StatusPending = "Pending"
+	// These constants are kept for backward compatibility during refactoring
+	StatusReady   = kubechainv1alpha1.TaskRunStatusStatusReady
+	StatusError   = kubechainv1alpha1.TaskRunStatusStatusError
+	StatusPending = kubechainv1alpha1.TaskRunStatusStatusPending
 )
 
 // +kubebuilder:rbac:groups=kubechain.humanlayer.dev,resources=taskruns,verbs=get;list;watch;create;update;patch;delete
@@ -43,6 +47,7 @@ type TaskRunReconciler struct {
 	recorder     record.EventRecorder
 	newLLMClient func(ctx context.Context, llm kubechainv1alpha1.LLM, apiKey string) (llmclient.LLMClient, error)
 	MCPManager   *mcpmanager.MCPServerManager
+	Tracer       trace.Tracer
 }
 
 // getTask fetches the parent Task for this TaskRun
@@ -77,12 +82,18 @@ func (r *TaskRunReconciler) validateTaskAndAgent(ctx context.Context, taskRun *k
 			statusUpdate.Status.Error = fmt.Sprintf("Task %q not found", taskRun.Spec.TaskRef.Name)
 			statusUpdate.Status.StatusDetail = fmt.Sprintf("Task %q not found", taskRun.Spec.TaskRef.Name)
 			statusUpdate.Status.Status = StatusError
+
+			// End span since we've failed with a terminal error
+			r.endTaskRunSpan(ctx, taskRun, codes.Error, fmt.Sprintf("Task %q not found", taskRun.Spec.TaskRef.Name))
 		} else {
 			logger.Error(err, "Task validation failed")
 			statusUpdate.Status.Ready = false
 			statusUpdate.Status.Status = StatusError
 			statusUpdate.Status.StatusDetail = fmt.Sprintf("Task validation failed: %v", err)
 			statusUpdate.Status.Error = err.Error()
+
+			// End span since we've failed with a terminal error
+			r.endTaskRunSpan(ctx, taskRun, codes.Error, fmt.Sprintf("Task validation failed: %v", err))
 		}
 
 		if updateErr := r.Status().Update(ctx, statusUpdate); updateErr != nil {
@@ -350,6 +361,61 @@ func (r *TaskRunReconciler) collectTools(ctx context.Context, agent *kubechainv1
 	return tools
 }
 
+// endTaskRunSpan ends the parent span for a TaskRun if it exists
+func (r *TaskRunReconciler) endTaskRunSpan(ctx context.Context, taskRun *kubechainv1alpha1.TaskRun, status codes.Code, description string) {
+	// Only try to end span if we have SpanContext info
+	if taskRun.Status.SpanContext == nil || taskRun.Status.SpanContext.TraceID == "" {
+		return
+	}
+
+	// Get tracer
+	tracer := r.Tracer
+	if tracer == nil {
+		tracer = otel.GetTracerProvider().Tracer("taskrun")
+	}
+
+	// Parse the trace and span IDs from the stored context
+	var traceID trace.TraceID
+	var spanID trace.SpanID
+
+	// Convert hex strings to byte arrays
+	traceIDBytes, err := trace.TraceIDFromHex(taskRun.Status.SpanContext.TraceID)
+	if err != nil {
+		return
+	}
+	traceID = traceIDBytes
+
+	spanIDBytes, err := trace.SpanIDFromHex(taskRun.Status.SpanContext.SpanID)
+	if err != nil {
+		return
+	}
+	spanID = spanIDBytes
+
+	// Create a span context with the stored IDs
+	spanCtx := trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID:    traceID,
+		SpanID:     spanID,
+		TraceFlags: trace.FlagsSampled,
+		Remote:     false,
+	})
+
+	// Create context with the span context
+	ctxWithSpan := trace.ContextWithSpanContext(ctx, spanCtx)
+
+	// Create a final completion span that's a child of the original span
+	_, span := tracer.Start(ctxWithSpan, fmt.Sprintf("TaskRun/%s/Completion", taskRun.Name),
+		trace.WithSpanKind(trace.SpanKindServer),
+		trace.WithAttributes(
+			attribute.String("taskrun.name", taskRun.Name),
+			attribute.String("taskrun.namespace", taskRun.Namespace),
+			attribute.String("taskrun.phase", string(taskRun.Status.Phase)),
+			attribute.String("taskrun.status", string(taskRun.Status.Status)),
+		),
+	)
+	span.SetStatus(status, description)
+	span.End()
+}
+
 // processLLMResponse handles the LLM's output and updates status accordingly
 func (r *TaskRunReconciler) processLLMResponse(ctx context.Context, output *kubechainv1alpha1.Message, taskRun *kubechainv1alpha1.TaskRun, statusUpdate *kubechainv1alpha1.TaskRun) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
@@ -367,6 +433,9 @@ func (r *TaskRunReconciler) processLLMResponse(ctx context.Context, output *kube
 		statusUpdate.Status.StatusDetail = "LLM final response received"
 		statusUpdate.Status.Error = ""
 		r.recorder.Event(taskRun, corev1.EventTypeNormal, "LLMFinalAnswer", "LLM response received successfully")
+
+		// End the parent span since we've reached a terminal state
+		r.endTaskRunSpan(ctx, taskRun, codes.Ok, "TaskRun completed successfully with final answer")
 	} else {
 		// tool call branch: create TaskRunToolCall objects for each tool call returned by the LLM.
 		statusUpdate.Status.Output = ""
@@ -442,8 +511,19 @@ func (r *TaskRunReconciler) initializePhaseAndSpan(ctx context.Context, statusUp
 	logger := log.FromContext(ctx)
 
 	// Start tracing the TaskRun
-	tracer := otel.GetTracerProvider().Tracer("taskrun")
-	ctx, span := tracer.Start(ctx, "TaskRun")
+	tracer := r.Tracer
+	if tracer == nil {
+		tracer = otel.GetTracerProvider().Tracer("taskrun")
+	}
+
+	// Make sure we provide a meaningful span name that includes the TaskRun name
+	spanName := fmt.Sprintf("TaskRun/%s", statusUpdate.Name)
+	ctx, span := tracer.Start(ctx, spanName, trace.WithSpanKind(trace.SpanKindServer))
+
+	// We need to explicitly end the span so the root span is properly recorded
+	// This is not what we want long-term, but it ensures spans show up correctly
+	// while we resolve the issue with maintaining spans across reconciliation calls
+	defer span.End()
 
 	// Store span context in status
 	spanCtx := span.SpanContext()
@@ -452,17 +532,76 @@ func (r *TaskRunReconciler) initializePhaseAndSpan(ctx context.Context, statusUp
 		SpanID:  spanCtx.SpanID().String(),
 	}
 
+	// Set useful attributes on the span
+	span.SetAttributes(
+		attribute.String("taskrun.name", statusUpdate.Name),
+		attribute.String("taskrun.namespace", statusUpdate.Namespace),
+		attribute.String("taskrun.uid", string(statusUpdate.UID)),
+	)
+
 	statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseInitializing
 	statusUpdate.Status.Ready = false
-	statusUpdate.Status.Status = "Initializing"
+	statusUpdate.Status.Status = kubechainv1alpha1.TaskRunStatusStatusPending
 	statusUpdate.Status.StatusDetail = "Initializing"
 	if err := r.Status().Update(ctx, statusUpdate); err != nil {
 		logger.Error(err, "Failed to update TaskRun status")
+		span.SetStatus(codes.Error, "Failed to update TaskRun status")
+		span.RecordError(err)
 		return ctrl.Result{}, err
 	}
 
-	// Don't end the span - it will be ended when we reach FinalAnswer
+	// By ending the span now, we ensure it's properly recorded
+	// This approach creates a separate span for each reconciliation rather than
+	// a single span that covers the entire TaskRun lifecycle
+	span.SetStatus(codes.Ok, "TaskRun initialized")
 	return ctrl.Result{Requeue: true}, nil
+}
+
+// createLLMRequestSpan creates a child span for an LLM request that is properly linked to the parent span
+func (r *TaskRunReconciler) createLLMRequestSpan(ctx context.Context, taskRun *kubechainv1alpha1.TaskRun, contextWindowSize, toolsCount int) (context.Context, trace.Span) {
+	// Use controller's tracer if available, otherwise get the global tracer
+	tracer := r.Tracer
+	if tracer == nil {
+		tracer = otel.GetTracerProvider().Tracer("taskrun")
+	}
+
+	// If we have a parent span context, create a child span linked to the parent
+	if taskRun.Status.SpanContext != nil && taskRun.Status.SpanContext.TraceID != "" {
+		// Parse the trace and span IDs from the stored context
+		traceIDBytes, err := trace.TraceIDFromHex(taskRun.Status.SpanContext.TraceID)
+		if err == nil {
+			spanIDBytes, err := trace.SpanIDFromHex(taskRun.Status.SpanContext.SpanID)
+			if err == nil {
+				// Create a span context with the stored IDs
+				spanCtx := trace.NewSpanContext(trace.SpanContextConfig{
+					TraceID:    traceIDBytes,
+					SpanID:     spanIDBytes,
+					TraceFlags: trace.FlagsSampled,
+					Remote:     false,
+				})
+
+				// Create context with the span context
+				ctx = trace.ContextWithSpanContext(ctx, spanCtx)
+			}
+		}
+
+		// Create a child span that will properly link to the parent
+		childCtx, childSpan := tracer.Start(ctx, fmt.Sprintf("TaskRun/%s/LLMRequest", taskRun.Name),
+			trace.WithSpanKind(trace.SpanKindClient))
+
+		// Set attributes for the LLM request
+		childSpan.SetAttributes(
+			attribute.Int("context_window_size", contextWindowSize),
+			attribute.Int("tools_count", toolsCount),
+			attribute.String("taskrun.name", taskRun.Name),
+			attribute.String("taskrun.namespace", taskRun.Namespace),
+		)
+
+		return childCtx, childSpan
+	}
+
+	// No parent span, just use the current context
+	return ctx, nil
 }
 
 // Reconcile validates the taskrun's task reference and sends the prompt to the LLM.
@@ -482,6 +621,12 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// Initialize phase if not set
 	if statusUpdate.Status.Phase == "" {
 		return r.initializePhaseAndSpan(ctx, statusUpdate)
+	}
+
+	// Skip reconciliation for terminal states
+	if statusUpdate.Status.Phase == kubechainv1alpha1.TaskRunPhaseFinalAnswer || statusUpdate.Status.Phase == kubechainv1alpha1.TaskRunPhaseFailed {
+		logger.V(1).Info("TaskRun in terminal state, skipping reconciliation", "phase", statusUpdate.Status.Phase)
+		return ctrl.Result{}, nil
 	}
 
 	// Step 1: Validate Task and Agent
@@ -518,9 +663,13 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		logger.Error(err, "Failed to create LLM client")
 		statusUpdate.Status.Ready = false
 		statusUpdate.Status.Status = StatusError
+		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseFailed
 		statusUpdate.Status.StatusDetail = "Failed to create LLM client: " + err.Error()
 		statusUpdate.Status.Error = err.Error()
 		r.recorder.Event(&taskRun, corev1.EventTypeWarning, "LLMClientCreationFailed", err.Error())
+
+		// End span since we've failed with a terminal error
+		r.endTaskRunSpan(ctx, &taskRun, codes.Error, "Failed to create LLM client: "+err.Error())
 		if updateErr := r.Status().Update(ctx, statusUpdate); updateErr != nil {
 			logger.Error(updateErr, "Failed to update TaskRun status")
 			return ctrl.Result{}, updateErr
@@ -532,8 +681,15 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	tools := r.collectTools(ctx, agent)
 
 	r.recorder.Event(&taskRun, corev1.EventTypeNormal, "SendingContextWindowToLLM", "Sending context window to LLM")
+
+	// Create child span for LLM call
+	childCtx, childSpan := r.createLLMRequestSpan(ctx, &taskRun, len(taskRun.Status.ContextWindow), len(tools))
+	if childSpan != nil {
+		defer childSpan.End()
+	}
+
 	// Step 8: Send the prompt to the LLM
-	output, err := llmClient.SendRequest(ctx, taskRun.Status.ContextWindow, tools)
+	output, err := llmClient.SendRequest(childCtx, taskRun.Status.ContextWindow, tools)
 	if err != nil {
 		logger.Error(err, "LLM request failed")
 		statusUpdate.Status.Ready = false
@@ -541,11 +697,23 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		statusUpdate.Status.StatusDetail = fmt.Sprintf("LLM request failed: %v", err)
 		statusUpdate.Status.Error = err.Error()
 		r.recorder.Event(&taskRun, corev1.EventTypeWarning, "LLMRequestFailed", err.Error())
+
+		// Record error in span
+		if childSpan != nil {
+			childSpan.RecordError(err)
+			childSpan.SetStatus(codes.Error, err.Error())
+		}
+
 		if updateErr := r.Status().Update(ctx, statusUpdate); updateErr != nil {
 			logger.Error(updateErr, "Failed to update TaskRun status after LLM error")
 			return ctrl.Result{}, updateErr
 		}
 		return ctrl.Result{}, err
+	}
+
+	// Mark span as successful if we reach here
+	if childSpan != nil {
+		childSpan.SetStatus(codes.Ok, "LLM request succeeded")
 	}
 
 	// Step 9: Process LLM response

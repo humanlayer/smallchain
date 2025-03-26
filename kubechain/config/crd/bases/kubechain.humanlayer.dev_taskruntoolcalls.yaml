@@ -117,6 +117,16 @@ spec:
               result:
                 description: Result contains the result of the tool call if completed
                 type: string
+              spanContext:
+                description: SpanContext contains OpenTelemetry span context information
+                properties:
+                  spanID:
+                    description: SpanID is the span ID
+                    type: string
+                  traceID:
+                    description: TraceID is the trace ID for the span
+                    type: string
+                type: object
               startTime:
                 description: StartTime is when the tool call started
                 format: date-time
