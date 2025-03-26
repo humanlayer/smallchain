@@ -714,11 +714,15 @@ func (r *TaskRunToolCallReconciler) postToHumanLayer(ctx context.Context, trtc *
 		return 0, fmt.Errorf("unsupported channel type: %s", contactChannel.Spec.ChannelType)
 	}
 
-	client.SetFunctionCallSpec("approve_tool_call", map[string]interface{}{
-		"tool_name": trtc.Spec.ToolRef.Name,
-		"task_run":  trtc.Spec.TaskRunRef.Name,
-		"namespace": trtc.Namespace,
-	})
+	toolName := trtc.Spec.ToolRef.Name
+	var args map[string]interface{}
+	if err := json.Unmarshal([]byte(trtc.Spec.Arguments), &args); err != nil {
+		// Set default error map if JSON parsing fails
+		args = map[string]interface{}{
+			"error": "Error reading JSON",
+		}
+	}
+	client.SetFunctionCallSpec(toolName, args)
 
 	client.SetCallID("call-" + uuid.New().String())
 	client.SetRunID(trtc.Name)
