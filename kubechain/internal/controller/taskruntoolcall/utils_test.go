@@ -242,9 +242,7 @@ func setupTestAddTool(ctx context.Context) func() {
 // TestMCPServer represents a test MCPServer resource
 type TestMCPServer struct {
 	name                   string
-	contactChannelName     string
 	needsApproval          bool
-	needsApprovalChecking  bool
 	approvalContactChannel string
 	mcpServer              *kubechainv1alpha1.MCPServer
 }
