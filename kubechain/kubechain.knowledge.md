@@ -90,13 +90,17 @@ kind: LLM
 metadata:
   name: gpt-4o
 spec:
-  provider: openai
+  provider: openai  # One of: openai, anthropic, mistral, google, vertex
   apiKeyFrom:
     secretKeyRef:
       name: openai
       key: OPENAI_API_KEY
-  config:
+  baseConfig:
     model: gpt-4o
+    temperature: "0.7"
+  providerConfig:
+    openaiConfig:
+      organization: "org-123456"  # Optional
 ---
 apiVersion: kubechain.humanlayer.dev/v1alpha1
 kind: Agent
