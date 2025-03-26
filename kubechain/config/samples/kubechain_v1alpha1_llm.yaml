@@ -13,10 +13,6 @@ spec:
   baseConfig:
     model: "gpt-4o"
     temperature: "0.7"
-    maxTokens: 1000
-  providerConfig:
-    openaiConfig:
-      organization: "org-123456"
 ---
 # Anthropic Example
 apiVersion: kubechain.humanlayer.dev/v1alpha1
@@ -32,70 +28,4 @@ spec:
   baseConfig:
     model: "claude-3-5-sonnet-20240620"
     temperature: "0.5"
-    maxTokens: 2000
----
-# Vertex Example
-apiVersion: kubechain.humanlayer.dev/v1alpha1
-kind: LLM
-metadata:
-  name: gemini-pro
-spec:
-  provider: vertex
-  apiKeyFrom:
-    secretKeyRef:
-      name: vertex-credentials
-      key: service-account-json
-  baseConfig:
-    model: "gemini-pro"
-    temperature: "0.4"
-    maxTokens: 1500
-    topP: "0.95"
-    topK: 40
-  providerConfig:
-    vertexConfig:
-      cloudProject: "my-gcp-project"
-      cloudLocation: "us-central1"
----
-# Mistral Example
-apiVersion: kubechain.humanlayer.dev/v1alpha1
-kind: LLM
-metadata:
-  name: mistral-large
-spec:
-  provider: mistral
-  apiKeyFrom:
-    secretKeyRef:
-      name: mistral
-      key: MISTRAL_API_KEY
-  baseConfig:
-    model: "mistral-large-latest"
-    temperature: "0.7"
-    maxTokens: 1000
-    topP: "0.95"
-  providerConfig:
-    mistralConfig:
-      maxRetries: 3
-      timeout: 60
-      randomSeed: 42
----
-# Google AI Example
-apiVersion: kubechain.humanlayer.dev/v1alpha1
-kind: LLM
-metadata:
-  name: google-gemini
-spec:
-  provider: google
-  apiKeyFrom:
-    secretKeyRef:
-      name: google
-      key: GOOGLE_API_KEY
-  baseConfig:
-    model: "gemini-pro"
-    temperature: "0.7"
-    maxTokens: 2048
-    topP: "0.95"
-    topK: 40
-  providerConfig:
-    googleConfig:
-      cloudProject: "my-gcp-project"
-      cloudLocation: "us-central1"
+

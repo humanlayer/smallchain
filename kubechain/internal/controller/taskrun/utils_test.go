@@ -308,7 +308,9 @@ func setupSuiteObjects(ctx context.Context) (secret *corev1.Secret, llm *kubecha
 	return secret, llm, agent, task, teardown
 }
 
-func reconciler() (*TaskRunReconciler, *record.FakeRecorder) {
+// createReconciler is a utility function to create a new TaskRunReconciler
+// Used to avoid conflicts with the similarly named function in taskrun_controller_test.go
+func createReconciler() (*TaskRunReconciler, *record.FakeRecorder) {
 	By("creating the reconciler")
 	recorder := record.NewFakeRecorder(10)
 	reconciler := &TaskRunReconciler{

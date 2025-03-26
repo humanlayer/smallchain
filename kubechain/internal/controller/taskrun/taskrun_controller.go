@@ -41,7 +41,7 @@ type TaskRunReconciler struct {
 	client.Client
 	Scheme       *runtime.Scheme
 	recorder     record.EventRecorder
-	newLLMClient func(apiKey string) (llmclient.OpenAIClient, error)
+	newLLMClient func(ctx context.Context, llm kubechainv1alpha1.LLM, apiKey string) (llmclient.LLMClient, error)
 	MCPManager   *mcpmanager.MCPServerManager
 }
 
@@ -506,21 +506,21 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, nil
 	}
 
-	// Step 5: Get API credentials (LLM is returned but not used)
-	_, apiKey, err := r.getLLMAndCredentials(ctx, agent, &taskRun, statusUpdate)
+	// Step 5: Get LLM and API credentials
+	llm, apiKey, err := r.getLLMAndCredentials(ctx, agent, &taskRun, statusUpdate)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
 	// Step 6: Create LLM client
-	llmClient, err := r.newLLMClient(apiKey)
+	llmClient, err := r.newLLMClient(ctx, llm, apiKey)
 	if err != nil {
-		logger.Error(err, "Failed to create OpenAI client")
+		logger.Error(err, "Failed to create LLM client")
 		statusUpdate.Status.Ready = false
 		statusUpdate.Status.Status = StatusError
-		statusUpdate.Status.StatusDetail = "Failed to create OpenAI client: " + err.Error()
+		statusUpdate.Status.StatusDetail = "Failed to create LLM client: " + err.Error()
 		statusUpdate.Status.Error = err.Error()
-		r.recorder.Event(&taskRun, corev1.EventTypeWarning, "OpenAIClientCreationFailed", err.Error())
+		r.recorder.Event(&taskRun, corev1.EventTypeWarning, "LLMClientCreationFailed", err.Error())
 		if updateErr := r.Status().Update(ctx, statusUpdate); updateErr != nil {
 			logger.Error(updateErr, "Failed to update TaskRun status")
 			return ctrl.Result{}, updateErr
@@ -570,7 +570,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 func (r *TaskRunReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.recorder = mgr.GetEventRecorderFor("taskrun-controller")
 	if r.newLLMClient == nil {
-		r.newLLMClient = llmclient.NewRawOpenAIClient
+		r.newLLMClient = llmclient.NewLLMClient
 	}
 
 	// Initialize MCPManager if not already set
