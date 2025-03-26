@@ -1,3 +1,18 @@
+### v0.1.12 (March 24, 2025)
+
+Features:
+- Added OpenTelemetry tracing support
+  - Spans for LLM requests with context window and tool metrics
+  - Parent spans for TaskRun lifecycle tracking
+  - Completion spans for terminal states
+  - Status and error propagation to spans
+
+Changes:
+- Refactored TaskRun phase transitions and improved phase transition logging
+- Enhanced testing infrastructure
+  - Improved TaskRun and TaskRunToolCall test suites
+  - Added test utilities for common setup patterns
+
 ### v0.1.11 (March 24, 2025)
 
 Features:
