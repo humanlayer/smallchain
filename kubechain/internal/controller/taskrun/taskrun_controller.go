@@ -557,6 +557,53 @@ func (r *TaskRunReconciler) initializePhaseAndSpan(ctx context.Context, statusUp
 	return ctrl.Result{Requeue: true}, nil
 }
 
+// createLLMRequestSpan creates a child span for an LLM request that is properly linked to the parent span
+func (r *TaskRunReconciler) createLLMRequestSpan(ctx context.Context, taskRun *kubechainv1alpha1.TaskRun, contextWindowSize, toolsCount int) (context.Context, trace.Span) {
+	// Use controller's tracer if available, otherwise get the global tracer
+	tracer := r.Tracer
+	if tracer == nil {
+		tracer = otel.GetTracerProvider().Tracer("taskrun")
+	}
+
+	// If we have a parent span context, create a child span linked to the parent
+	if taskRun.Status.SpanContext != nil && taskRun.Status.SpanContext.TraceID != "" {
+		// Parse the trace and span IDs from the stored context
+		traceIDBytes, err := trace.TraceIDFromHex(taskRun.Status.SpanContext.TraceID)
+		if err == nil {
+			spanIDBytes, err := trace.SpanIDFromHex(taskRun.Status.SpanContext.SpanID)
+			if err == nil {
+				// Create a span context with the stored IDs
+				spanCtx := trace.NewSpanContext(trace.SpanContextConfig{
+					TraceID:    traceIDBytes,
+					SpanID:     spanIDBytes,
+					TraceFlags: trace.FlagsSampled,
+					Remote:     false,
+				})
+
+				// Create context with the span context
+				ctx = trace.ContextWithSpanContext(ctx, spanCtx)
+			}
+		}
+
+		// Create a child span that will properly link to the parent
+		childCtx, childSpan := tracer.Start(ctx, fmt.Sprintf("TaskRun/%s/LLMRequest", taskRun.Name),
+			trace.WithSpanKind(trace.SpanKindClient))
+
+		// Set attributes for the LLM request
+		childSpan.SetAttributes(
+			attribute.Int("context_window_size", contextWindowSize),
+			attribute.Int("tools_count", toolsCount),
+			attribute.String("taskrun.name", taskRun.Name),
+			attribute.String("taskrun.namespace", taskRun.Namespace),
+		)
+
+		return childCtx, childSpan
+	}
+
+	// No parent span, just use the current context
+	return ctx, nil
+}
+
 // Reconcile validates the taskrun's task reference and sends the prompt to the LLM.
 func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
@@ -637,50 +684,9 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	r.recorder.Event(&taskRun, corev1.EventTypeNormal, "SendingContextWindowToLLM", "Sending context window to LLM")
 
 	// Create child span for LLM call
-	var childCtx context.Context
-	var childSpan trace.Span
-
-	// Use controller's tracer if available, otherwise get the global tracer
-	tracer := r.Tracer
-	if tracer == nil {
-		tracer = otel.GetTracerProvider().Tracer("taskrun")
-	}
-
-	// If we have a parent span context, create a child span linked to the parent
-	if taskRun.Status.SpanContext != nil && taskRun.Status.SpanContext.TraceID != "" {
-		// Parse the trace and span IDs from the stored context
-		traceIDBytes, err := trace.TraceIDFromHex(taskRun.Status.SpanContext.TraceID)
-		if err == nil {
-			spanIDBytes, err := trace.SpanIDFromHex(taskRun.Status.SpanContext.SpanID)
-			if err == nil {
-				// Create a span context with the stored IDs
-				spanCtx := trace.NewSpanContext(trace.SpanContextConfig{
-					TraceID:    traceIDBytes,
-					SpanID:     spanIDBytes,
-					TraceFlags: trace.FlagsSampled,
-					Remote:     false,
-				})
-
-				// Create context with the span context
-				ctx = trace.ContextWithSpanContext(ctx, spanCtx)
-			}
-		}
-
-		// Create a child span that will properly link to the parent
-		childCtx, childSpan = tracer.Start(ctx, fmt.Sprintf("TaskRun/%s/LLMRequest", taskRun.Name),
-			trace.WithSpanKind(trace.SpanKindClient))
+	childCtx, childSpan := r.createLLMRequestSpan(ctx, &taskRun, len(taskRun.Status.ContextWindow), len(tools))
+	if childSpan != nil {
 		defer childSpan.End()
-
-		// Set attributes for the LLM request
-		childSpan.SetAttributes(
-			attribute.Int("context_window_size", len(taskRun.Status.ContextWindow)),
-			attribute.Int("tools_count", len(tools)),
-			attribute.String("taskrun.name", taskRun.Name),
-			attribute.String("taskrun.namespace", taskRun.Namespace),
-		)
-	} else {
-		// No parent span, just use the current context
-		childCtx = ctx
 	}
 
 	// Step 8: Send the prompt to the LLM
