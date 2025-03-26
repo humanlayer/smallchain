@@ -66,7 +66,7 @@ func NewLangchainClient(ctx context.Context, provider string, apiKey string, mod
 		}
 		model, err = vertex.New(context.Background(), opts...)
 	default:
-		return nil, fmt.Errorf("unsupported provider: %s", provider)
+		return nil, fmt.Errorf("unsupported provider: %s. Supported providers are: openai, anthropic, mistral, google, vertex", provider)
 	}
 
 	if err != nil {

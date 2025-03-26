@@ -28,4 +28,60 @@ spec:
   baseConfig:
     model: "claude-3-5-sonnet-20240620"
     temperature: "0.5"
+---
+# Mistral Example
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: LLM
+metadata:
+  name: mistral-large
+spec:
+  provider: mistral
+  apiKeyFrom:
+    secretKeyRef:
+      name: mistral
+      key: MISTRAL_API_KEY
+  baseConfig:
+    model: "mistral-large-latest"
+    temperature: "0.7"
+  providerConfig:
+    mistralConfig:
+      maxRetries: 3
+---
+# Google AI Example
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: LLM
+metadata:
+  name: gemini-pro
+spec:
+  provider: google
+  apiKeyFrom:
+    secretKeyRef:
+      name: google
+      key: GOOGLE_API_KEY
+  baseConfig:
+    model: "gemini-pro"
+    temperature: "0.7"
+    maxTokens: 2048
+  providerConfig:
+    googleConfig:
+      cloudProject: "my-project-id"
+---
+# Vertex AI Example
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: LLM
+metadata:
+  name: vertex-gemini
+spec:
+  provider: vertex
+  apiKeyFrom:
+    secretKeyRef:
+      name: vertex
+      key: service-account-json
+  baseConfig:
+    model: "gemini-pro"
+    temperature: "0.7"
+  providerConfig:
+    vertexConfig:
+      cloudProject: "my-project-id"
+      cloudLocation: "us-central1"
 
