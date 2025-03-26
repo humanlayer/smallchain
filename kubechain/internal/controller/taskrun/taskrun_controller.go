@@ -21,6 +21,8 @@ import (
 	"github.com/humanlayer/smallchain/kubechain/internal/llmclient"
 	"github.com/humanlayer/smallchain/kubechain/internal/mcpmanager"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -538,8 +540,36 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	tools := r.collectTools(ctx, agent)
 
 	r.recorder.Event(&taskRun, corev1.EventTypeNormal, "SendingContextWindowToLLM", "Sending context window to LLM")
+
+	// Create child span for LLM call
+	var childCtx context.Context
+	var childSpan trace.Span
+
+	// Use controller's tracer if available, otherwise get the global tracer
+	tracer := r.Tracer
+	if tracer == nil {
+		tracer = otel.GetTracerProvider().Tracer("taskrun")
+	}
+
+	// If we have a parent span context, create a child span
+	if taskRun.Status.SpanContext != nil && taskRun.Status.SpanContext.TraceID != "" {
+		// Create a new span context from the stored SpanContext
+		childCtx, childSpan = tracer.Start(ctx, "LLM Request")
+		defer childSpan.End()
+
+		// Set attributes for the LLM request
+		childSpan.SetAttributes(
+			attribute.Int("context_window_size", len(taskRun.Status.ContextWindow)),
+			attribute.Int("tools_count", len(tools)),
+			attribute.String("taskrun_name", taskRun.Name),
+		)
+	} else {
+		// No parent span, just use the current context
+		childCtx = ctx
+	}
+
 	// Step 8: Send the prompt to the LLM
-	output, err := llmClient.SendRequest(ctx, taskRun.Status.ContextWindow, tools)
+	output, err := llmClient.SendRequest(childCtx, taskRun.Status.ContextWindow, tools)
 	if err != nil {
 		logger.Error(err, "LLM request failed")
 		statusUpdate.Status.Ready = false
@@ -547,11 +577,23 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		statusUpdate.Status.StatusDetail = fmt.Sprintf("LLM request failed: %v", err)
 		statusUpdate.Status.Error = err.Error()
 		r.recorder.Event(&taskRun, corev1.EventTypeWarning, "LLMRequestFailed", err.Error())
+
+		// Record error in span
+		if childSpan != nil {
+			childSpan.RecordError(err)
+			childSpan.SetStatus(codes.Error, err.Error())
+		}
+
 		if updateErr := r.Status().Update(ctx, statusUpdate); updateErr != nil {
 			logger.Error(updateErr, "Failed to update TaskRun status after LLM error")
 			return ctrl.Result{}, updateErr
 		}
 		return ctrl.Result{}, err
+	}
+
+	// Mark span as successful if we reach here
+	if childSpan != nil {
+		childSpan.SetStatus(codes.Ok, "LLM request succeeded")
 	}
 
 	// Step 9: Process LLM response
