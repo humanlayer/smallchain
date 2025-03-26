@@ -107,7 +107,6 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 				toolName:  addTool.name,
 				arguments: `invalid json`, // Invalid JSON
 			}
-			defer taskRunToolCall.Teardown(ctx)
 
 			trtc := taskRunToolCall.SetupWithStatus(ctx, kubechainv1alpha1.TaskRunToolCallStatus{
 				Phase:        kubechainv1alpha1.TaskRunToolCallPhasePending,
@@ -115,6 +114,8 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 				StatusDetail: "Ready for execution",
 				StartTime:    &metav1.Time{Time: time.Now().Add(-1 * time.Minute)},
 			})
+
+			defer taskRunToolCall.Teardown(ctx)
 
 			By("reconciling the taskruntoolcall with invalid arguments")
 			reconciler, recorder := reconciler()
@@ -144,7 +145,6 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 			By("checking that error events were emitted")
 			utils.ExpectRecorder(recorder).ToEmitEventContaining("ExecutionFailed")
 		})
-
 	})
 
 	// Tests for MCP tools without approval requirement
@@ -225,7 +225,6 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 	// Tests for approval workflow
 	Context("Pending -> AwaitingHumanApproval (MCP Tool)", func() {
 		It("transitions to AwaitingHumanApproval when MCPServer has approval channel", func() {
-
 			// Note setupTestApprovalResources sets up the MCP server, MCP tool, and TaskRunToolCall
 			trtc, teardown := setupTestApprovalResources(ctx)
 			defer teardown()
@@ -278,7 +277,6 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 
 	Context("Pending -> ErrorRequestingHumanApproval (MCP Tool)", func() {
 		It("transitions to ErrorRequestingHumanApproval when request to HumanLayer fails", func() {
-
 			// Note setupTestApprovalResources sets up the MCP server, MCP tool, and TaskRunToolCall
 			trtc, teardown := setupTestApprovalResources(ctx)
 			defer teardown()
