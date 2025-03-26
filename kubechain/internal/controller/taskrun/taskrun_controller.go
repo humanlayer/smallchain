@@ -374,10 +374,44 @@ func (r *TaskRunReconciler) endTaskRunSpan(ctx context.Context, taskRun *kubecha
 		tracer = otel.GetTracerProvider().Tracer("taskrun")
 	}
 
-	// Create a fake span for the parent span that we can end
-	// This is a bit of a hack, but we don't have access to the original span
-	// and need to end it properly when the TaskRun reaches a terminal state
-	ctx, span := tracer.Start(ctx, "TaskRun End")
+	// Parse the trace and span IDs from the stored context
+	var traceID trace.TraceID
+	var spanID trace.SpanID
+
+	// Convert hex strings to byte arrays
+	traceIDBytes, err := trace.TraceIDFromHex(taskRun.Status.SpanContext.TraceID)
+	if err != nil {
+		return
+	}
+	traceID = traceIDBytes
+
+	spanIDBytes, err := trace.SpanIDFromHex(taskRun.Status.SpanContext.SpanID)
+	if err != nil {
+		return
+	}
+	spanID = spanIDBytes
+
+	// Create a span context with the stored IDs
+	spanCtx := trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID:    traceID,
+		SpanID:     spanID,
+		TraceFlags: trace.FlagsSampled,
+		Remote:     false,
+	})
+
+	// Create context with the span context
+	ctxWithSpan := trace.ContextWithSpanContext(ctx, spanCtx)
+
+	// Create a final completion span that's a child of the original span
+	_, span := tracer.Start(ctxWithSpan, fmt.Sprintf("TaskRun/%s/Completion", taskRun.Name),
+		trace.WithSpanKind(trace.SpanKindServer),
+		trace.WithAttributes(
+			attribute.String("taskrun.name", taskRun.Name),
+			attribute.String("taskrun.namespace", taskRun.Namespace),
+			attribute.String("taskrun.phase", string(taskRun.Status.Phase)),
+			attribute.String("taskrun.status", string(taskRun.Status.Status)),
+		),
+	)
 	span.SetStatus(status, description)
 	span.End()
 }
@@ -481,7 +515,15 @@ func (r *TaskRunReconciler) initializePhaseAndSpan(ctx context.Context, statusUp
 	if tracer == nil {
 		tracer = otel.GetTracerProvider().Tracer("taskrun")
 	}
-	ctx, span := tracer.Start(ctx, "TaskRun")
+
+	// Make sure we provide a meaningful span name that includes the TaskRun name
+	spanName := fmt.Sprintf("TaskRun/%s", statusUpdate.Name)
+	ctx, span := tracer.Start(ctx, spanName, trace.WithSpanKind(trace.SpanKindServer))
+
+	// We need to explicitly end the span so the root span is properly recorded
+	// This is not what we want long-term, but it ensures spans show up correctly
+	// while we resolve the issue with maintaining spans across reconciliation calls
+	defer span.End()
 
 	// Store span context in status
 	spanCtx := span.SpanContext()
@@ -490,16 +532,28 @@ func (r *TaskRunReconciler) initializePhaseAndSpan(ctx context.Context, statusUp
 		SpanID:  spanCtx.SpanID().String(),
 	}
 
+	// Set useful attributes on the span
+	span.SetAttributes(
+		attribute.String("taskrun.name", statusUpdate.Name),
+		attribute.String("taskrun.namespace", statusUpdate.Namespace),
+		attribute.String("taskrun.uid", string(statusUpdate.UID)),
+	)
+
 	statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseInitializing
 	statusUpdate.Status.Ready = false
 	statusUpdate.Status.Status = kubechainv1alpha1.TaskRunStatusStatusPending
 	statusUpdate.Status.StatusDetail = "Initializing"
 	if err := r.Status().Update(ctx, statusUpdate); err != nil {
 		logger.Error(err, "Failed to update TaskRun status")
+		span.SetStatus(codes.Error, "Failed to update TaskRun status")
+		span.RecordError(err)
 		return ctrl.Result{}, err
 	}
 
-	// Don't end the span - it will be ended when we reach FinalAnswer
+	// By ending the span now, we ensure it's properly recorded
+	// This approach creates a separate span for each reconciliation rather than
+	// a single span that covers the entire TaskRun lifecycle
+	span.SetStatus(codes.Ok, "TaskRun initialized")
 	return ctrl.Result{Requeue: true}, nil
 }
 
@@ -520,6 +574,12 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// Initialize phase if not set
 	if statusUpdate.Status.Phase == "" {
 		return r.initializePhaseAndSpan(ctx, statusUpdate)
+	}
+
+	// Skip reconciliation for terminal states
+	if statusUpdate.Status.Phase == kubechainv1alpha1.TaskRunPhaseFinalAnswer || statusUpdate.Status.Phase == kubechainv1alpha1.TaskRunPhaseFailed {
+		logger.V(1).Info("TaskRun in terminal state, skipping reconciliation", "phase", statusUpdate.Status.Phase)
+		return ctrl.Result{}, nil
 	}
 
 	// Step 1: Validate Task and Agent
@@ -586,17 +646,37 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		tracer = otel.GetTracerProvider().Tracer("taskrun")
 	}
 
-	// If we have a parent span context, create a child span
+	// If we have a parent span context, create a child span linked to the parent
 	if taskRun.Status.SpanContext != nil && taskRun.Status.SpanContext.TraceID != "" {
-		// Create a new span context from the stored SpanContext
-		childCtx, childSpan = tracer.Start(ctx, "LLM Request")
+		// Parse the trace and span IDs from the stored context
+		traceIDBytes, err := trace.TraceIDFromHex(taskRun.Status.SpanContext.TraceID)
+		if err == nil {
+			spanIDBytes, err := trace.SpanIDFromHex(taskRun.Status.SpanContext.SpanID)
+			if err == nil {
+				// Create a span context with the stored IDs
+				spanCtx := trace.NewSpanContext(trace.SpanContextConfig{
+					TraceID:    traceIDBytes,
+					SpanID:     spanIDBytes,
+					TraceFlags: trace.FlagsSampled,
+					Remote:     false,
+				})
+
+				// Create context with the span context
+				ctx = trace.ContextWithSpanContext(ctx, spanCtx)
+			}
+		}
+
+		// Create a child span that will properly link to the parent
+		childCtx, childSpan = tracer.Start(ctx, fmt.Sprintf("TaskRun/%s/LLMRequest", taskRun.Name),
+			trace.WithSpanKind(trace.SpanKindClient))
 		defer childSpan.End()
 
 		// Set attributes for the LLM request
 		childSpan.SetAttributes(
 			attribute.Int("context_window_size", len(taskRun.Status.ContextWindow)),
 			attribute.Int("tools_count", len(tools)),
-			attribute.String("taskrun_name", taskRun.Name),
+			attribute.String("taskrun.name", taskRun.Name),
+			attribute.String("taskrun.namespace", taskRun.Namespace),
 		)
 	} else {
 		// No parent span, just use the current context
