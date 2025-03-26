@@ -4,6 +4,18 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+type TaskRunToolCallStatusType string
+
+const (
+	TaskRunToolCallStatusTypeReady                        TaskRunToolCallStatusType = "Ready"
+	TaskRunToolCallStatusTypeError                        TaskRunToolCallStatusType = "Error"
+	TaskRunToolCallStatusTypePending                      TaskRunToolCallStatusType = "Pending"
+	TaskRunToolCallStatusTypeAwaitingHumanApproval        TaskRunToolCallStatusType = "AwaitingHumanApproval"
+	TaskRunToolCallStatusTypeAwaitingHumanInput           TaskRunToolCallStatusType = "AwaitingHumanInput"
+	TaskRunToolCallStatusTypeAwaitingSubAgent             TaskRunToolCallStatusType = "AwaitingSubAgent"
+	TaskRunToolCallStatusTypeErrorRequestingHumanApproval TaskRunToolCallStatusType = "ErrorRequestingHumanApproval"
+)
+
 // TaskRunToolCallSpec defines the desired state of TaskRunToolCall
 type TaskRunToolCallSpec struct {
 	// ToolCallId is the unique identifier for this tool call
@@ -33,8 +45,8 @@ type TaskRunToolCallStatus struct {
 	Ready bool `json:"ready,omitempty"`
 
 	// Status indicates the current status of the tool call
-	// +kubebuilder:validation:Enum=Ready;Error;Pending;AwaitingHumanApproval;AwaitingHumanInput;AwaitingSubAgent
-	Status string `json:"status,omitempty"`
+	// +kubebuilder:validation:Enum=Ready;Error;Pending;AwaitingHumanApproval;AwaitingHumanInput;AwaitingSubAgent;ErrorRequestingHumanApproval
+	Status TaskRunToolCallStatusType `json:"status,omitempty"`
 
 	// StatusDetail provides additional details about the current status
 	// +optional

@@ -140,6 +140,7 @@ spec:
                 - AwaitingHumanApproval
                 - AwaitingHumanInput
                 - AwaitingSubAgent
+                - ErrorRequestingHumanApproval
                 type: string
               statusDetail:
                 description: StatusDetail provides additional details about the current
