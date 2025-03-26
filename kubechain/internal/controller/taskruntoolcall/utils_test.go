@@ -3,6 +3,7 @@ package taskruntoolcall
 import (
 	"context"
 	"fmt"
+	"time"
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
@@ -19,23 +20,23 @@ var addTool = &TestTool{
 	toolType: "function",
 }
 
-// var testContactChannel = &TestContactChannel{
-// 	name:        "test-contact-channel",
-// 	channelType: "slack",
-// 	secretName:  testSecret.name,
-// }
+var testContactChannel = &TestContactChannel{
+	name:        "test-contact-channel",
+	channelType: "slack",
+	secretName:  testSecret.name,
+}
 
-// var testMCPServer = &TestMCPServer{
-// 	name:                   "test-mcp-server",
-// 	needsApproval:          true,
-// 	approvalContactChannel: testContactChannel.name,
-// }
+var testMCPServer = &TestMCPServer{
+	name:                   "test-mcp-server",
+	needsApproval:          true,
+	approvalContactChannel: testContactChannel.name,
+}
 
-// var testMCPTool = &TestMCPTool{
-// 	name:        "test-mcp-server-test-tool",
-// 	mcpServer:   testMCPServer.name,
-// 	mcpToolName: "test-tool",
-// }
+var testMCPTool = &TestMCPTool{
+	name:        "test-mcp-server-test-tool",
+	mcpServer:   testMCPServer.name,
+	mcpToolName: "test-tool",
+}
 
 var trtcForAddTool = &TestTaskRunToolCall{
 	name:      "test-taskruntoolcall",
@@ -240,10 +241,10 @@ func setupTestAddTool(ctx context.Context) func() {
 
 // TestMCPServer represents a test MCPServer resource
 type TestMCPServer struct {
-	name string
-	// contactChannelName     string
-	needsApproval bool
-	// needsApprovalChecking  bool
+	name                   string
+	contactChannelName     string
+	needsApproval          bool
+	needsApprovalChecking  bool
 	approvalContactChannel string
 	mcpServer              *kubechainv1alpha1.MCPServer
 }
@@ -374,4 +375,45 @@ func reconciler() (*TaskRunToolCallReconciler, *record.FakeRecorder) {
 	}
 
 	return reconciler, recorder
+}
+
+// setupTestApprovalResources sets up all resources needed for testing approval
+func setupTestApprovalResources(ctx context.Context) (*kubechainv1alpha1.TaskRunToolCall, func()) {
+	By("creating the secret")
+	testSecret.Setup(ctx)
+	By("creating the contact channel")
+	testContactChannel.SetupWithStatus(ctx, kubechainv1alpha1.ContactChannelStatus{
+		Ready:  true,
+		Status: "Ready",
+	})
+	By("creating the MCP server")
+	testMCPServer.SetupWithStatus(ctx, kubechainv1alpha1.MCPServerStatus{
+		Connected: true,
+		Status:    "Ready",
+	})
+	By("creating the MCP tool")
+	mcpTool := testMCPTool.SetupWithStatus(ctx, kubechainv1alpha1.ToolStatus{
+		Ready:  true,
+		Status: "Ready",
+	})
+
+	taskRunToolCall := &TestTaskRunToolCall{
+		name:      "test-mcp-with-approval-trtc",
+		toolName:  mcpTool.Spec.Name,
+		arguments: `{"a": 2, "b": 3}`,
+	}
+
+	trtc := taskRunToolCall.SetupWithStatus(ctx, kubechainv1alpha1.TaskRunToolCallStatus{
+		Phase:        kubechainv1alpha1.TaskRunToolCallPhasePending,
+		Status:       "Pending",
+		StatusDetail: "Ready for execution",
+		StartTime:    &metav1.Time{Time: time.Now().Add(-1 * time.Minute)},
+	})
+
+	return trtc, func() {
+		testMCPTool.Teardown(ctx)
+		testMCPServer.Teardown(ctx)
+		testContactChannel.Teardown(ctx)
+		testSecret.Teardown(ctx)
+	}
 }
