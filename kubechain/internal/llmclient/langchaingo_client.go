@@ -7,8 +7,10 @@ import (
 
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/anthropic"
+	"github.com/tmc/langchaingo/llms/googleai"
+	"github.com/tmc/langchaingo/llms/googleai/vertex"
+	"github.com/tmc/langchaingo/llms/mistral"
 	"github.com/tmc/langchaingo/llms/openai"
-	// Import other providers as needed
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
 )
@@ -42,7 +44,27 @@ func NewLangchainClient(ctx context.Context, provider string, apiKey string, mod
 			opts = append(opts, anthropic.WithBaseURL(modelConfig.BaseURL))
 		}
 		model, err = anthropic.New(opts...)
-	// Add other providers as needed
+	case "mistral":
+		opts := []mistral.Option{mistral.WithAPIKey(apiKey)}
+		if modelConfig.Model != "" {
+			opts = append(opts, mistral.WithModel(modelConfig.Model))
+		}
+		if modelConfig.BaseURL != "" {
+			opts = append(opts, mistral.WithEndpoint(modelConfig.BaseURL))
+		}
+		model, err = mistral.New(opts...)
+	case "google":
+		opts := []googleai.Option{googleai.WithAPIKey(apiKey)}
+		if modelConfig.Model != "" {
+			opts = append(opts, googleai.WithDefaultModel(modelConfig.Model))
+		}
+		model, err = googleai.New(context.Background(), opts...)
+	case "vertex":
+		opts := []googleai.Option{googleai.WithCredentialsJSON([]byte(apiKey))}
+		if modelConfig.Model != "" {
+			opts = append(opts, googleai.WithDefaultModel(modelConfig.Model))
+		}
+		model, err = vertex.New(context.Background(), opts...)
 	default:
 		return nil, fmt.Errorf("unsupported provider: %s", provider)
 	}
