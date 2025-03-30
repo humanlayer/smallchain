@@ -12,10 +12,10 @@ import (
 	humanlayerapi "github.com/humanlayer/smallchain/kubechain/internal/humanlayerapi"
 )
 
-// NewHumanLayerClient creates a new API client using either the provided API key
+// NewHumanLayerClientFactory creates a new API client using either the provided API key
 // or falling back to the HUMANLAYER_API_KEY environment variable. Similarly,
 // it uses the provided API base URL or falls back to HUMANLAYER_API_BASE.
-func NewHumanLayerClient(optionalApiBase string) (HumanLayerClientInterface, error) {
+func NewHumanLayerClientFactory(optionalApiBase string) (HumanLayerClientFactoryInterface, error) {
 	config := humanlayerapi.NewConfiguration()
 
 	// Get API base from parameter or environment variable
@@ -55,10 +55,12 @@ type HumanLayerClientWrapperInterface interface {
 	SetCallID(callID string)
 	SetRunID(runID string)
 	SetAPIKey(apiKey string)
+
 	RequestApproval(ctx context.Context) (functionCall *humanlayerapi.FunctionCallOutput, statusCode int, err error)
+	GetFunctionCallStatus(ctx context.Context) (functionCall *humanlayerapi.FunctionCallOutput, statusCode int, err error)
 }
 
-type HumanLayerClientInterface interface {
+type HumanLayerClientFactoryInterface interface {
 	NewHumanLayerClient() HumanLayerClientWrapperInterface
 }
 
@@ -138,6 +140,14 @@ func (h *HumanLayerClientWrapper) RequestApproval(ctx context.Context) (function
 	functionCall, resp, err := h.client.DefaultAPI.RequestApproval(ctx).
 		Authorization("Bearer " + h.apiKey).
 		FunctionCallInput(*functionCallInput).
+		Execute()
+
+	return functionCall, resp.StatusCode, err
+}
+
+func (h *HumanLayerClientWrapper) GetFunctionCallStatus(ctx context.Context) (functionCall *humanlayerapi.FunctionCallOutput, statusCode int, err error) {
+	functionCall, resp, err := h.client.DefaultAPI.GetFunctionCallStatus(ctx, h.callID).
+		Authorization("Bearer " + h.apiKey).
 		Execute()
 
 	return functionCall, resp.StatusCode, err

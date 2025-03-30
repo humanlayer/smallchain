@@ -327,13 +327,13 @@ func (v NullableTime) MarshalJSON() ([]byte, error) {
 
 func (v *NullableTime) UnmarshalJSON(src []byte) error {
 	v.isSet = true
-	
+
 	// Handle null case
 	if string(src) == "null" {
 		v.value = nil
 		return nil
 	}
-	
+
 	// Try standard time parsing first
 	var stdTime time.Time
 	err := json.Unmarshal(src, &stdTime)
@@ -341,21 +341,21 @@ func (v *NullableTime) UnmarshalJSON(src []byte) error {
 		v.value = &stdTime
 		return nil
 	}
-	
+
 	// If standard parsing fails, try to parse as RFC3339Nano without timezone
 	s := string(src)
 	if len(s) >= 2 {
 		// Remove quotes from the string
 		s = s[1 : len(s)-1]
-		
+
 		// Try various time formats
 		formats := []string{
-			"2006-01-02T15:04:05.999999",  // Missing timezone
-			"2006-01-02T15:04:05",         // No fractional seconds or timezone
-			time.RFC3339,                  // Standard format with timezone
-			time.RFC3339Nano,              // Standard format with nanoseconds
+			"2006-01-02T15:04:05.999999", // Missing timezone
+			"2006-01-02T15:04:05",        // No fractional seconds or timezone
+			time.RFC3339,                 // Standard format with timezone
+			time.RFC3339Nano,             // Standard format with nanoseconds
 		}
-		
+
 		for _, format := range formats {
 			if t, err := time.Parse(format, s); err == nil {
 				v.value = &t
@@ -363,7 +363,7 @@ func (v *NullableTime) UnmarshalJSON(src []byte) error {
 			}
 		}
 	}
-	
+
 	return fmt.Errorf("cannot parse %s as time.Time", string(src))
 }
 
