@@ -808,28 +808,31 @@ func (r *TaskRunToolCallReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 			approvalGranted = status.GetApproved()
 
-			// approval rejected, end flow
-			if !approvalGranted {
-				trtc.Status.Status = kubechainv1alpha1.TaskRunToolCallStatusTypeError
-				trtc.Status.StatusDetail = "Tool execution rejected"
-				trtc.Status.Result = "Rejected"
-				trtc.Status.Phase = kubechainv1alpha1.TaskRunToolCallPhaseFailed
+			if approvalGranted {
+				statusUpdate := trtc.DeepCopy()
+				statusUpdate.Status.Status = kubechainv1alpha1.TaskRunToolCallStatusTypeReadyToExecuteApprovedTool
+				statusUpdate.Status.StatusDetail = "Ready to execute approved tool"
+				statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunToolCallPhasePending
 
-				if err := r.Status().Update(ctx, &trtc); err != nil {
+				if err := r.Status().Update(ctx, statusUpdate); err != nil {
 					logger.Error(err, "Failed to update TaskRunToolCall status")
 					return ctrl.Result{}, err
 				}
 
 				return ctrl.Result{}, nil
-			}
+			} else {
+				statusUpdate := trtc.DeepCopy()
+				statusUpdate.Status.Status = kubechainv1alpha1.TaskRunToolCallStatusTypeToolCallRejected
+				statusUpdate.Status.StatusDetail = "Tool execution rejected"
+				statusUpdate.Status.Result = "Rejected"
+				statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunToolCallPhaseFailed
 
-			if approvalGranted {
-				trtc.Status.Status = kubechainv1alpha1.TaskRunToolCallStatusTypePending
-				trtc.Status.StatusDetail = "Tool execution approved"
-				trtc.Status.Phase = kubechainv1alpha1.TaskRunToolCallPhaseSucceeded
+				if err := r.Status().Update(ctx, statusUpdate); err != nil {
+					logger.Error(err, "Failed to update TaskRunToolCall status")
+					return ctrl.Result{}, err
+				}
 
-				// TODO: Do we want to update the status here and return? Right now we just let
-				// the rest of execution continue which allows tool execution to occur.
+				return ctrl.Result{}, nil
 			}
 		}
 

@@ -145,6 +145,8 @@ spec:
                 - AwaitingHumanInput
                 - AwaitingSubAgent
                 - ErrorRequestingHumanApproval
+                - ReadyToExecuteApprovedTool
+                - ToolCallRejected
                 type: string
               statusDetail:
                 description: StatusDetail provides additional details about the current

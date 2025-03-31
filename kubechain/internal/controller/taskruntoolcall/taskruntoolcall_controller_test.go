@@ -226,7 +226,7 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 	Context("Pending -> AwaitingHumanApproval (MCP Tool) -> Ready:Succeeded", func() {
 		It("transitions to AwaitingHumanApproval when MCPServer has approval channel", func() {
 			// Note setupTestApprovalResources sets up the MCP server, MCP tool, and TaskRunToolCall
-			trtc, teardown := setupTestApprovalResources(ctx)
+			trtc, teardown := setupTestApprovalResources(ctx, nil)
 			defer teardown()
 
 			By("reconciling the taskruntoolcall that uses MCP tool with approval")
@@ -237,10 +237,9 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 			}
 
 			reconciler.HLClient = &humanlayer.MockHumanLayerClient{
-				ShouldFail:           false,
-				StatusCode:           200,
-				ReturnError:          nil,
-				ShouldReturnApproval: true,
+				ShouldFail:  false,
+				StatusCode:  200,
+				ReturnError: nil,
 			}
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{
@@ -274,11 +273,62 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 			utils.ExpectRecorder(recorder).ToEmitEventContaining("AwaitingHumanApproval")
 			Expect(updatedTRTC.Status.Status).To(Equal(kubechainv1alpha1.TaskRunToolCallStatusTypeAwaitingHumanApproval))
 
-			By("reconciling the taskrunttoolcall again to check if it is approved")
+			// By("reconciling the taskrunttoolcall again to check if it is approved")
+			// reconciler.MCPManager = &MockMCPManager{
+			// 	NeedsApproval: false,
+			// }
+			// result, err = reconciler.Reconcile(ctx, reconcile.Request{
+			// 	NamespacedName: types.NamespacedName{
+			// 		Name:      trtc.Name,
+			// 		Namespace: trtc.Namespace,
+			// 	},
+			// })
+
+			// Expect(err).NotTo(HaveOccurred())
+			// Expect(result.Requeue).To(BeFalse())
+
+			// By("checking the taskruntoolcall status is set to Ready:Succeeded")
+			// updatedTRTC = &kubechainv1alpha1.TaskRunToolCall{}
+			// err = k8sClient.Get(ctx, types.NamespacedName{
+			// 	Name:      trtc.Name,
+			// 	Namespace: trtc.Namespace,
+			// }, updatedTRTC)
+
+			// Expect(err).NotTo(HaveOccurred())
+			// Expect(updatedTRTC.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunToolCallPhaseSucceeded))
+			// Expect(updatedTRTC.Status.Status).To(Equal(kubechainv1alpha1.TaskRunToolCallStatusTypeReady))
+			// Expect(updatedTRTC.Status.Result).To(Equal("5")) // From our mock implementation
+		})
+	})
+
+	Context("AwaitingHumanApproval -> ReadyToExecuteApprovedTool", func() {
+		It("transitions from AwaitingHumanApproval to ReadyToExecuteApprovedTool when MCP tool is approved", func() {
+			trtc, teardown := setupTestApprovalResources(ctx, &SetupTestApprovalConfig{
+				TaskRunToolCallStatus: &kubechainv1alpha1.TaskRunToolCallStatus{
+					Phase:        kubechainv1alpha1.TaskRunToolCallPhasePending,
+					Status:       kubechainv1alpha1.TaskRunToolCallStatusTypeAwaitingHumanApproval,
+					StatusDetail: "Waiting for human approval via contact channel",
+					StartTime:    &metav1.Time{Time: time.Now().Add(-1 * time.Minute)},
+				},
+			})
+			defer teardown()
+
+			By("reconciling the trtc against an approval-granting HumanLayer client")
+
+			reconciler, _ := reconciler()
+
 			reconciler.MCPManager = &MockMCPManager{
-				NeedsApproval: false,
+				NeedsApproval: true,
 			}
-			result, err = reconciler.Reconcile(ctx, reconcile.Request{
+
+			reconciler.HLClient = &humanlayer.MockHumanLayerClient{
+				ShouldFail:           false,
+				StatusCode:           200,
+				ReturnError:          nil,
+				ShouldReturnApproval: true,
+			}
+
+			result, err := reconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: types.NamespacedName{
 					Name:      trtc.Name,
 					Namespace: trtc.Namespace,
@@ -288,31 +338,82 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Requeue).To(BeFalse())
 
-			By("checking the taskruntoolcall status is set to Ready:Succeeded")
-			updatedTRTC = &kubechainv1alpha1.TaskRunToolCall{}
+			By("checking the taskruntoolcall status is set to ReadyToExecuteApprovedTool")
+			updatedTRTC := &kubechainv1alpha1.TaskRunToolCall{}
 			err = k8sClient.Get(ctx, types.NamespacedName{
 				Name:      trtc.Name,
 				Namespace: trtc.Namespace,
 			}, updatedTRTC)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(updatedTRTC.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunToolCallPhaseSucceeded))
-			Expect(updatedTRTC.Status.Status).To(Equal(kubechainv1alpha1.TaskRunToolCallStatusTypeReady))
-			Expect(updatedTRTC.Status.Result).To(Equal("5")) // From our mock implementation
+			Expect(updatedTRTC.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunToolCallPhasePending))
+			Expect(updatedTRTC.Status.Status).To(Equal(kubechainv1alpha1.TaskRunToolCallStatusTypeReadyToExecuteApprovedTool))
+			Expect(updatedTRTC.Status.StatusDetail).To(ContainSubstring("Ready to execute approved tool"))
+		})
+	})
+
+	Context("AwaitingHumanApproval -> ToolCallRejected", func() {
+		It("transitions from AwaitingHumanApproval to ToolCallRejected when MCP tool is rejected", func() {
+			trtc, teardown := setupTestApprovalResources(ctx, &SetupTestApprovalConfig{
+				TaskRunToolCallStatus: &kubechainv1alpha1.TaskRunToolCallStatus{
+					Phase:        kubechainv1alpha1.TaskRunToolCallPhasePending,
+					Status:       kubechainv1alpha1.TaskRunToolCallStatusTypeAwaitingHumanApproval,
+					StatusDetail: "Waiting for human approval via contact channel",
+					StartTime:    &metav1.Time{Time: time.Now().Add(-1 * time.Minute)},
+				},
+			})
+			defer teardown()
+
+			By("reconciling the trtc against an approval-rejecting HumanLayer client")
+
+			reconciler, _ := reconciler()
+
+			reconciler.MCPManager = &MockMCPManager{
+				NeedsApproval: true,
+			}
+
+			reconciler.HLClient = &humanlayer.MockHumanLayerClient{
+				ShouldFail:            false,
+				StatusCode:            200,
+				ReturnError:           nil,
+				ShouldReturnRejection: true,
+			}
+
+			result, err := reconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      trtc.Name,
+					Namespace: trtc.Namespace,
+				},
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeFalse())
+
+			By("checking the taskruntoolcall status is set to ToolCallRejected")
+			updatedTRTC := &kubechainv1alpha1.TaskRunToolCall{}
+			err = k8sClient.Get(ctx, types.NamespacedName{
+				Name:      trtc.Name,
+				Namespace: trtc.Namespace,
+			}, updatedTRTC)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedTRTC.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunToolCallPhaseFailed))
+			Expect(updatedTRTC.Status.Status).To(Equal(kubechainv1alpha1.TaskRunToolCallStatusTypeToolCallRejected))
+			Expect(updatedTRTC.Status.StatusDetail).To(ContainSubstring("Tool execution rejected"))
 		})
 	})
 
 	Context("Pending -> ErrorRequestingHumanApproval (MCP Tool)", func() {
 		It("transitions to ErrorRequestingHumanApproval when request to HumanLayer fails", func() {
 			// Note setupTestApprovalResources sets up the MCP server, MCP tool, and TaskRunToolCall
-			trtc, teardown := setupTestApprovalResources(ctx)
+			trtc, teardown := setupTestApprovalResources(ctx, nil)
 			defer teardown()
 
 			By("reconciling the taskruntoolcall that uses MCP tool with approval")
 			reconciler, _ := reconciler()
 
 			reconciler.MCPManager = &MockMCPManager{
-				NeedsApproval: true,
+				NeedsApproval: false,
 			}
 
 			reconciler.HLClient = &humanlayer.MockHumanLayerClient{

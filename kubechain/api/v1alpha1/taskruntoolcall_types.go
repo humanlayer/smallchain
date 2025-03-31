@@ -14,6 +14,8 @@ const (
 	TaskRunToolCallStatusTypeAwaitingHumanInput           TaskRunToolCallStatusType = "AwaitingHumanInput"
 	TaskRunToolCallStatusTypeAwaitingSubAgent             TaskRunToolCallStatusType = "AwaitingSubAgent"
 	TaskRunToolCallStatusTypeErrorRequestingHumanApproval TaskRunToolCallStatusType = "ErrorRequestingHumanApproval"
+	TaskRunToolCallStatusTypeReadyToExecuteApprovedTool   TaskRunToolCallStatusType = "ReadyToExecuteApprovedTool"
+	TaskRunToolCallStatusTypeToolCallRejected             TaskRunToolCallStatusType = "ToolCallRejected"
 )
 
 // TaskRunToolCallSpec defines the desired state of TaskRunToolCall
@@ -45,7 +47,7 @@ type TaskRunToolCallStatus struct {
 	Ready bool `json:"ready,omitempty"`
 
 	// Status indicates the current status of the tool call
-	// +kubebuilder:validation:Enum=Ready;Error;Pending;AwaitingHumanApproval;AwaitingHumanInput;AwaitingSubAgent;ErrorRequestingHumanApproval
+	// +kubebuilder:validation:Enum=Ready;Error;Pending;AwaitingHumanApproval;AwaitingHumanInput;AwaitingSubAgent;ErrorRequestingHumanApproval;ReadyToExecuteApprovedTool;ToolCallRejected
 	Status TaskRunToolCallStatusType `json:"status,omitempty"`
 
 	// StatusDetail provides additional details about the current status

@@ -375,8 +375,15 @@ func reconciler() (*TaskRunToolCallReconciler, *record.FakeRecorder) {
 	return reconciler, recorder
 }
 
+// SetupTestApprovalConfig contains optional configuration for setupTestApprovalResources
+type SetupTestApprovalConfig struct {
+	TaskRunToolCallStatus *kubechainv1alpha1.TaskRunToolCallStatus
+	TaskRunToolCallName   string
+	TaskRunToolCallArgs   string
+}
+
 // setupTestApprovalResources sets up all resources needed for testing approval
-func setupTestApprovalResources(ctx context.Context) (*kubechainv1alpha1.TaskRunToolCall, func()) {
+func setupTestApprovalResources(ctx context.Context, config *SetupTestApprovalConfig) (*kubechainv1alpha1.TaskRunToolCall, func()) {
 	By("creating the secret")
 	testSecret.Setup(ctx)
 	By("creating the contact channel")
@@ -395,18 +402,35 @@ func setupTestApprovalResources(ctx context.Context) (*kubechainv1alpha1.TaskRun
 		Status: "Ready",
 	})
 
-	taskRunToolCall := &TestTaskRunToolCall{
-		name:      "test-mcp-with-approval-trtc",
-		toolName:  mcpTool.Spec.Name,
-		arguments: `{"a": 2, "b": 3}`,
+	name := "test-mcp-with-approval-trtc"
+	args := `{"a": 2, "b": 3}`
+	if config != nil {
+		if config.TaskRunToolCallName != "" {
+			name = config.TaskRunToolCallName
+		}
+		if config.TaskRunToolCallArgs != "" {
+			args = config.TaskRunToolCallArgs
+		}
 	}
 
-	trtc := taskRunToolCall.SetupWithStatus(ctx, kubechainv1alpha1.TaskRunToolCallStatus{
+	taskRunToolCall := &TestTaskRunToolCall{
+		name:      name,
+		toolName:  mcpTool.Spec.Name,
+		arguments: args,
+	}
+
+	status := kubechainv1alpha1.TaskRunToolCallStatus{
 		Phase:        kubechainv1alpha1.TaskRunToolCallPhasePending,
 		Status:       "Pending",
 		StatusDetail: "Ready for execution",
 		StartTime:    &metav1.Time{Time: time.Now().Add(-1 * time.Minute)},
-	})
+	}
+
+	if config != nil && config.TaskRunToolCallStatus != nil {
+		status = *config.TaskRunToolCallStatus
+	}
+
+	trtc := taskRunToolCall.SetupWithStatus(ctx, status)
 
 	return trtc, func() {
 		testMCPTool.Teardown(ctx)

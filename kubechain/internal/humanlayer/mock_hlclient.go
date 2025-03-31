@@ -10,15 +10,16 @@ import (
 
 // MockHumanLayerClient implements HumanLayerClientInterface for testing
 type MockHumanLayerClient struct {
-	ShouldFail           bool
-	StatusCode           int
-	ReturnError          error
-	ShouldReturnApproval bool
-	LastAPIKey           string
-	LastCallID           string
-	LastRunID            string
-	LastFunction         string
-	LastArguments        map[string]interface{}
+	ShouldFail            bool
+	StatusCode            int
+	ReturnError           error
+	ShouldReturnApproval  bool
+	ShouldReturnRejection bool
+	LastAPIKey            string
+	LastCallID            string
+	LastRunID             string
+	LastFunction          string
+	LastArguments         map[string]interface{}
 }
 
 // MockHumanLayerClientWrapper implements HumanLayerClientWrapperInterface for testing
@@ -86,6 +87,19 @@ func (m *MockHumanLayerClientWrapper) GetFunctionCallStatus(ctx context.Context)
 	if m.parent.ShouldReturnApproval {
 		now := time.Now()
 		approved := true
+		status := humanlayerapi.NewNullableFunctionCallStatus(&humanlayerapi.FunctionCallStatus{
+			RequestedAt: *humanlayerapi.NewNullableTime(&now),
+			RespondedAt: *humanlayerapi.NewNullableTime(&now),
+			Approved:    *humanlayerapi.NewNullableBool(&approved),
+		})
+		return &humanlayerapi.FunctionCallOutput{
+			Status: *status,
+		}, 200, nil
+	}
+
+	if m.parent.ShouldReturnRejection {
+		now := time.Now()
+		approved := false
 		status := humanlayerapi.NewNullableFunctionCallStatus(&humanlayerapi.FunctionCallStatus{
 			RequestedAt: *humanlayerapi.NewNullableTime(&now),
 			RespondedAt: *humanlayerapi.NewNullableTime(&now),
