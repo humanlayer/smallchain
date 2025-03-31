@@ -683,8 +683,9 @@ func (r *TaskRunToolCallReconciler) getHumanLayerAPIKey(ctx context.Context, sec
 
 //nolint:unparam
 func (r *TaskRunToolCallReconciler) setStatusError(ctx context.Context, trtcStatus kubechainv1alpha1.TaskRunToolCallStatusType, eventType string, trtc *kubechainv1alpha1.TaskRunToolCall, err error) (ctrl.Result, error, bool) {
+	trtcDeepCopy := trtc.DeepCopy()
 	logger := log.FromContext(ctx)
-	trtc.Status.Status = trtcStatus
+	trtcDeepCopy.Status.Status = trtcStatus
 
 	// Handle nil error case
 	errorMessage := "Unknown error occurred"
@@ -692,11 +693,11 @@ func (r *TaskRunToolCallReconciler) setStatusError(ctx context.Context, trtcStat
 		errorMessage = err.Error()
 	}
 
-	trtc.Status.StatusDetail = errorMessage
-	trtc.Status.Error = errorMessage
-	r.recorder.Event(trtc, corev1.EventTypeWarning, eventType, errorMessage)
+	trtcDeepCopy.Status.StatusDetail = errorMessage
+	trtcDeepCopy.Status.Error = errorMessage
+	r.recorder.Event(trtcDeepCopy, corev1.EventTypeWarning, eventType, errorMessage)
 
-	if err := r.Status().Update(ctx, trtc); err != nil {
+	if err := r.Status().Update(ctx, trtcDeepCopy); err != nil {
 		logger.Error(err, "Failed to update status")
 		return ctrl.Result{}, err, true
 	}
@@ -711,8 +712,6 @@ func (r *TaskRunToolCallReconciler) updateTRTCStatus(ctx context.Context, trtc *
 	trtcDeepCopy.Status.Status = trtcStatusType
 	trtcDeepCopy.Status.StatusDetail = statusDetail
 	trtcDeepCopy.Status.Phase = trtcStatusPhase
-	// trtcDeepCopy.Status.Error = err.Error()
-	// r.recorder.Event(trtcDeepCopy, corev1.EventTypeWarning, trtcStatusPhase, err.Error())
 
 	if err := r.Status().Update(ctx, trtcDeepCopy); err != nil {
 		logger.Error(err, "Failed to update status")

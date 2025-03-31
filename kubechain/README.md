@@ -49,6 +49,38 @@ kubectl apply -k config/samples/
 
 >**NOTE**: Ensure that the samples has default values to test it out.
 
+### Playing with HumanLayer? Try this example first.
+
+To try out the HumanLayer integration for human approval flows:
+
+1. Before getting started, make sure you've run through the following prereqs:
+
+* Be sure to have run through the above instructions to get an initial cluster ready. No need to deploy any samples just yet, we'll take care of that next.
+* Grab your `HUMANLAYER_API_KEY` and `OPENAI_API_KEY` and have them handy for the next few steps. 
+* This example assumes you've integrated one of your HumanLayer projects with a Slack Workspace, be sure to do that first.
+
+2. Okay, here we go. Create some required secrets in your local example cluster:
+
+   ```sh
+   # Create HumanLayer API key secret
+   kubectl create secret generic humanlayer-api-key \
+     --from-literal=api-key=$HUMANLAYER_API_KEY \
+     --namespace=default
+
+   # Create OpenAI API key secret (needed for demo)
+   kubectl create secret generic openai \
+     --from-literal=OPENAI_API_KEY=$OPENAI_API_KEY \
+     --namespace=default
+   ```
+
+3. Edit `kubechain/config/samples/kubechain_v1alpha_contactchannel_with_approval.yaml` and to include the Slack `channelId` you integrated with your HumanLayer project. 
+
+4. Apply the Kubernetes sample config: `kubectl apply -f kubechain/config/samples/kubechain_v1alpha_contactchannel_with_approval.yaml`
+
+
+If things went well, you should get a Slack message requesting approval or rejection prior finishing up the tool call flow. Be sure to see how your `taskruntoolcall` status changes once your Slack approval request comes in and after you've taken action on it with `kubectl describe taskruntoolcall`. 
+
+
 ### To Uninstall
 **Delete the instances (CRs) from the cluster:**
 
