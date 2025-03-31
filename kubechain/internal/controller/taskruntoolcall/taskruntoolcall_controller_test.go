@@ -279,11 +279,11 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 		It("transitions from AwaitingHumanApproval to ReadyToExecuteApprovedTool when MCP tool is approved", func() {
 			trtc, teardown := setupTestApprovalResources(ctx, &SetupTestApprovalConfig{
 				TaskRunToolCallStatus: &kubechainv1alpha1.TaskRunToolCallStatus{
-					HumanLayerCallId: "call-ready-to-execute-test",
-					Phase:            kubechainv1alpha1.TaskRunToolCallPhasePending,
-					Status:           kubechainv1alpha1.TaskRunToolCallStatusTypeAwaitingHumanApproval,
-					StatusDetail:     "Waiting for human approval via contact channel",
-					StartTime:        &metav1.Time{Time: time.Now().Add(-1 * time.Minute)},
+					ExternalCallID: "call-ready-to-execute-test",
+					Phase:          kubechainv1alpha1.TaskRunToolCallPhasePending,
+					Status:         kubechainv1alpha1.TaskRunToolCallStatusTypeAwaitingHumanApproval,
+					StatusDetail:   "Waiting for human approval via contact channel",
+					StartTime:      &metav1.Time{Time: time.Now().Add(-1 * time.Minute)},
 				},
 			})
 			defer teardown()
@@ -331,11 +331,11 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 		It("transitions from AwaitingHumanApproval to ToolCallRejected when MCP tool is rejected", func() {
 			trtc, teardown := setupTestApprovalResources(ctx, &SetupTestApprovalConfig{
 				TaskRunToolCallStatus: &kubechainv1alpha1.TaskRunToolCallStatus{
-					HumanLayerCallId: "call-tool-call-rejected-test",
-					Phase:            kubechainv1alpha1.TaskRunToolCallPhasePending,
-					Status:           kubechainv1alpha1.TaskRunToolCallStatusTypeAwaitingHumanApproval,
-					StatusDetail:     "Waiting for human approval via contact channel",
-					StartTime:        &metav1.Time{Time: time.Now().Add(-1 * time.Minute)},
+					ExternalCallID: "call-tool-call-rejected-test",
+					Phase:          kubechainv1alpha1.TaskRunToolCallPhasePending,
+					Status:         kubechainv1alpha1.TaskRunToolCallStatusTypeAwaitingHumanApproval,
+					StatusDetail:   "Waiting for human approval via contact channel",
+					StartTime:      &metav1.Time{Time: time.Now().Add(-1 * time.Minute)},
 				},
 			})
 			defer teardown()
@@ -383,11 +383,11 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 		It("transitions from ReadyToExecuteApprovedTool to Succeeded when a tool is executed", func() {
 			trtc, teardown := setupTestApprovalResources(ctx, &SetupTestApprovalConfig{
 				TaskRunToolCallStatus: &kubechainv1alpha1.TaskRunToolCallStatus{
-					HumanLayerCallId: "call-ready-to-execute-test",
-					Phase:            kubechainv1alpha1.TaskRunToolCallPhasePending,
-					Status:           kubechainv1alpha1.TaskRunToolCallStatusTypeReadyToExecuteApprovedTool,
-					StatusDetail:     "Ready to execute tool, with great vigor",
-					StartTime:        &metav1.Time{Time: time.Now().Add(-1 * time.Minute)},
+					ExternalCallID: "call-ready-to-execute-test",
+					Phase:          kubechainv1alpha1.TaskRunToolCallPhasePending,
+					Status:         kubechainv1alpha1.TaskRunToolCallStatusTypeReadyToExecuteApprovedTool,
+					StatusDetail:   "Ready to execute tool, with great vigor",
+					StartTime:      &metav1.Time{Time: time.Now().Add(-1 * time.Minute)},
 				},
 			})
 			defer teardown()

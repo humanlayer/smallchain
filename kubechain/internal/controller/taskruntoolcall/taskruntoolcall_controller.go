@@ -762,13 +762,13 @@ func (r *TaskRunToolCallReconciler) handlePendingApproval(ctx context.Context, t
 	}
 
 	// Verify we have a call ID
-	if trtc.Status.HumanLayerCallId == "" {
-		logger.Info("Missing HumanLayerCallId in pending approval state")
+	if trtc.Status.ExternalCallID == "" {
+		logger.Info("Missing ExternalCallID in pending approval state")
 		return ctrl.Result{}, nil, false
 	}
 
 	client := r.HLClientFactory.NewHumanLayerClient()
-	client.SetCallID(trtc.Status.HumanLayerCallId)
+	client.SetCallID(trtc.Status.ExternalCallID)
 	client.SetAPIKey(apiKey)
 	functionCall, _, err := client.GetFunctionCallStatus(ctx)
 
@@ -840,7 +840,7 @@ func (r *TaskRunToolCallReconciler) requestHumanApproval(ctx context.Context, tr
 
 	// Update with call ID and requeue
 	callId := functionCall.GetCallId()
-	trtc.Status.HumanLayerCallId = callId
+	trtc.Status.ExternalCallID = callId
 	if err := r.Status().Update(ctx, trtc); err != nil {
 		logger.Error(err, "Failed to update TaskRunToolCall status")
 		return ctrl.Result{}, err
