@@ -66,8 +66,18 @@ func main() {
 	fcStatus := getFunctionCallStatus(client)
 	status := fcStatus.GetStatus()
 
-	respondedAt := status.RespondedAt.Get()
+	approved, ok := status.GetApprovedOk()
 
-	fmt.Println("Approved: ", status.GetApproved())
-	fmt.Println("Responded at", respondedAt)
+	// Check if the value was set
+	if ok {
+		if approved == nil {
+			fmt.Println("Approval status is nil (Not responded yet)")
+		} else if *approved {
+			fmt.Println("Approved")
+		} else {
+			fmt.Println("Rejected")
+		}
+	} else {
+		fmt.Println("Not responded yet")
+	}
 }

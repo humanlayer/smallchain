@@ -778,13 +778,13 @@ func (r *TaskRunToolCallReconciler) handlePendingApproval(ctx context.Context, t
 
 	status := functionCall.GetStatus()
 
-	// No response yet, requeue
-	if status.RespondedAt.Get() == nil {
+	approved, ok := status.GetApprovedOk()
+
+	if !ok || approved == nil {
 		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil, true
 	}
 
-	approvalGranted := status.GetApproved()
-	if approvalGranted {
+	if *approved {
 		return r.updateTRTCStatus(ctx, trtc,
 			kubechainv1alpha1.TaskRunToolCallStatusTypeReadyToExecuteApprovedTool,
 			kubechainv1alpha1.TaskRunToolCallPhasePending,
