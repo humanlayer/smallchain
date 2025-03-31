@@ -703,6 +703,24 @@ func (r *TaskRunToolCallReconciler) setStatusError(ctx context.Context, trtcStat
 	return ctrl.Result{}, nil
 }
 
+func (r *TaskRunToolCallReconciler) updateTRTCStatus(ctx context.Context, trtc *kubechainv1alpha1.TaskRunToolCall, trtcStatusType kubechainv1alpha1.TaskRunToolCallStatusType, trtcStatusPhase kubechainv1alpha1.TaskRunToolCallPhase, statusDetail string, err error) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
+
+	trtcDeepCopy := trtc.DeepCopy()
+
+	trtcDeepCopy.Status.Status = trtcStatusType
+	trtcDeepCopy.Status.StatusDetail = statusDetail
+	trtcDeepCopy.Status.Phase = trtcStatusPhase
+	// trtcDeepCopy.Status.Error = err.Error()
+	// r.recorder.Event(trtcDeepCopy, corev1.EventTypeWarning, trtcStatusPhase, err.Error())
+
+	if err := r.Status().Update(ctx, trtcDeepCopy); err != nil {
+		logger.Error(err, "Failed to update status")
+		return ctrl.Result{}, err
+	}
+	return ctrl.Result{}, nil
+}
+
 func (r *TaskRunToolCallReconciler) postToHumanLayer(ctx context.Context, trtc *kubechainv1alpha1.TaskRunToolCall, contactChannel *kubechainv1alpha1.ContactChannel, apiKey string) (*humanlayerapi.FunctionCallOutput, int, error) {
 	client := r.HLClient.NewHumanLayerClient()
 
@@ -809,30 +827,9 @@ func (r *TaskRunToolCallReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			approvalGranted = status.GetApproved()
 
 			if approvalGranted {
-				statusUpdate := trtc.DeepCopy()
-				statusUpdate.Status.Status = kubechainv1alpha1.TaskRunToolCallStatusTypeReadyToExecuteApprovedTool
-				statusUpdate.Status.StatusDetail = "Ready to execute approved tool"
-				statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunToolCallPhasePending
-
-				if err := r.Status().Update(ctx, statusUpdate); err != nil {
-					logger.Error(err, "Failed to update TaskRunToolCall status")
-					return ctrl.Result{}, err
-				}
-
-				return ctrl.Result{}, nil
+				return r.updateTRTCStatus(ctx, &trtc, kubechainv1alpha1.TaskRunToolCallStatusTypeReadyToExecuteApprovedTool, kubechainv1alpha1.TaskRunToolCallPhasePending, "Ready to execute approved tool", nil)
 			} else {
-				statusUpdate := trtc.DeepCopy()
-				statusUpdate.Status.Status = kubechainv1alpha1.TaskRunToolCallStatusTypeToolCallRejected
-				statusUpdate.Status.StatusDetail = "Tool execution rejected"
-				statusUpdate.Status.Result = "Rejected"
-				statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunToolCallPhaseFailed
-
-				if err := r.Status().Update(ctx, statusUpdate); err != nil {
-					logger.Error(err, "Failed to update TaskRunToolCall status")
-					return ctrl.Result{}, err
-				}
-
-				return ctrl.Result{}, nil
+				return r.updateTRTCStatus(ctx, &trtc, kubechainv1alpha1.TaskRunToolCallStatusTypeToolCallRejected, kubechainv1alpha1.TaskRunToolCallPhaseFailed, "Tool execution rejected", nil)
 			}
 		}
 
