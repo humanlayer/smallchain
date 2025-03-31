@@ -245,13 +245,13 @@ func (in *ContactChannelList) DeepCopyObject() runtime.Object {
 func (in *ContactChannelSpec) DeepCopyInto(out *ContactChannelSpec) {
 	*out = *in
 	out.APIKeyFrom = in.APIKeyFrom
-	if in.SlackConfig != nil {
-		in, out := &in.SlackConfig, &out.SlackConfig
+	if in.Slack != nil {
+		in, out := &in.Slack, &out.Slack
 		*out = new(SlackChannelConfig)
 		(*in).DeepCopyInto(*out)
 	}
-	if in.EmailConfig != nil {
-		in, out := &in.EmailConfig, &out.EmailConfig
+	if in.Email != nil {
+		in, out := &in.Email, &out.Email
 		*out = new(EmailChannelConfig)
 		**out = **in
 	}

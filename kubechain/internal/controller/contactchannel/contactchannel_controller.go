@@ -120,17 +120,17 @@ func (r *ContactChannelReconciler) validateEmailAddress(email string) error {
 func (r *ContactChannelReconciler) validateChannelConfig(channel *kubechainv1alpha1.ContactChannel) error {
 	switch channel.Spec.ChannelType {
 	case channelTypeSlack:
-		if channel.Spec.SlackConfig == nil {
+		if channel.Spec.Slack == nil {
 			return fmt.Errorf("slackConfig is required for slack channel type")
 		}
 		// Slack channel ID validation is handled by the CRD validation
 		return nil
 
 	case channelTypeEmail:
-		if channel.Spec.EmailConfig == nil {
+		if channel.Spec.Email == nil {
 			return fmt.Errorf("emailConfig is required for email channel type")
 		}
-		return r.validateEmailAddress(channel.Spec.EmailConfig.Address)
+		return r.validateEmailAddress(channel.Spec.Email.Address)
 
 	default:
 		return fmt.Errorf("unsupported channel type: %s", channel.Spec.ChannelType)

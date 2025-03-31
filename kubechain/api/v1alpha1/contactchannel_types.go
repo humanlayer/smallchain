@@ -62,17 +62,13 @@ type ContactChannelSpec struct {
 	// +kubebuilder:validation:Required
 	APIKeyFrom APIKeySource `json:"apiKeyFrom"`
 
-	// todo change this to `Slack` + `json:"slack"`
-
-	// SlackConfig holds configuration specific to Slack channels
+	// Slack holds configuration specific to Slack channels
 	// +optional
-	SlackConfig *SlackChannelConfig `json:"slackConfig,omitempty"`
+	Slack *SlackChannelConfig `json:"slack,omitempty"`
 
-	// todo change this to `Email` + `json:"email"`
-
-	// EmailConfig holds configuration specific to Email channels
+	// Email holds configuration specific to Email channels
 	// +optional
-	EmailConfig *EmailChannelConfig `json:"emailConfig,omitempty"`
+	Email *EmailChannelConfig `json:"email,omitempty"`
 }
 
 // ContactChannelStatus defines the observed state of ContactChannel.
