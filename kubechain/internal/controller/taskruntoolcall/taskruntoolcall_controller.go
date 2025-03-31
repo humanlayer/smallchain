@@ -847,6 +847,11 @@ func (r *TaskRunToolCallReconciler) requestHumanApproval(ctx context.Context, tr
 
 // handleMCPApprovalFlow encapsulates the MCP approval flow logic
 func (r *TaskRunToolCallReconciler) handleMCPApprovalFlow(ctx context.Context, trtc *kubechainv1alpha1.TaskRunToolCall) (ctrl.Result, error, bool) {
+	// We've already been through the approval flow and are ready to execute the tool
+	if trtc.Status.Status == kubechainv1alpha1.TaskRunToolCallStatusTypeReadyToExecuteApprovedTool {
+		return ctrl.Result{}, nil, false
+	}
+
 	// Check if this is an MCP tool and needs approval
 	mcpServer, needsApproval, err := r.getMCPServer(ctx, trtc)
 	if err != nil {
