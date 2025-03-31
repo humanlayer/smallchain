@@ -236,7 +236,7 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 				NeedsApproval: true,
 			}
 
-			reconciler.HLClient = &humanlayer.MockHumanLayerClient{
+			reconciler.HLClientFactory = &humanlayer.MockHumanLayerClientFactory{
 				ShouldFail:  false,
 				StatusCode:  200,
 				ReturnError: nil,
@@ -296,7 +296,7 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 				NeedsApproval: true,
 			}
 
-			reconciler.HLClient = &humanlayer.MockHumanLayerClient{
+			reconciler.HLClientFactory = &humanlayer.MockHumanLayerClientFactory{
 				ShouldFail:           false,
 				StatusCode:           200,
 				ReturnError:          nil,
@@ -348,7 +348,7 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 				NeedsApproval: true,
 			}
 
-			reconciler.HLClient = &humanlayer.MockHumanLayerClient{
+			reconciler.HLClientFactory = &humanlayer.MockHumanLayerClientFactory{
 				ShouldFail:            false,
 				StatusCode:            200,
 				ReturnError:           nil,
@@ -433,7 +433,7 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 				NeedsApproval: false,
 			}
 
-			reconciler.HLClient = &humanlayer.MockHumanLayerClient{
+			reconciler.HLClientFactory = &humanlayer.MockHumanLayerClientFactory{
 				ShouldFail:  true,
 				StatusCode:  500,
 				ReturnError: fmt.Errorf("While taking pizzas from the kitchen to the lobby, Pete passed through the server room where he tripped over a network cable and now there's pizza all over the place. Also this request failed. No more pizza in the server room Pete."),

@@ -40,11 +40,11 @@ const (
 // TaskRunToolCallReconciler reconciles a TaskRunToolCall object.
 type TaskRunToolCallReconciler struct {
 	client.Client
-	Scheme     *runtime.Scheme
-	recorder   record.EventRecorder
-	server     *http.Server
-	MCPManager mcpmanager.MCPManagerInterface
-	HLClient   humanlayer.HumanLayerClientFactoryInterface
+	Scheme          *runtime.Scheme
+	recorder        record.EventRecorder
+	server          *http.Server
+	MCPManager      mcpmanager.MCPManagerInterface
+	HLClientFactory humanlayer.HumanLayerClientFactory
 }
 
 func (r *TaskRunToolCallReconciler) webhookHandler(w http.ResponseWriter, req *http.Request) {
@@ -722,7 +722,7 @@ func (r *TaskRunToolCallReconciler) updateTRTCStatus(ctx context.Context, trtc *
 }
 
 func (r *TaskRunToolCallReconciler) postToHumanLayer(ctx context.Context, trtc *kubechainv1alpha1.TaskRunToolCall, contactChannel *kubechainv1alpha1.ContactChannel, apiKey string) (*humanlayerapi.FunctionCallOutput, int, error) {
-	client := r.HLClient.NewHumanLayerClient()
+	client := r.HLClientFactory.NewHumanLayerClient()
 
 	switch contactChannel.Spec.ChannelType {
 	case "slack":
@@ -767,7 +767,7 @@ func (r *TaskRunToolCallReconciler) handlePendingApproval(ctx context.Context, t
 		return ctrl.Result{}, nil, false
 	}
 
-	client := r.HLClient.NewHumanLayerClient()
+	client := r.HLClientFactory.NewHumanLayerClient()
 	client.SetCallID(trtc.Status.HumanLayerCallId)
 	client.SetAPIKey(apiKey)
 	functionCall, _, _ := client.GetFunctionCallStatus(ctx)
@@ -815,7 +815,7 @@ func (r *TaskRunToolCallReconciler) requestHumanApproval(ctx context.Context, tr
 	}
 
 	// Verify HLClient is initialized
-	if r.HLClient == nil {
+	if r.HLClientFactory == nil {
 		err := fmt.Errorf("HLClient not initialized")
 		result, errStatus, _ := r.setStatusError(ctx, kubechainv1alpha1.TaskRunToolCallStatusTypeErrorRequestingHumanApproval,
 			"NoHumanLayerClient", trtc, err)
@@ -989,13 +989,13 @@ func (r *TaskRunToolCallReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		r.MCPManager = mcpmanager.NewMCPServerManager()
 	}
 
-	if r.HLClient == nil {
+	if r.HLClientFactory == nil {
 		client, err := humanlayer.NewHumanLayerClientFactory("")
 		if err != nil {
 			return err
 		}
 
-		r.HLClient = client
+		r.HLClientFactory = client
 	}
 
 	go func() {

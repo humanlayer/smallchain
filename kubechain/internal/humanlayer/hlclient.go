@@ -15,7 +15,7 @@ import (
 // NewHumanLayerClientFactory creates a new API client using either the provided API key
 // or falling back to the HUMANLAYER_API_KEY environment variable. Similarly,
 // it uses the provided API base URL or falls back to HUMANLAYER_API_BASE.
-func NewHumanLayerClientFactory(optionalApiBase string) (HumanLayerClientFactoryInterface, error) {
+func NewHumanLayerClientFactory(optionalApiBase string) (HumanLayerClientFactory, error) {
 	config := humanlayerapi.NewConfiguration()
 
 	// Get API base from parameter or environment variable
@@ -45,10 +45,10 @@ func NewHumanLayerClientFactory(optionalApiBase string) (HumanLayerClientFactory
 	// Create the API client with the configuration
 	client := humanlayerapi.NewAPIClient(config)
 
-	return &HumanLayerClient{client: client}, nil
+	return &RealHumanLayerClientFactory{client: client}, nil
 }
 
-type HumanLayerClientWrapperInterface interface {
+type HumanLayerClientWrapper interface {
 	SetSlackConfig(slackConfig *kubechainv1alpha1.SlackChannelConfig)
 	SetEmailConfig(emailConfig *kubechainv1alpha1.EmailChannelConfig)
 	SetFunctionCallSpec(functionName string, args map[string]interface{})
@@ -60,11 +60,11 @@ type HumanLayerClientWrapperInterface interface {
 	GetFunctionCallStatus(ctx context.Context) (functionCall *humanlayerapi.FunctionCallOutput, statusCode int, err error)
 }
 
-type HumanLayerClientFactoryInterface interface {
-	NewHumanLayerClient() HumanLayerClientWrapperInterface
+type HumanLayerClientFactory interface {
+	NewHumanLayerClient() HumanLayerClientWrapper
 }
 
-type HumanLayerClientWrapper struct {
+type RealHumanLayerClientWrapper struct {
 	client                *humanlayerapi.APIClient
 	slackChannelInput     *humanlayerapi.SlackContactChannelInput
 	emailContactChannel   *humanlayerapi.EmailContactChannel
@@ -74,17 +74,17 @@ type HumanLayerClientWrapper struct {
 	apiKey                string
 }
 
-type HumanLayerClient struct {
+type RealHumanLayerClientFactory struct {
 	client *humanlayerapi.APIClient
 }
 
-func (h *HumanLayerClient) NewHumanLayerClient() HumanLayerClientWrapperInterface {
-	return &HumanLayerClientWrapper{
+func (h *RealHumanLayerClientFactory) NewHumanLayerClient() HumanLayerClientWrapper {
+	return &RealHumanLayerClientWrapper{
 		client: h.client,
 	}
 }
 
-func (h *HumanLayerClientWrapper) SetSlackConfig(slackConfig *kubechainv1alpha1.SlackChannelConfig) {
+func (h *RealHumanLayerClientWrapper) SetSlackConfig(slackConfig *kubechainv1alpha1.SlackChannelConfig) {
 	slackChannelInput := humanlayerapi.NewSlackContactChannelInput(slackConfig.ChannelOrUserID)
 
 	if slackConfig.ContextAboutChannelOrUser != "" {
@@ -94,7 +94,7 @@ func (h *HumanLayerClientWrapper) SetSlackConfig(slackConfig *kubechainv1alpha1.
 	h.slackChannelInput = slackChannelInput
 }
 
-func (h *HumanLayerClientWrapper) SetEmailConfig(emailConfig *kubechainv1alpha1.EmailChannelConfig) {
+func (h *RealHumanLayerClientWrapper) SetEmailConfig(emailConfig *kubechainv1alpha1.EmailChannelConfig) {
 	emailContactChannel := humanlayerapi.NewEmailContactChannel(emailConfig.Address)
 
 	if emailConfig.ContextAboutUser != "" {
@@ -104,26 +104,26 @@ func (h *HumanLayerClientWrapper) SetEmailConfig(emailConfig *kubechainv1alpha1.
 	h.emailContactChannel = emailContactChannel
 }
 
-func (h *HumanLayerClientWrapper) SetFunctionCallSpec(functionName string, args map[string]interface{}) {
+func (h *RealHumanLayerClientWrapper) SetFunctionCallSpec(functionName string, args map[string]interface{}) {
 	// Create the function call input with required parameters
 	functionCallSpecInput := humanlayerapi.NewFunctionCallSpecInput(functionName, args)
 
 	h.functionCallSpecInput = functionCallSpecInput
 }
 
-func (h *HumanLayerClientWrapper) SetCallID(callID string) {
+func (h *RealHumanLayerClientWrapper) SetCallID(callID string) {
 	h.callID = callID
 }
 
-func (h *HumanLayerClientWrapper) SetRunID(runID string) {
+func (h *RealHumanLayerClientWrapper) SetRunID(runID string) {
 	h.runID = runID
 }
 
-func (h *HumanLayerClientWrapper) SetAPIKey(apiKey string) {
+func (h *RealHumanLayerClientWrapper) SetAPIKey(apiKey string) {
 	h.apiKey = apiKey
 }
 
-func (h *HumanLayerClientWrapper) RequestApproval(ctx context.Context) (functionCall *humanlayerapi.FunctionCallOutput, statusCode int, err error) {
+func (h *RealHumanLayerClientWrapper) RequestApproval(ctx context.Context) (functionCall *humanlayerapi.FunctionCallOutput, statusCode int, err error) {
 	channel := humanlayerapi.NewContactChannelInput()
 
 	if h.slackChannelInput != nil {
@@ -145,7 +145,7 @@ func (h *HumanLayerClientWrapper) RequestApproval(ctx context.Context) (function
 	return functionCall, resp.StatusCode, err
 }
 
-func (h *HumanLayerClientWrapper) GetFunctionCallStatus(ctx context.Context) (functionCall *humanlayerapi.FunctionCallOutput, statusCode int, err error) {
+func (h *RealHumanLayerClientWrapper) GetFunctionCallStatus(ctx context.Context) (functionCall *humanlayerapi.FunctionCallOutput, statusCode int, err error) {
 	functionCall, resp, err := h.client.DefaultAPI.GetFunctionCallStatus(ctx, h.callID).
 		Authorization("Bearer " + h.apiKey).
 		Execute()

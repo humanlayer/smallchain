@@ -12,7 +12,7 @@ import (
 	"github.com/humanlayer/smallchain/kubechain/internal/humanlayerapi"
 )
 
-func requestApproval(client humanlayer.HumanLayerClientWrapperInterface) *humanlayerapi.FunctionCallOutput {
+func requestApproval(client humanlayer.HumanLayerClientWrapper) *humanlayerapi.FunctionCallOutput {
 	client.SetSlackConfig(&kubechainv1alpha1.SlackChannelConfig{
 		ChannelOrUserID:           "C07HR5JL15F",
 		ContextAboutChannelOrUser: "Channel for approving web fetch operations",
@@ -35,7 +35,7 @@ func requestApproval(client humanlayer.HumanLayerClientWrapperInterface) *humanl
 	return functionCall
 }
 
-func getFunctionCallStatus(client humanlayer.HumanLayerClientWrapperInterface) *humanlayerapi.FunctionCallOutput {
+func getFunctionCallStatus(client humanlayer.HumanLayerClientWrapper) *humanlayerapi.FunctionCallOutput {
 	functionCall, statusCode, err := client.GetFunctionCallStatus(context.Background())
 
 	fmt.Println(functionCall.GetCallId())

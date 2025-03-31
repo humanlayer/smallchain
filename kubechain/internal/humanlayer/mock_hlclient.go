@@ -8,8 +8,8 @@ import (
 	humanlayerapi "github.com/humanlayer/smallchain/kubechain/internal/humanlayerapi"
 )
 
-// MockHumanLayerClient implements HumanLayerClientInterface for testing
-type MockHumanLayerClient struct {
+// MockHumanLayerClientFactory implements HumanLayerClientFactory for testing
+type MockHumanLayerClientFactory struct {
 	ShouldFail            bool
 	StatusCode            int
 	ReturnError           error
@@ -22,9 +22,9 @@ type MockHumanLayerClient struct {
 	LastArguments         map[string]interface{}
 }
 
-// MockHumanLayerClientWrapper implements HumanLayerClientWrapperInterface for testing
+// MockHumanLayerClientWrapper implements HumanLayerClientWrapper for testing
 type MockHumanLayerClientWrapper struct {
-	parent       *MockHumanLayerClient
+	parent       *MockHumanLayerClientFactory
 	slackConfig  *kubechainv1alpha1.SlackChannelConfig
 	emailConfig  *kubechainv1alpha1.EmailChannelConfig
 	functionName string
@@ -35,53 +35,53 @@ type MockHumanLayerClientWrapper struct {
 }
 
 // NewHumanLayerClient creates a new mock client
-func NewMockHumanLayerClient(shouldFail bool, statusCode int, returnError error) *MockHumanLayerClient {
-	return &MockHumanLayerClient{
+func NewMockHumanLayerClient(shouldFail bool, statusCode int, returnError error) *MockHumanLayerClientFactory {
+	return &MockHumanLayerClientFactory{
 		ShouldFail:  shouldFail,
 		StatusCode:  statusCode,
 		ReturnError: returnError,
 	}
 }
 
-// NewHumanLayerClient implements HumanLayerClientFactoryInterface
-func (m *MockHumanLayerClient) NewHumanLayerClient() HumanLayerClientWrapperInterface {
+// NewHumanLayerClient implements HumanLayerClientFactory
+func (m *MockHumanLayerClientFactory) NewHumanLayerClient() HumanLayerClientWrapper {
 	return &MockHumanLayerClientWrapper{
 		parent: m,
 	}
 }
 
-// SetSlackConfig implements HumanLayerClientWrapperInterface
+// SetSlackConfig implements HumanLayerClientWrapper
 func (m *MockHumanLayerClientWrapper) SetSlackConfig(slackConfig *kubechainv1alpha1.SlackChannelConfig) {
 	m.slackConfig = slackConfig
 }
 
-// SetEmailConfig implements HumanLayerClientWrapperInterface
+// SetEmailConfig implements HumanLayerClientWrapper
 func (m *MockHumanLayerClientWrapper) SetEmailConfig(emailConfig *kubechainv1alpha1.EmailChannelConfig) {
 	m.emailConfig = emailConfig
 }
 
-// SetFunctionCallSpec implements HumanLayerClientWrapperInterface
+// SetFunctionCallSpec implements HumanLayerClientWrapper
 func (m *MockHumanLayerClientWrapper) SetFunctionCallSpec(functionName string, args map[string]interface{}) {
 	m.functionName = functionName
 	m.functionArgs = args
 }
 
-// SetCallID implements HumanLayerClientWrapperInterface
+// SetCallID implements HumanLayerClientWrapper
 func (m *MockHumanLayerClientWrapper) SetCallID(callID string) {
 	m.callID = callID
 }
 
-// SetRunID implements HumanLayerClientWrapperInterface
+// SetRunID implements HumanLayerClientWrapper
 func (m *MockHumanLayerClientWrapper) SetRunID(runID string) {
 	m.runID = runID
 }
 
-// SetAPIKey implements HumanLayerClientWrapperInterface
+// SetAPIKey implements HumanLayerClientWrapper
 func (m *MockHumanLayerClientWrapper) SetAPIKey(apiKey string) {
 	m.apiKey = apiKey
 }
 
-// GetFunctionCallStatus implements HumanLayerClientWrapperInterface
+// GetFunctionCallStatus implements HumanLayerClientWrapper
 func (m *MockHumanLayerClientWrapper) GetFunctionCallStatus(ctx context.Context) (*humanlayerapi.FunctionCallOutput, int, error) {
 
 	if m.parent.ShouldReturnApproval {
@@ -113,7 +113,7 @@ func (m *MockHumanLayerClientWrapper) GetFunctionCallStatus(ctx context.Context)
 	return nil, m.parent.StatusCode, m.parent.ReturnError
 }
 
-// RequestApproval implements HumanLayerClientWrapperInterface
+// RequestApproval implements HumanLayerClientWrapper
 func (m *MockHumanLayerClientWrapper) RequestApproval(ctx context.Context) (*humanlayerapi.FunctionCallOutput, int, error) {
 	// Store the values in the parent for test verification
 	m.parent.LastAPIKey = m.apiKey
