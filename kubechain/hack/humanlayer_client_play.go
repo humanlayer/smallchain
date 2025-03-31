@@ -51,11 +51,18 @@ func main() {
 	client := factory.NewHumanLayerClient()
 	client.SetAPIKey(os.Getenv("HUMANLAYER_API_KEY"))
 
-	// fc := requestApproval(client)
-	// callID := fc.GetCallId()
+	var callID string
 
-	callID := "call-96d9b742-8aca-4952-babd-c5551402a09a"
+	if len(os.Args) > 1 {
+		fmt.Println("Call ID provided as argument - skipping approval request")
+		callID = os.Args[1]
+	} else {
+		fc := requestApproval(client)
+		callID = fc.GetCallId()
+	}
+
 	client.SetCallID(callID)
+
 	fcStatus := getFunctionCallStatus(client)
 	status := fcStatus.GetStatus()
 
