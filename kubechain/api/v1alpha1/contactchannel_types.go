@@ -50,6 +50,9 @@ type EmailChannelConfig struct {
 
 // ContactChannelSpec defines the desired state of ContactChannel.
 type ContactChannelSpec struct {
+	// Type is the type of channel (e.g. "slack", "email")
+	// Todo - consider removing this, HumanLayer ContactChannel models don't include it
+
 	// ChannelType is the type of channel (e.g. "slack", "email")
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Enum=slack;email
@@ -59,9 +62,13 @@ type ContactChannelSpec struct {
 	// +kubebuilder:validation:Required
 	APIKeyFrom APIKeySource `json:"apiKeyFrom"`
 
+	// todo change this to `Slack` + `json:"slack"`
+
 	// SlackConfig holds configuration specific to Slack channels
 	// +optional
 	SlackConfig *SlackChannelConfig `json:"slackConfig,omitempty"`
+
+	// todo change this to `Email` + `json:"email"`
 
 	// EmailConfig holds configuration specific to Email channels
 	// +optional

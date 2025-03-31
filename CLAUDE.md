@@ -172,6 +172,75 @@ Alternatively, clean up components individually:
 - Ensure the PROJECT file contains entries for all resources before running `make manifests`
 - Follow the detailed guidance in the [Kubebuilder Guide](/kubechain/docs/kubebuilder-guide.md)
 
+### Kubernetes Resource Design
+
+#### Don't use "config" in field names:
+
+Bad:
+
+```
+spec:
+  slackConfig:
+    #...
+  emailConfig:
+    #...
+```
+
+Good:
+
+```
+spec:
+  slack:
+    # ...
+  email:
+    # ...
+```
+
+#### Prefer nil-able sub-objects over "type" fields:
+
+This is more guidelines than rules, just consider it in cases when you a Resource that is a union type. There's
+no great answer here because of how Go handles unions. (maybe the state-of-the-art has progressed since the last time I checked) -- dex
+
+Bad:
+
+```
+spec: 
+  type: slack
+  slack:
+    channelOrUserID: C1234567890
+```
+
+Good:
+
+```
+spec: 
+  slack:
+    channelOrUserID: C1234567890
+```
+
+In code, instead of 
+
+```
+switch (resource.Spec.Type) {
+    case "slack":
+        // ...
+    case "email":
+        // ...
+}
+```
+
+check which object is non-nil and use that:
+
+```
+if resource.Spec.Slack != nil {
+    // ...
+} else if resource.Spec.Email != nil {
+    // ...
+} else if {
+    // ...
+}
+```
+
 ### Markdown
 - When writing markdown code blocks, do not indent the block, just use backticks to offset the code
 

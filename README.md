@@ -66,15 +66,11 @@ To run KubeChain locally on macos, you'll also need:
 
 ### Setting Up a Local Cluster
 
-
-
-1. **Create a Kind cluster**
-
 ```bash
 kind create cluster
 ```
 
-2. **Add your OpenAI API key as a Kubernetes secret**
+### Add your OpenAI API key as a Kubernetes secret
 
 ```bash
 kubectl create secret generic openai \
@@ -1052,6 +1048,138 @@ Events:
 
 That's it! Go add your favorite MCPs and start running durable agents in Kubernetes!
 
+### Incorporating Human Approval
+
+For certain classes of MCP tools, you may want to incorporate human approval into the agent's workflow. 
+
+KubeChain supports this via [HumanLayer](https://github.com/humanlayer/humanlayer) contact [channels](https://www.humanlayer.dev/docs/channels/introduction) 
+to request human approval and input across slack, email, and more.
+
+**Note**: directly approving tool calls with `kubectl` or a `kubechain` CLI is planned but not yet supported.
+
+You'll need a HumanLayer API key to get started:
+
+```
+kubectl create secret generic humanlayer --from-literal=HUMANLAYER_API_KEY=$HUMANLAYER_API_KEY
+```
+
+then you can create a ContactChannel resource. In this case, we'll use email:
+
+```
+cat <<EOF | kubectl apply -f -
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: ContactChannel
+metadata:
+  name: email-approval
+spec:
+  type: email
+  apiKeyFrom:
+    secretKeyRef:
+      name: humanlayer
+      key: HUMANLAYER_API_KEY
+  # these match the HumanLayer ContactChannel model
+  email:
+    address: "approver@example.com"
+    contextAboutUser: "Primary approver for web fetch operations"
+```
+
+Now, let's patch our MCP server to reference this contact channel. 
+
+```
+cat <<EOF | kubectl patch -f -
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: MCPServer
+metadata:
+  name: fetch
+spec:
+  transport: "stdio"
+  command: "uvx"
+  args: ["mcp-server-fetch"]
+  # if approvalContactChannel is set,
+  # all tools on this MCP server will require human approval before executing
+  approvalContactChannel:
+    name: email-approval
+EOF
+```
+
+Now, we can create a new task that uses the fetch tool to test the human approval workflow.
+
+```bash
+cat <<EOF | kubectl apply -f -
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: Task
+metadata:
+  name: fetch-task-2
+spec:
+  agentRef:
+    name: my-assistant
+  message: "what is the data at https://swapi.dev/api/people/2?"
+EOF
+```
+
+Once this hits the tool call, we can check out the tool calls to see the human approval workflow in action:
+
+```
+kubectl get taskruntoolcall
+```
+
+```
+#TODO paste output
+```
+
+and we can describe the tool call to see that its waiting for human approval:
+
+
+```
+kubectl describe taskruntoolcall fetch-task-2-toolcall-01
+```
+
+```
+#TODO paste output
+```
+
+
+### Using other Language Models
+
+So far we've been using the `gpt-4o` model from OpenAI. KubeChain also supports using other language models from OpenAI, Anthropic, Vertex, and more.
+
+
+Let's create a new LLM and Agent that uses the `claude-3-5-sonnet` model from Anthropic.
+
+#### Create a secret
+
+```
+cat <<EOF | kubectl create secret generic anthropic --from-literal=ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY
+```
+
+#### Create an LLM
+
+```
+cat <<EOF | kubectl apply -f -
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: LLM
+metadata:
+  name: claude-3-5-sonnet
+spec:
+  provider: anthropic
+  model: claude-3-5-sonnet
+EOF
+```
+
+fetch the LLM to verify it was created:
+
+```
+kubectl get llm claude-3-5-sonnet
+```
+
+```
+#TODO paste output
+```
+
+
+**Exercise for the reader**: create a new Agent that uses the `claude-3-5-sonnet` model and our MCP server, and assign it a task!
+
+
 
 ### Cleaning Up
 
@@ -1070,6 +1198,8 @@ Remove the OpenAI secret:
 
 ```
 kubectl delete secret openai
+kubectl delete secret anthropic
+kubectl delete secret humanlayer
 ```
 
 Remove the operator, resources and custom resource definitions:
