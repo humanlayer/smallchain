@@ -770,7 +770,11 @@ func (r *TaskRunToolCallReconciler) handlePendingApproval(ctx context.Context, t
 	client := r.HLClientFactory.NewHumanLayerClient()
 	client.SetCallID(trtc.Status.HumanLayerCallId)
 	client.SetAPIKey(apiKey)
-	functionCall, _, _ := client.GetFunctionCallStatus(ctx)
+	functionCall, _, err := client.GetFunctionCallStatus(ctx)
+
+	if err != nil {
+		return ctrl.Result{}, err, true
+	}
 
 	status := functionCall.GetStatus()
 
