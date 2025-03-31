@@ -176,8 +176,8 @@ func (r *TaskRunToolCallReconciler) executeMCPTool(ctx context.Context, trtc *ku
 }
 
 // initializeTRTC initializes the TaskRunToolCall status if not already set
-// Returns true if initialization was done, false otherwise
-func (r *TaskRunToolCallReconciler) initializeTRTC(ctx context.Context, trtc *kubechainv1alpha1.TaskRunToolCall) (bool, error) {
+// Returns (initialized, error, handled)
+func (r *TaskRunToolCallReconciler) initializeTRTC(ctx context.Context, trtc *kubechainv1alpha1.TaskRunToolCall) (bool, error, bool) {
 	logger := log.FromContext(ctx)
 
 	if trtc.Status.Phase == "" {
@@ -187,37 +187,37 @@ func (r *TaskRunToolCallReconciler) initializeTRTC(ctx context.Context, trtc *ku
 		trtc.Status.StartTime = &metav1.Time{Time: time.Now()}
 		if err := r.Status().Update(ctx, trtc); err != nil {
 			logger.Error(err, "Failed to update initial status on TaskRunToolCall")
-			return true, err
+			return true, err, true
 		}
-		return true, nil
+		return true, nil, true
 	}
 
-	return false, nil
+	return false, nil, false
 }
 
 // checkCompletedOrExisting checks if the TRTC is already complete or has a child TaskRun
-func (r *TaskRunToolCallReconciler) checkCompletedOrExisting(ctx context.Context, trtc *kubechainv1alpha1.TaskRunToolCall) (bool, error) {
+func (r *TaskRunToolCallReconciler) checkCompletedOrExisting(ctx context.Context, trtc *kubechainv1alpha1.TaskRunToolCall) (bool, error, bool) {
 	logger := log.FromContext(ctx)
 
 	// Check if already completed
 	if trtc.Status.Phase == kubechainv1alpha1.TaskRunToolCallPhaseSucceeded || trtc.Status.Phase == kubechainv1alpha1.TaskRunToolCallPhaseFailed {
 		logger.Info("TaskRunToolCall already completed, nothing to do", "phase", trtc.Status.Phase)
-		return true, nil
+		return true, nil, true
 	}
 
 	// Check if a child TaskRun already exists for this tool call
 	var taskRunList kubechainv1alpha1.TaskRunList
 	if err := r.List(ctx, &taskRunList, client.InNamespace(trtc.Namespace), client.MatchingLabels{"kubechain.humanlayer.dev/taskruntoolcall": trtc.Name}); err != nil {
 		logger.Error(err, "Failed to list child TaskRuns")
-		return true, err
+		return true, err, true
 	}
 	if len(taskRunList.Items) > 0 {
 		logger.Info("Child TaskRun already exists", "childTaskRun", taskRunList.Items[0].Name)
 		// Optionally, sync status from child to parent.
-		return true, nil
+		return true, nil, true
 	}
 
-	return false, nil
+	return false, nil, false
 }
 
 // parseArguments parses the tool call arguments
@@ -682,7 +682,7 @@ func (r *TaskRunToolCallReconciler) getHumanLayerAPIKey(ctx context.Context, sec
 }
 
 //nolint:unparam
-func (r *TaskRunToolCallReconciler) setStatusError(ctx context.Context, trtcStatus kubechainv1alpha1.TaskRunToolCallStatusType, eventType string, trtc *kubechainv1alpha1.TaskRunToolCall, err error) (ctrl.Result, error) {
+func (r *TaskRunToolCallReconciler) setStatusError(ctx context.Context, trtcStatus kubechainv1alpha1.TaskRunToolCallStatusType, eventType string, trtc *kubechainv1alpha1.TaskRunToolCall, err error) (ctrl.Result, error, bool) {
 	logger := log.FromContext(ctx)
 	trtc.Status.Status = trtcStatus
 
@@ -698,12 +698,12 @@ func (r *TaskRunToolCallReconciler) setStatusError(ctx context.Context, trtcStat
 
 	if err := r.Status().Update(ctx, trtc); err != nil {
 		logger.Error(err, "Failed to update status")
-		return ctrl.Result{}, err
+		return ctrl.Result{}, err, true
 	}
-	return ctrl.Result{}, nil
+	return ctrl.Result{}, nil, true
 }
 
-func (r *TaskRunToolCallReconciler) updateTRTCStatus(ctx context.Context, trtc *kubechainv1alpha1.TaskRunToolCall, trtcStatusType kubechainv1alpha1.TaskRunToolCallStatusType, trtcStatusPhase kubechainv1alpha1.TaskRunToolCallPhase, statusDetail string, err error) (ctrl.Result, error) {
+func (r *TaskRunToolCallReconciler) updateTRTCStatus(ctx context.Context, trtc *kubechainv1alpha1.TaskRunToolCall, trtcStatusType kubechainv1alpha1.TaskRunToolCallStatusType, trtcStatusPhase kubechainv1alpha1.TaskRunToolCallPhase, statusDetail string) (ctrl.Result, error, bool) {
 	logger := log.FromContext(ctx)
 
 	trtcDeepCopy := trtc.DeepCopy()
@@ -716,9 +716,9 @@ func (r *TaskRunToolCallReconciler) updateTRTCStatus(ctx context.Context, trtc *
 
 	if err := r.Status().Update(ctx, trtcDeepCopy); err != nil {
 		logger.Error(err, "Failed to update status")
-		return ctrl.Result{}, err
+		return ctrl.Result{}, err, true
 	}
-	return ctrl.Result{}, nil
+	return ctrl.Result{}, nil, true
 }
 
 func (r *TaskRunToolCallReconciler) postToHumanLayer(ctx context.Context, trtc *kubechainv1alpha1.TaskRunToolCall, contactChannel *kubechainv1alpha1.ContactChannel, apiKey string) (*humanlayerapi.FunctionCallOutput, int, error) {
@@ -752,153 +752,226 @@ func (r *TaskRunToolCallReconciler) postToHumanLayer(ctx context.Context, trtc *
 	return functionCall, statusCode, err
 }
 
+// handlePendingApproval checks if an existing human approval is completed and updates status accordingly
+func (r *TaskRunToolCallReconciler) handlePendingApproval(ctx context.Context, trtc *kubechainv1alpha1.TaskRunToolCall, apiKey string) (ctrl.Result, error, bool) {
+	logger := log.FromContext(ctx)
+
+	// Only process if in the pending approval state
+	if trtc.Status.Status != kubechainv1alpha1.TaskRunToolCallStatusTypeAwaitingHumanApproval {
+		return ctrl.Result{}, nil, false
+	}
+
+	// Verify we have a call ID
+	if trtc.Status.HumanLayerCallId == "" {
+		logger.Info("Missing HumanLayerCallId in pending approval state")
+		return ctrl.Result{}, nil, false
+	}
+
+	client := r.HLClient.NewHumanLayerClient()
+	client.SetCallID(trtc.Status.HumanLayerCallId)
+	client.SetAPIKey(apiKey)
+	functionCall, _, _ := client.GetFunctionCallStatus(ctx)
+
+	status := functionCall.GetStatus()
+
+	// No response yet, requeue
+	if status.RespondedAt.Get() == nil {
+		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil, true
+	}
+
+	approvalGranted := status.GetApproved()
+	if approvalGranted {
+		return r.updateTRTCStatus(ctx, trtc,
+			kubechainv1alpha1.TaskRunToolCallStatusTypeReadyToExecuteApprovedTool,
+			kubechainv1alpha1.TaskRunToolCallPhasePending,
+			"Ready to execute approved tool")
+	} else {
+		return r.updateTRTCStatus(ctx, trtc,
+			kubechainv1alpha1.TaskRunToolCallStatusTypeToolCallRejected,
+			kubechainv1alpha1.TaskRunToolCallPhaseFailed,
+			"Tool execution rejected")
+	}
+}
+
+// requestHumanApproval handles setting up a new human approval request
+func (r *TaskRunToolCallReconciler) requestHumanApproval(ctx context.Context, trtc *kubechainv1alpha1.TaskRunToolCall,
+	contactChannel *kubechainv1alpha1.ContactChannel, apiKey string, mcpServer *kubechainv1alpha1.MCPServer) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
+
+	// Skip if already in progress or approved
+	if trtc.Status.Status == kubechainv1alpha1.TaskRunToolCallStatusTypeReadyToExecuteApprovedTool {
+		return ctrl.Result{}, nil
+	}
+
+	// Update status to awaiting approval
+	trtc.Status.Status = "AwaitingHumanApproval"
+	trtc.Status.StatusDetail = fmt.Sprintf("Waiting for human approval via contact channel %s", mcpServer.Spec.ApprovalContactChannel.Name)
+	r.recorder.Event(trtc, corev1.EventTypeNormal, "AwaitingHumanApproval",
+		fmt.Sprintf("Tool execution requires approval via contact channel %s", mcpServer.Spec.ApprovalContactChannel.Name))
+
+	if err := r.Status().Update(ctx, trtc); err != nil {
+		logger.Error(err, "Failed to update TaskRunToolCall status")
+		return ctrl.Result{}, err
+	}
+
+	// Verify HLClient is initialized
+	if r.HLClient == nil {
+		err := fmt.Errorf("HLClient not initialized")
+		result, errStatus, _ := r.setStatusError(ctx, kubechainv1alpha1.TaskRunToolCallStatusTypeErrorRequestingHumanApproval,
+			"NoHumanLayerClient", trtc, err)
+		return result, errStatus
+	}
+
+	// Post to HumanLayer to request approval
+	functionCall, statusCode, err := r.postToHumanLayer(ctx, trtc, contactChannel, apiKey)
+	if err != nil {
+		errorMsg := fmt.Errorf("HumanLayer request failed with status code: %d", statusCode)
+		if err != nil {
+			errorMsg = fmt.Errorf("HumanLayer request failed with status code %d: %v", statusCode, err)
+		}
+		result, errStatus, _ := r.setStatusError(ctx, kubechainv1alpha1.TaskRunToolCallStatusTypeErrorRequestingHumanApproval,
+			"HumanLayerRequestFailed", trtc, errorMsg)
+		return result, errStatus
+	}
+
+	// Update with call ID and requeue
+	callId := functionCall.GetCallId()
+	trtc.Status.HumanLayerCallId = callId
+	if err := r.Status().Update(ctx, trtc); err != nil {
+		logger.Error(err, "Failed to update TaskRunToolCall status")
+		return ctrl.Result{}, err
+	}
+
+	return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+}
+
+// handleMCPApprovalFlow encapsulates the MCP approval flow logic
+func (r *TaskRunToolCallReconciler) handleMCPApprovalFlow(ctx context.Context, trtc *kubechainv1alpha1.TaskRunToolCall) (ctrl.Result, error, bool) {
+	// Check if this is an MCP tool and needs approval
+	mcpServer, needsApproval, err := r.getMCPServer(ctx, trtc)
+	if err != nil {
+		return ctrl.Result{}, err, true
+	}
+
+	// If not an MCP tool or no approval needed, continue with normal processing
+	if mcpServer == nil || !needsApproval {
+		return ctrl.Result{}, nil, false
+	}
+
+	// Get contact channel and API key information
+	trtcNamespace := trtc.Namespace
+	contactChannel, err := r.getContactChannel(ctx, mcpServer, trtcNamespace)
+	if err != nil {
+		result, errStatus, _ := r.setStatusError(ctx, kubechainv1alpha1.TaskRunToolCallStatusTypeErrorRequestingHumanApproval,
+			"NoContactChannel", trtc, err)
+		return result, errStatus, true
+	}
+
+	apiKey, err := r.getHumanLayerAPIKey(ctx,
+		contactChannel.Spec.APIKeyFrom.SecretKeyRef.Name,
+		contactChannel.Spec.APIKeyFrom.SecretKeyRef.Key,
+		trtcNamespace)
+
+	if err != nil || apiKey == "" {
+		result, errStatus, _ := r.setStatusError(ctx, kubechainv1alpha1.TaskRunToolCallStatusTypeErrorRequestingHumanApproval,
+			"NoAPIKey", trtc, err)
+		return result, errStatus, true
+	}
+
+	// Handle pending approval check first
+	if trtc.Status.Status == kubechainv1alpha1.TaskRunToolCallStatusTypeAwaitingHumanApproval {
+		result, err, handled := r.handlePendingApproval(ctx, trtc, apiKey)
+		if handled {
+			return result, err, true
+		}
+	}
+
+	// Request human approval if not already done
+	result, err := r.requestHumanApproval(ctx, trtc, contactChannel, apiKey, mcpServer)
+	return result, err, true
+}
+
+// dispatchToolExecution routes tool execution to the appropriate handler based on tool type
+func (r *TaskRunToolCallReconciler) dispatchToolExecution(ctx context.Context, trtc *kubechainv1alpha1.TaskRunToolCall,
+	args map[string]interface{}) (ctrl.Result, error) {
+
+	// Check for MCP tool first
+	serverName, mcpToolName, isMCP := isMCPTool(trtc.Spec.ToolRef.Name)
+	if isMCP && r.MCPManager != nil {
+		return r.processMCPTool(ctx, trtc, serverName, mcpToolName, args)
+	}
+
+	// Get traditional Tool resource
+	tool, toolType, err := r.getTraditionalTool(ctx, trtc)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// Dispatch based on tool type
+	switch toolType {
+	case "delegateToAgent":
+		return r.processDelegateToAgent(ctx, trtc)
+	case "function":
+		return r.processBuiltinFunction(ctx, trtc, tool, args)
+	case "externalAPI":
+		return r.processExternalAPI(ctx, trtc, tool)
+	default:
+		return r.handleUnsupportedToolType(ctx, trtc)
+	}
+}
+
 // Reconcile processes TaskRunToolCall objects.
 func (r *TaskRunToolCallReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
+	// Get the TaskRunToolCall resource
 	var trtc kubechainv1alpha1.TaskRunToolCall
 	if err := r.Get(ctx, req.NamespacedName, &trtc); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	logger.Info("Reconciling TaskRunToolCall", "name", trtc.Name)
 
-	// Step 1: Initialize status if not set
-	if initialized, err := r.initializeTRTC(ctx, &trtc); initialized || err != nil {
+	// 1. Initialize status if not set
+	initialized, err, handled := r.initializeTRTC(ctx, &trtc)
+	if handled {
 		if err != nil {
 			return ctrl.Result{}, err
 		}
-		return ctrl.Result{}, nil
+		if initialized {
+			return ctrl.Result{}, nil
+		}
 	}
 
-	// Do not pass GO, do not collect $200, if we've errored
+	// 2. Check for terminal error states - early return
 	if trtc.Status.Status == kubechainv1alpha1.TaskRunToolCallStatusTypeErrorRequestingHumanApproval {
 		return ctrl.Result{}, nil
 	}
 
-	// Step 2: Check if already completed or has child TaskRun
-	if done, err := r.checkCompletedOrExisting(ctx, &trtc); done || err != nil {
+	// 3. Check if already completed or has child TaskRun
+	done, err, handled := r.checkCompletedOrExisting(ctx, &trtc)
+	if handled {
 		if err != nil {
 			return ctrl.Result{}, err
 		}
-		return ctrl.Result{}, nil
-	}
-
-	serverName, mcpToolName, isMCP := isMCPTool(trtc.Spec.ToolRef.Name)
-
-	if isMCP {
-		// Step 3: Check if this is an MCP tool and needs approval
-		mcpServer, needsApproval, err := r.getMCPServer(ctx, &trtc)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-
-		approvalGranted := false
-		trtcNamespace := trtc.Namespace
-		var contactChannel *kubechainv1alpha1.ContactChannel
-		var apiKey string
-
-		if needsApproval {
-			contactChannel, err = r.getContactChannel(ctx, mcpServer, trtcNamespace)
-			if err != nil {
-				return r.setStatusError(ctx, kubechainv1alpha1.TaskRunToolCallStatusTypeErrorRequestingHumanApproval, "NoContactChannel", &trtc, err)
-			}
-
-			apiKey, err = r.getHumanLayerAPIKey(ctx, contactChannel.Spec.APIKeyFrom.SecretKeyRef.Name, contactChannel.Spec.APIKeyFrom.SecretKeyRef.Key, trtcNamespace)
-
-			if err != nil || apiKey == "" {
-				return r.setStatusError(ctx, kubechainv1alpha1.TaskRunToolCallStatusTypeErrorRequestingHumanApproval, "NoAPIKey", &trtc, err)
-			}
-		}
-
-		// Check if approved/rejected
-		if needsApproval && trtc.Status.Status == kubechainv1alpha1.TaskRunToolCallStatusTypeAwaitingHumanApproval {
-			client := r.HLClient.NewHumanLayerClient()
-			client.SetCallID(trtc.Status.HumanLayerCallId)
-			client.SetAPIKey(apiKey)
-			functionCall, _, _ := client.GetFunctionCallStatus(ctx)
-
-			status := functionCall.GetStatus()
-
-			// No response yet.
-			if status.RespondedAt.Get() == nil {
-				return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
-			}
-
-			approvalGranted = status.GetApproved()
-
-			if approvalGranted {
-				return r.updateTRTCStatus(ctx, &trtc, kubechainv1alpha1.TaskRunToolCallStatusTypeReadyToExecuteApprovedTool, kubechainv1alpha1.TaskRunToolCallPhasePending, "Ready to execute approved tool", nil)
-			} else {
-				return r.updateTRTCStatus(ctx, &trtc, kubechainv1alpha1.TaskRunToolCallStatusTypeToolCallRejected, kubechainv1alpha1.TaskRunToolCallPhaseFailed, "Tool execution rejected", nil)
-			}
-		}
-
-		if needsApproval && !approvalGranted {
-			trtc.Status.Status = "AwaitingHumanApproval"
-			trtc.Status.StatusDetail = fmt.Sprintf("Waiting for human approval via contact channel %s", mcpServer.Spec.ApprovalContactChannel.Name)
-			r.recorder.Event(&trtc, corev1.EventTypeNormal, "AwaitingHumanApproval",
-				fmt.Sprintf("Tool execution requires approval via contact channel %s", mcpServer.Spec.ApprovalContactChannel.Name))
-
-			if err := r.Status().Update(ctx, &trtc); err != nil {
-				logger.Error(err, "Failed to update TaskRunToolCall status")
-				return ctrl.Result{}, err
-			}
-
-			if r.HLClient == nil {
-				err := fmt.Errorf("HLClient not initialized")
-				return r.setStatusError(ctx, kubechainv1alpha1.TaskRunToolCallStatusTypeErrorRequestingHumanApproval, "NoHumanLayerClient", &trtc, err)
-			}
-
-			functionCall, statusCode, err := r.postToHumanLayer(ctx, &trtc, contactChannel, apiKey)
-
-			if err != nil {
-				errorMsg := fmt.Errorf("HumanLayer request failed with status code: %d", statusCode)
-				if err != nil {
-					errorMsg = fmt.Errorf("HumanLayer request failed with status code %d: %v", statusCode, err)
-				}
-				return r.setStatusError(ctx, kubechainv1alpha1.TaskRunToolCallStatusTypeErrorRequestingHumanApproval, "HumanLayerRequestFailed", &trtc, errorMsg)
-			}
-
-			callId := functionCall.GetCallId()
-			trtc.Status.HumanLayerCallId = callId
-
-			if err := r.Status().Update(ctx, &trtc); err != nil {
-				logger.Error(err, "Failed to update TaskRunToolCall status")
-				return ctrl.Result{}, err
-			}
-
-			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+		if done {
+			return ctrl.Result{}, nil
 		}
 	}
 
-	// Step 4: Parse arguments
+	// 4. Handle MCP approval flow
+	result, err, handled := r.handleMCPApprovalFlow(ctx, &trtc)
+	if handled {
+		return result, err
+	}
+
+	// 5. Parse arguments for execution
 	args, err := r.parseArguments(ctx, &trtc)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
-	// Step 5: Handle MCP tool execution if applicable
-	if isMCP && r.MCPManager != nil {
-		return r.processMCPTool(ctx, &trtc, serverName, mcpToolName, args)
-	}
-
-	// Step 6: Get traditional Tool resource
-	tool, toolType, err := r.getTraditionalTool(ctx, &trtc)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-
-	// Step 7: Process based on tool type
-	switch toolType {
-	case "delegateToAgent":
-		return r.processDelegateToAgent(ctx, &trtc)
-	case "function":
-		return r.processBuiltinFunction(ctx, &trtc, tool, args)
-	case "externalAPI":
-		return r.processExternalAPI(ctx, &trtc, tool)
-	default:
-		return r.handleUnsupportedToolType(ctx, &trtc)
-	}
+	// 6. Execute the appropriate tool type
+	return r.dispatchToolExecution(ctx, &trtc, args)
 }
 
 func (r *TaskRunToolCallReconciler) SetupWithManager(mgr ctrl.Manager) error {
