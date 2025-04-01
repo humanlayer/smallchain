@@ -1,3 +1,18 @@
+### v0.1.13 (March 25, 2025)
+
+Features:
+- Added support for tool approval via [HumanLayer](https://humanlayer.dev) contact channels
+
+Changes:
+- Renamed ContactChannel CRD fields for better clarity
+  - Changed `channelType` to `type`
+  - Changed `slackConfig` to `slack`
+  - Changed `emailConfig` to `email`
+- Enhanced TaskRunToolCall status tracking
+  - Added `externalCallID` field for tracking external service calls
+  - Added new phases: `ErrorRequestingHumanApproval`, `ReadyToExecuteApprovedTool`, `ToolCallRejected`
+
+
 ### v0.1.12 (March 24, 2025)
 
 Features:
