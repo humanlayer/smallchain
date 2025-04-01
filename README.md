@@ -12,7 +12,7 @@ KubeChain is a cloud-native orchestrator for AI Agents built on Kubernetes. It s
 
 <h3>
 
-[Discord](https://discord.gg/AK6bWGFY7d) | [Documentation](./docs) | [Examples](./kubechain-example)
+[Discord](https://discord.gg/AK6bWGFY7d) | [Documentation](./kubechain/docs) | [Examples](./kubechain-example)
 
 </h3>
 
