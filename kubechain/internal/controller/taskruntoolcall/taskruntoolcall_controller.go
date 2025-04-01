@@ -724,9 +724,9 @@ func (r *TaskRunToolCallReconciler) postToHumanLayer(ctx context.Context, trtc *
 	client := r.HLClientFactory.NewHumanLayerClient()
 
 	switch contactChannel.Spec.Type {
-	case "slack":
+	case kubechainv1alpha1.ContactChannelTypeSlack:
 		client.SetSlackConfig(contactChannel.Spec.Slack)
-	case "email":
+	case kubechainv1alpha1.ContactChannelTypeEmail:
 		client.SetEmailConfig(contactChannel.Spec.Email)
 	default:
 		return nil, 0, fmt.Errorf("unsupported channel type: %s", contactChannel.Spec.Type)

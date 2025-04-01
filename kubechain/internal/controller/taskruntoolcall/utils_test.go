@@ -22,7 +22,7 @@ var addTool = &TestTool{
 
 var testContactChannel = &TestContactChannel{
 	name:        "test-contact-channel",
-	channelType: "slack",
+	channelType: kubechainv1alpha1.ContactChannelTypeSlack,
 	secretName:  testSecret.name,
 }
 
@@ -64,7 +64,7 @@ type TestSecret struct {
 // TestContactChannel represents a test ContactChannel resource
 type TestContactChannel struct {
 	name           string
-	channelType    string
+	channelType    kubechainv1alpha1.ContactChannelType
 	secretName     string
 	contactChannel *kubechainv1alpha1.ContactChannel
 }
@@ -389,10 +389,15 @@ func setupTestApprovalResources(ctx context.Context, config *SetupTestApprovalCo
 	testSecret.Setup(ctx)
 	By("creating the contact channel")
 
-	// Set contact channel type based on config or default to "slack"
-	channelType := "slack"
+	// Set contact channel type based on config or default to ContactChannelTypeSlack
+	channelType := kubechainv1alpha1.ContactChannelTypeSlack
 	if config != nil && config.ContactChannelType != "" {
-		channelType = config.ContactChannelType
+		switch config.ContactChannelType {
+		case "email":
+			channelType = kubechainv1alpha1.ContactChannelTypeEmail
+		default:
+			channelType = kubechainv1alpha1.ContactChannelTypeSlack
+		}
 	}
 
 	testContactChannel.channelType = channelType

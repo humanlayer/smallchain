@@ -40,10 +40,6 @@ var (
 	statusError   = "Error"
 	statusPending = "Pending"
 
-	// Channel types
-	channelTypeSlack = "slack"
-	channelTypeEmail = "email"
-
 	// API endpoints - variables so they can be overridden in tests
 	humanLayerAPIURL = "https://api.humanlayer.dev/humanlayer/v1/project"
 
@@ -119,14 +115,14 @@ func (r *ContactChannelReconciler) validateEmailAddress(email string) error {
 // validateChannelConfig validates the channel configuration based on channel type
 func (r *ContactChannelReconciler) validateChannelConfig(channel *kubechainv1alpha1.ContactChannel) error {
 	switch channel.Spec.Type {
-	case channelTypeSlack:
+	case kubechainv1alpha1.ContactChannelTypeSlack:
 		if channel.Spec.Slack == nil {
 			return fmt.Errorf("slackConfig is required for slack channel type")
 		}
 		// Slack channel ID validation is handled by the CRD validation
 		return nil
 
-	case channelTypeEmail:
+	case kubechainv1alpha1.ContactChannelTypeEmail:
 		if channel.Spec.Email == nil {
 			return fmt.Errorf("emailConfig is required for email channel type")
 		}
@@ -170,13 +166,13 @@ func (r *ContactChannelReconciler) validateSecret(ctx context.Context, channel *
 
 	// Also validate channel-specific credential if needed
 	switch channel.Spec.Type {
-	case channelTypeSlack:
+	case kubechainv1alpha1.ContactChannelTypeSlack:
 		// For Slack channels, we may need to validate Slack token separately
 		// if the implementation requires a separate Slack token
 		// This would depend on how HumanLayer handles the integration
 		return nil
 
-	case channelTypeEmail:
+	case kubechainv1alpha1.ContactChannelTypeEmail:
 		// Email validation doesn't require additional API key validation
 		return nil
 

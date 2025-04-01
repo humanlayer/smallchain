@@ -329,7 +329,7 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 				Namespace: "default",
 			}, &contactChannel)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(contactChannel.Spec.Type).To(Equal("email"))
+			Expect(contactChannel.Spec.Type).To(Equal(kubechainv1alpha1.ContactChannelTypeEmail))
 		})
 	})
 

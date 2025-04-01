@@ -20,6 +20,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+type ContactChannelType string
+
+const (
+	ContactChannelTypeSlack ContactChannelType = "slack"
+	ContactChannelTypeEmail ContactChannelType = "email"
+)
+
 // SlackChannelConfig defines configuration specific to Slack channels
 type SlackChannelConfig struct {
 	// ChannelOrUserID is the Slack channel ID (C...) or user ID (U...)
@@ -56,7 +63,7 @@ type ContactChannelSpec struct {
 	// Type is the type of channel (e.g. "slack", "email")
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Enum=slack;email
-	Type string `json:"type"`
+	Type ContactChannelType `json:"type"`
 
 	// APIKeyFrom references the secret containing the API key or token
 	// +kubebuilder:validation:Required
