@@ -46,7 +46,7 @@ KubeChain is a cloud-native orchestrator for AI Agents built on Kubernetes. It s
 
 - **LLM**: Provider + API Keys + Parameters
 - **Agent**: LLM + System Prompt + Tools
-- **Tool**: Function, API, Docker container, or another Agent
+- **Tool**: MCP server or another Agent
 - **Task**: Agent + User Message
 - **TaskRun**: Task + Current context window
 
