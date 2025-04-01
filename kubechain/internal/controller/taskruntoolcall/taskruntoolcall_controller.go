@@ -725,9 +725,9 @@ func (r *TaskRunToolCallReconciler) postToHumanLayer(ctx context.Context, trtc *
 
 	switch contactChannel.Spec.ChannelType {
 	case "slack":
-		client.SetSlackConfig(contactChannel.Spec.SlackConfig)
+		client.SetSlackConfig(contactChannel.Spec.Slack)
 	case "email":
-		client.SetEmailConfig(contactChannel.Spec.EmailConfig)
+		client.SetEmailConfig(contactChannel.Spec.Email)
 	default:
 		return nil, 0, fmt.Errorf("unsupported channel type: %s", contactChannel.Spec.ChannelType)
 	}
@@ -770,7 +770,6 @@ func (r *TaskRunToolCallReconciler) handlePendingApproval(ctx context.Context, t
 	client.SetCallID(trtc.Status.ExternalCallID)
 	client.SetAPIKey(apiKey)
 	functionCall, _, err := client.GetFunctionCallStatus(ctx)
-
 	if err != nil {
 		return ctrl.Result{}, err, true
 	}
@@ -798,7 +797,8 @@ func (r *TaskRunToolCallReconciler) handlePendingApproval(ctx context.Context, t
 
 // requestHumanApproval handles setting up a new human approval request
 func (r *TaskRunToolCallReconciler) requestHumanApproval(ctx context.Context, trtc *kubechainv1alpha1.TaskRunToolCall,
-	contactChannel *kubechainv1alpha1.ContactChannel, apiKey string, mcpServer *kubechainv1alpha1.MCPServer) (ctrl.Result, error) {
+	contactChannel *kubechainv1alpha1.ContactChannel, apiKey string, mcpServer *kubechainv1alpha1.MCPServer,
+) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
 	// Skip if already in progress or approved
@@ -901,8 +901,8 @@ func (r *TaskRunToolCallReconciler) handleMCPApprovalFlow(ctx context.Context, t
 
 // dispatchToolExecution routes tool execution to the appropriate handler based on tool type
 func (r *TaskRunToolCallReconciler) dispatchToolExecution(ctx context.Context, trtc *kubechainv1alpha1.TaskRunToolCall,
-	args map[string]interface{}) (ctrl.Result, error) {
-
+	args map[string]interface{},
+) (ctrl.Result, error) {
 	// Check for MCP tool first
 	serverName, mcpToolName, isMCP := isMCPTool(trtc.Spec.ToolRef.Name)
 	if isMCP && r.MCPManager != nil {

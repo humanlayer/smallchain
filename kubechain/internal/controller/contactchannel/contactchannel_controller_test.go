@@ -108,7 +108,7 @@ var _ = Describe("ContactChannel Controller", func() {
 							Key:  secretKey,
 						},
 					},
-					SlackConfig: &kubechainv1alpha1.SlackChannelConfig{
+					Slack: &kubechainv1alpha1.SlackChannelConfig{
 						ChannelOrUserID:           "C12345678",
 						ContextAboutChannelOrUser: "A test channel",
 					},
@@ -165,7 +165,7 @@ var _ = Describe("ContactChannel Controller", func() {
 							Key:  secretKey,
 						},
 					},
-					EmailConfig: &kubechainv1alpha1.EmailChannelConfig{
+					Email: &kubechainv1alpha1.EmailChannelConfig{
 						Address:          "test@example.com",
 						ContextAboutUser: "Test user",
 						Subject:          "Test notification",
@@ -277,7 +277,7 @@ var _ = Describe("ContactChannel Controller", func() {
 							Key:  secretKey,
 						},
 					},
-					SlackConfig: &kubechainv1alpha1.SlackChannelConfig{
+					Slack: &kubechainv1alpha1.SlackChannelConfig{
 						ChannelOrUserID: "C12345678",
 					},
 				},
@@ -321,7 +321,7 @@ var _ = Describe("ContactChannel Controller", func() {
 							Key:  secretKey,
 						},
 					},
-					SlackConfig: &kubechainv1alpha1.SlackChannelConfig{
+					Slack: &kubechainv1alpha1.SlackChannelConfig{
 						ChannelOrUserID: "C12345678",
 					},
 				},
@@ -377,7 +377,7 @@ var _ = Describe("ContactChannel Controller", func() {
 							Key:  secretKey,
 						},
 					},
-					EmailConfig: &kubechainv1alpha1.EmailChannelConfig{
+					Email: &kubechainv1alpha1.EmailChannelConfig{
 						// Use an email that passes regex pattern but fails RFC5322 validation
 						Address: "test@example..com",
 					},

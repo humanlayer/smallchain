@@ -79,8 +79,8 @@ spec:
                 - slack
                 - email
                 type: string
-              emailConfig:
-                description: EmailConfig holds configuration specific to Email channels
+              email:
+                description: Email holds configuration specific to Email channels
                 properties:
                   address:
                     description: Address is the recipient email address
@@ -96,8 +96,8 @@ spec:
                 required:
                 - address
                 type: object
-              slackConfig:
-                description: SlackConfig holds configuration specific to Slack channels
+              slack:
+                description: Slack holds configuration specific to Slack channels
                 properties:
                   allowedResponderIDs:
                     description: AllowedResponderIDs restricts who can respond (Slack

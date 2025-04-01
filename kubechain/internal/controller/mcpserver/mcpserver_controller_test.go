@@ -285,7 +285,7 @@ var _ = Describe("MCPServer Controller", func() {
 							Key:  "token",
 						},
 					},
-					SlackConfig: &kubechainv1alpha1.SlackChannelConfig{
+					Slack: &kubechainv1alpha1.SlackChannelConfig{
 						ChannelOrUserID: "C12345678",
 					},
 				},

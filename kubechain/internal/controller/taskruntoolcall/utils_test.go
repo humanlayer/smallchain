@@ -89,11 +89,11 @@ func (t *TestContactChannel) Setup(ctx context.Context) *kubechainv1alpha1.Conta
 
 	// Add specific config based on channel type
 	if t.channelType == "slack" {
-		contactChannel.Spec.SlackConfig = &kubechainv1alpha1.SlackChannelConfig{
+		contactChannel.Spec.Slack = &kubechainv1alpha1.SlackChannelConfig{
 			ChannelOrUserID: "C12345678",
 		}
 	} else if t.channelType == "email" {
-		contactChannel.Spec.EmailConfig = &kubechainv1alpha1.EmailChannelConfig{
+		contactChannel.Spec.Email = &kubechainv1alpha1.EmailChannelConfig{
 			Address: "test@example.com",
 		}
 	}
