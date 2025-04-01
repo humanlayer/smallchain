@@ -58,7 +58,7 @@ type EmailChannelConfig struct {
 // ContactChannelSpec defines the desired state of ContactChannel.
 type ContactChannelSpec struct {
 	// Type is the type of channel (e.g. "slack", "email")
-	// Todo - consider removing this, HumanLayer ContactChannel models don't include it
+	// TODO(4) - consider removing this, HumanLayer ContactChannel models don't include it
 
 	// Type is the type of channel (e.g. "slack", "email")
 	// +kubebuilder:validation:Required

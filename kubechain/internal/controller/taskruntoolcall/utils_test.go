@@ -380,7 +380,7 @@ type SetupTestApprovalConfig struct {
 	TaskRunToolCallStatus *kubechainv1alpha1.TaskRunToolCallStatus
 	TaskRunToolCallName   string
 	TaskRunToolCallArgs   string
-	ContactChannelType    string // "slack" or "email"
+	ContactChannelType    kubechainv1alpha1.ContactChannelType
 }
 
 // setupTestApprovalResources sets up all resources needed for testing approval

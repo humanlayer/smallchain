@@ -13,17 +13,23 @@ import (
 	"github.com/humanlayer/smallchain/kubechain/internal/humanlayerapi"
 )
 
-func requestApproval(client humanlayer.HumanLayerClientWrapper, channelType string) *humanlayerapi.FunctionCallOutput {
-	if channelType == "slack" {
+func requestApproval(
+	client humanlayer.HumanLayerClientWrapper,
+	channelType kubechainv1alpha1.ContactChannelType,
+) *humanlayerapi.FunctionCallOutput {
+	switch channelType {
+	case kubechainv1alpha1.ContactChannelTypeSlack:
 		client.SetSlackConfig(&kubechainv1alpha1.SlackChannelConfig{
 			ChannelOrUserID:           "C07HR5JL15F",
 			ContextAboutChannelOrUser: "Channel for approving web fetch operations",
 		})
-	} else if channelType == "email" {
+	case kubechainv1alpha1.ContactChannelTypeEmail:
 		client.SetEmailConfig(&kubechainv1alpha1.EmailChannelConfig{
 			Address:          os.Getenv("HL_EXAMPLE_CONTACT_EMAIL"),
 			ContextAboutUser: "Primary approver for web fetch operations",
 		})
+	default:
+		panic("Unsupported channel type: " + channelType)
 	}
 
 	client.SetFunctionCallSpec("test-city", map[string]any{
@@ -70,7 +76,7 @@ func main() {
 		fmt.Println("Call ID provided as argument - skipping approval request")
 		callID = *callIDFlag
 	} else {
-		fc := requestApproval(client, *typeFlag)
+		fc := requestApproval(client, kubechainv1alpha1.ContactChannelType(*typeFlag))
 		callID = fc.GetCallId()
 	}
 
@@ -82,15 +88,14 @@ func main() {
 	approved, ok := status.GetApprovedOk()
 
 	// Check if the value was set
-	if ok {
-		if approved == nil {
-			fmt.Println("Approval status is nil (Not responded yet)")
-		} else if *approved {
-			fmt.Println("Approved")
-		} else {
-			fmt.Println("Rejected")
-		}
-	} else {
+	switch {
+	case !ok:
 		fmt.Println("Not responded yet")
+	case approved == nil:
+		fmt.Println("Approval status is nil (Not responded yet)")
+	case *approved:
+		fmt.Println("Approved")
+	default:
+		fmt.Println("Rejected")
 	}
 }
