@@ -103,6 +103,10 @@ spec:
               error:
                 description: Error message if the tool call failed
                 type: string
+              externalCallID:
+                description: ExternalCallID is the unique identifier for this function
+                  call in external services
+                type: string
               phase:
                 description: Phase indicates the current phase of the tool call
                 enum:
@@ -141,11 +145,15 @@ spec:
                 - AwaitingHumanInput
                 - AwaitingSubAgent
                 - ErrorRequestingHumanApproval
+                - ReadyToExecuteApprovedTool
+                - ToolCallRejected
                 type: string
               statusDetail:
                 description: StatusDetail provides additional details about the current
                   status
                 type: string
+            required:
+            - externalCallID
             type: object
         type: object
     served: true

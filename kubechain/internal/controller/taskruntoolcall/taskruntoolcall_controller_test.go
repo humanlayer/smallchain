@@ -223,10 +223,10 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 	})
 
 	// Tests for approval workflow
-	Context("Pending -> AwaitingHumanApproval (MCP Tool)", func() {
+	Context("Pending -> AwaitingHumanApproval (MCP Tool, Slack Contact Channel)", func() {
 		It("transitions to AwaitingHumanApproval when MCPServer has approval channel", func() {
 			// Note setupTestApprovalResources sets up the MCP server, MCP tool, and TaskRunToolCall
-			trtc, teardown := setupTestApprovalResources(ctx)
+			trtc, teardown := setupTestApprovalResources(ctx, nil)
 			defer teardown()
 
 			By("reconciling the taskruntoolcall that uses MCP tool with approval")
@@ -236,7 +236,7 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 				NeedsApproval: true,
 			}
 
-			reconciler.HLClient = &humanlayer.MockHumanLayerClient{
+			reconciler.HLClientFactory = &humanlayer.MockHumanLayerClientFactory{
 				ShouldFail:  false,
 				StatusCode:  200,
 				ReturnError: nil,
@@ -275,20 +275,223 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 		})
 	})
 
-	Context("Pending -> ErrorRequestingHumanApproval (MCP Tool)", func() {
-		It("transitions to ErrorRequestingHumanApproval when request to HumanLayer fails", func() {
-			// Note setupTestApprovalResources sets up the MCP server, MCP tool, and TaskRunToolCall
-			trtc, teardown := setupTestApprovalResources(ctx)
+	Context("Pending -> AwaitingHumanApproval (MCP Tool, Email Contact Channel)", func() {
+		It("transitions to AwaitingHumanApproval when MCPServer has email approval channel", func() {
+			// Set up resources with email contact channel
+			trtc, teardown := setupTestApprovalResources(ctx, &SetupTestApprovalConfig{
+				ContactChannelType: "email",
+			})
 			defer teardown()
 
-			By("reconciling the taskruntoolcall that uses MCP tool with approval")
+			By("reconciling the taskruntoolcall that uses MCP tool with email approval")
+			reconciler, recorder := reconciler()
+
+			reconciler.MCPManager = &MockMCPManager{
+				NeedsApproval: true,
+			}
+
+			reconciler.HLClientFactory = &humanlayer.MockHumanLayerClientFactory{
+				ShouldFail:  false,
+				StatusCode:  200,
+				ReturnError: nil,
+			}
+
+			result, err := reconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      trtc.Name,
+					Namespace: trtc.Namespace,
+				},
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.RequeueAfter).To(Equal(5 * time.Second)) // Should requeue after 5 seconds
+
+			By("checking the taskruntoolcall status is set to AwaitingHumanApproval")
+			updatedTRTC := &kubechainv1alpha1.TaskRunToolCall{}
+			err = k8sClient.Get(ctx, types.NamespacedName{
+				Name:      trtc.Name,
+				Namespace: trtc.Namespace,
+			}, updatedTRTC)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedTRTC.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunToolCallPhasePending))
+			Expect(updatedTRTC.Status.Status).To(Equal(kubechainv1alpha1.TaskRunToolCallStatusTypeAwaitingHumanApproval))
+			Expect(updatedTRTC.Status.StatusDetail).To(ContainSubstring("Waiting for human approval via contact channel"))
+
+			By("checking that appropriate events were emitted")
+			utils.ExpectRecorder(recorder).ToEmitEventContaining("AwaitingHumanApproval")
+			Expect(updatedTRTC.Status.Status).To(Equal(kubechainv1alpha1.TaskRunToolCallStatusTypeAwaitingHumanApproval))
+
+			By("verifying the contact channel type is email")
+			var contactChannel kubechainv1alpha1.ContactChannel
+			err = k8sClient.Get(ctx, types.NamespacedName{
+				Name:      testContactChannel.name,
+				Namespace: "default",
+			}, &contactChannel)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(contactChannel.Spec.Type).To(Equal(kubechainv1alpha1.ContactChannelTypeEmail))
+		})
+	})
+
+	Context("AwaitingHumanApproval -> ReadyToExecuteApprovedTool", func() {
+		It("transitions from AwaitingHumanApproval to ReadyToExecuteApprovedTool when MCP tool is approved", func() {
+			trtc, teardown := setupTestApprovalResources(ctx, &SetupTestApprovalConfig{
+				TaskRunToolCallStatus: &kubechainv1alpha1.TaskRunToolCallStatus{
+					ExternalCallID: "call-ready-to-execute-test",
+					Phase:          kubechainv1alpha1.TaskRunToolCallPhasePending,
+					Status:         kubechainv1alpha1.TaskRunToolCallStatusTypeAwaitingHumanApproval,
+					StatusDetail:   "Waiting for human approval via contact channel",
+					StartTime:      &metav1.Time{Time: time.Now().Add(-1 * time.Minute)},
+				},
+			})
+			defer teardown()
+
+			By("reconciling the trtc against an approval-granting HumanLayer client")
+
 			reconciler, _ := reconciler()
 
 			reconciler.MCPManager = &MockMCPManager{
 				NeedsApproval: true,
 			}
 
-			reconciler.HLClient = &humanlayer.MockHumanLayerClient{
+			reconciler.HLClientFactory = &humanlayer.MockHumanLayerClientFactory{
+				ShouldFail:           false,
+				StatusCode:           200,
+				ReturnError:          nil,
+				ShouldReturnApproval: true,
+			}
+
+			result, err := reconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      trtc.Name,
+					Namespace: trtc.Namespace,
+				},
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeFalse())
+
+			By("checking the taskruntoolcall status is set to ReadyToExecuteApprovedTool")
+			updatedTRTC := &kubechainv1alpha1.TaskRunToolCall{}
+			err = k8sClient.Get(ctx, types.NamespacedName{
+				Name:      trtc.Name,
+				Namespace: trtc.Namespace,
+			}, updatedTRTC)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedTRTC.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunToolCallPhasePending))
+			Expect(updatedTRTC.Status.Status).To(Equal(kubechainv1alpha1.TaskRunToolCallStatusTypeReadyToExecuteApprovedTool))
+			Expect(updatedTRTC.Status.StatusDetail).To(ContainSubstring("Ready to execute approved tool"))
+		})
+	})
+
+	Context("AwaitingHumanApproval -> ToolCallRejected", func() {
+		It("transitions from AwaitingHumanApproval to ToolCallRejected when MCP tool is rejected", func() {
+			trtc, teardown := setupTestApprovalResources(ctx, &SetupTestApprovalConfig{
+				TaskRunToolCallStatus: &kubechainv1alpha1.TaskRunToolCallStatus{
+					ExternalCallID: "call-tool-call-rejected-test",
+					Phase:          kubechainv1alpha1.TaskRunToolCallPhasePending,
+					Status:         kubechainv1alpha1.TaskRunToolCallStatusTypeAwaitingHumanApproval,
+					StatusDetail:   "Waiting for human approval via contact channel",
+					StartTime:      &metav1.Time{Time: time.Now().Add(-1 * time.Minute)},
+				},
+			})
+			defer teardown()
+
+			By("reconciling the trtc against an approval-rejecting HumanLayer client")
+
+			reconciler, _ := reconciler()
+
+			reconciler.MCPManager = &MockMCPManager{
+				NeedsApproval: true,
+			}
+
+			reconciler.HLClientFactory = &humanlayer.MockHumanLayerClientFactory{
+				ShouldFail:            false,
+				StatusCode:            200,
+				ReturnError:           nil,
+				ShouldReturnRejection: true,
+			}
+
+			result, err := reconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      trtc.Name,
+					Namespace: trtc.Namespace,
+				},
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeFalse())
+
+			By("checking the taskruntoolcall status is set to ToolCallRejected")
+			updatedTRTC := &kubechainv1alpha1.TaskRunToolCall{}
+			err = k8sClient.Get(ctx, types.NamespacedName{
+				Name:      trtc.Name,
+				Namespace: trtc.Namespace,
+			}, updatedTRTC)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedTRTC.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunToolCallPhaseFailed))
+			Expect(updatedTRTC.Status.Status).To(Equal(kubechainv1alpha1.TaskRunToolCallStatusTypeToolCallRejected))
+			Expect(updatedTRTC.Status.StatusDetail).To(ContainSubstring("Tool execution rejected"))
+		})
+	})
+
+	Context("ReadyToExecuteApprovedTool -> Succeeded", func() {
+		It("transitions from ReadyToExecuteApprovedTool to Succeeded when a tool is executed", func() {
+			trtc, teardown := setupTestApprovalResources(ctx, &SetupTestApprovalConfig{
+				TaskRunToolCallStatus: &kubechainv1alpha1.TaskRunToolCallStatus{
+					ExternalCallID: "call-ready-to-execute-test",
+					Phase:          kubechainv1alpha1.TaskRunToolCallPhasePending,
+					Status:         kubechainv1alpha1.TaskRunToolCallStatusTypeReadyToExecuteApprovedTool,
+					StatusDetail:   "Ready to execute tool, with great vigor",
+					StartTime:      &metav1.Time{Time: time.Now().Add(-1 * time.Minute)},
+				},
+			})
+			defer teardown()
+
+			By("reconciling the trtc against an approval-granting HumanLayer client")
+
+			reconciler, _ := reconciler()
+
+			result, err := reconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      trtc.Name,
+					Namespace: trtc.Namespace,
+				},
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeFalse())
+
+			By("checking the taskruntoolcall status is set to Ready:Succeeded")
+			updatedTRTC := &kubechainv1alpha1.TaskRunToolCall{}
+			err = k8sClient.Get(ctx, types.NamespacedName{
+				Name:      trtc.Name,
+				Namespace: trtc.Namespace,
+			}, updatedTRTC)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedTRTC.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunToolCallPhaseSucceeded))
+			Expect(updatedTRTC.Status.Status).To(Equal(kubechainv1alpha1.TaskRunToolCallStatusTypeReady))
+			Expect(updatedTRTC.Status.Result).To(Equal("5")) // From our mock implementation
+		})
+	})
+
+	Context("Pending -> ErrorRequestingHumanApproval (MCP Tool)", func() {
+		It("transitions to ErrorRequestingHumanApproval when request to HumanLayer fails", func() {
+			// Note setupTestApprovalResources sets up the MCP server, MCP tool, and TaskRunToolCall
+			trtc, teardown := setupTestApprovalResources(ctx, nil)
+			defer teardown()
+
+			By("reconciling the taskruntoolcall that uses MCP tool with approval")
+			reconciler, _ := reconciler()
+
+			reconciler.MCPManager = &MockMCPManager{
+				NeedsApproval: false,
+			}
+
+			reconciler.HLClientFactory = &humanlayer.MockHumanLayerClientFactory{
 				ShouldFail:  true,
 				StatusCode:  500,
 				ReturnError: fmt.Errorf("While taking pizzas from the kitchen to the lobby, Pete passed through the server room where he tripped over a network cable and now there's pizza all over the place. Also this request failed. No more pizza in the server room Pete."),

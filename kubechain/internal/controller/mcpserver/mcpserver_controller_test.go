@@ -278,14 +278,14 @@ var _ = Describe("MCPServer Controller", func() {
 					Namespace: MCPServerNamespace,
 				},
 				Spec: kubechainv1alpha1.ContactChannelSpec{
-					ChannelType: "slack",
+					Type: "slack",
 					APIKeyFrom: kubechainv1alpha1.APIKeySource{
 						SecretKeyRef: kubechainv1alpha1.SecretKeyRef{
 							Name: "test-secret",
 							Key:  "token",
 						},
 					},
-					SlackConfig: &kubechainv1alpha1.SlackChannelConfig{
+					Slack: &kubechainv1alpha1.SlackChannelConfig{
 						ChannelOrUserID: "C12345678",
 					},
 				},
