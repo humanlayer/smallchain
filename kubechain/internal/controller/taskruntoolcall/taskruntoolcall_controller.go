@@ -177,7 +177,7 @@ func (r *TaskRunToolCallReconciler) executeMCPTool(ctx context.Context, trtc *ku
 
 // initializeTRTC initializes the TaskRunToolCall status if not already set
 // Returns (initialized, error, handled)
-func (r *TaskRunToolCallReconciler) initializeTRTC(ctx context.Context, trtc *kubechainv1alpha1.TaskRunToolCall) (bool, error, bool) {
+func (r *TaskRunToolCallReconciler) initializeTRTC(ctx context.Context, trtc *kubechainv1alpha1.TaskRunToolCall) (initialized bool, err error, handled bool) {
 	logger := log.FromContext(ctx)
 
 	if trtc.Status.Phase == "" {
@@ -196,7 +196,7 @@ func (r *TaskRunToolCallReconciler) initializeTRTC(ctx context.Context, trtc *ku
 }
 
 // checkCompletedOrExisting checks if the TRTC is already complete or has a child TaskRun
-func (r *TaskRunToolCallReconciler) checkCompletedOrExisting(ctx context.Context, trtc *kubechainv1alpha1.TaskRunToolCall) (bool, error, bool) {
+func (r *TaskRunToolCallReconciler) checkCompletedOrExisting(ctx context.Context, trtc *kubechainv1alpha1.TaskRunToolCall) (completed bool, err error, handled bool) {
 	logger := log.FromContext(ctx)
 
 	// Check if already completed
@@ -221,11 +221,10 @@ func (r *TaskRunToolCallReconciler) checkCompletedOrExisting(ctx context.Context
 }
 
 // parseArguments parses the tool call arguments
-func (r *TaskRunToolCallReconciler) parseArguments(ctx context.Context, trtc *kubechainv1alpha1.TaskRunToolCall) (map[string]interface{}, error) {
+func (r *TaskRunToolCallReconciler) parseArguments(ctx context.Context, trtc *kubechainv1alpha1.TaskRunToolCall) (args map[string]interface{}, err error) {
 	logger := log.FromContext(ctx)
 
 	// Parse the arguments string as JSON (needed for both MCP and traditional tools)
-	var args map[string]interface{}
 	if err := json.Unmarshal([]byte(trtc.Spec.Arguments), &args); err != nil {
 		logger.Error(err, "Failed to parse arguments")
 		trtc.Status.Status = StatusError
@@ -853,7 +852,7 @@ func (r *TaskRunToolCallReconciler) requestHumanApproval(ctx context.Context, tr
 }
 
 // handleMCPApprovalFlow encapsulates the MCP approval flow logic
-func (r *TaskRunToolCallReconciler) handleMCPApprovalFlow(ctx context.Context, trtc *kubechainv1alpha1.TaskRunToolCall) (ctrl.Result, error, bool) {
+func (r *TaskRunToolCallReconciler) handleMCPApprovalFlow(ctx context.Context, trtc *kubechainv1alpha1.TaskRunToolCall) (result ctrl.Result, err error, handled bool) {
 	// We've already been through the approval flow and are ready to execute the tool
 	if trtc.Status.Status == kubechainv1alpha1.TaskRunToolCallStatusTypeReadyToExecuteApprovedTool {
 		return ctrl.Result{}, nil, false
@@ -899,7 +898,7 @@ func (r *TaskRunToolCallReconciler) handleMCPApprovalFlow(ctx context.Context, t
 	}
 
 	// Request human approval if not already done
-	result, err := r.requestHumanApproval(ctx, trtc, contactChannel, apiKey, mcpServer)
+	result, err = r.requestHumanApproval(ctx, trtc, contactChannel, apiKey, mcpServer)
 	return result, err, true
 }
 
