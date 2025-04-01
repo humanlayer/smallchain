@@ -1062,7 +1062,7 @@ to request human approval and input across Slack, email, and more.
 You'll need a HumanLayer API key to get started:
 
 ```bash
-kubectl create secret generic humanlayer --from-literal=humanlayer-api-key=$HUMANLAYER_API_KEY
+kubectl create secret generic humanlayer --from-literal=HUMANLAYER_API_KEY=$HUMANLAYER_API_KEY
 ```
 
 Next, create a ContactChannel resource. In this example, we'll use an email contact channel (be sure to swap the `approver@example.com` address for a real target email address):
@@ -1077,8 +1077,8 @@ spec:
   type: email # Replace with "slack" if using Slack
   apiKeyFrom:
     secretKeyRef:
-      name: humanlayer-api-key
-      key: api-key
+      name: humanlayer
+      key: HUMANLAYER_API_KEY
   email:
     address: "approver@example.com" # Replace with actual target email address
     subject: "Approval Request from Kubechain"
