@@ -2,9 +2,9 @@
 apiVersion: kubechain.humanlayer.dev/v1alpha1
 kind: ContactChannel
 metadata:
-  name: make-fetch-happen-channel
+  name: approval-channel 
 spec:
-  type: email
+  type: email # Replace with "slack" if using Slack
   apiKeyFrom:
     secretKeyRef:
       name: humanlayer-api-key
@@ -13,7 +13,7 @@ spec:
     channelOrUserID: "C07HR5JL15F" # Replace with actual Slack channel ID
     contextAboutChannelOrUser: "Channel for approving web fetch operations"
   email:
-    address: "sundeep@humanlayer.dev"
+    address: "approver@example.com" # Replace with actual target email address
     subject: "Approval Request from Kubechain"
     contextAboutUser: "Primary approver for web fetch operations"
 ---
@@ -31,31 +31,33 @@ spec:
 apiVersion: kubechain.humanlayer.dev/v1alpha1
 kind: MCPServer
 metadata:
-  name: make-fetch-happen-server
+  name: fetch
 spec:
   transport: "stdio"
   command: "uvx"
   args: ["mcp-server-fetch"]
+  # When an approvalContactChannel is specified, 
+  # all tools on this MCP server will wait for human approval prior executing.
   approvalContactChannel:
-    name: make-fetch-happen-channel
+    name: approval-channel 
 ---
 apiVersion: kubechain.humanlayer.dev/v1alpha1
 kind: Agent
 metadata:
-  name: make-fetch-happen-agent
+  name: agent-with-fetch
 spec:
   llmRef:
     name: gpt-4o
   system: |
     You are a helpful assistant. Your job is to help the user with their tasks.
   mcpServers:
-    - name: make-fetch-happen-server
+    - name: fetch
 ---
 apiVersion: kubechain.humanlayer.dev/v1alpha1
 kind: Task
 metadata:
-  name: make-fetch-happen-task
+  name: approved-fetch-task
 spec:
   agentRef:
-    name: make-fetch-happen-agent
-  message: "What is on the front page of planetscale.com?"
+    name: agent-with-fetch 
+  message: "Write me a haiku about the character found at https://swapi.dev/api/people/2?"

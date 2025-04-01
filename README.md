@@ -1057,31 +1057,30 @@ to request human approval and input across Slack, email, and more.
 
 **Note**: Directly approving tool calls with `kubectl` or a `kubechain` CLI is planned but not yet supported.
 
-**Note**: We recommend running through the above examples first prior exploring this section. Several Kubernetes resources created in that section will be assumed to exist.
+**Note**: We recommend running through the above examples first prior exploring this section. Several Kubernetes resources created in that section will be assumed to exist. If you'd like to see a full running version of the Kubernetes configuration used in this section, check out [kubechain_v1alpha_contactchannel_with_approval.yaml](./config/samples/kubechain_v1alpha_contactchannel_with_approval.yaml)
 
 You'll need a HumanLayer API key to get started:
 
 ```bash
-kubectl create secret generic humanlayer --from-literal=HUMANLAYER_API_KEY=$HUMANLAYER_API_KEY
+kubectl create secret generic humanlayer --from-literal=humanlayer-api-key=$HUMANLAYER_API_KEY
 ```
 
-Next, create a ContactChannel resource. In this example, we'll use an email contact channel (be sure to swap the `approver@example.com` address for an alternate):
+Next, create a ContactChannel resource. In this example, we'll use an email contact channel (be sure to swap the `approver@example.com` address for a real target email address):
 
 ```bash
 cat <<EOF | kubectl apply -f -
 apiVersion: kubechain.humanlayer.dev/v1alpha1
 kind: ContactChannel
 metadata:
-  name: email-approval
+  name: approval-channel 
 spec:
-  channelType: email
+  type: email # Replace with "slack" if using Slack
   apiKeyFrom:
     secretKeyRef:
-      name: humanlayer
-      key: HUMANLAYER_API_KEY
-  # these match the HumanLayer ContactChannel model
+      name: humanlayer-api-key
+      key: api-key
   email:
-    address: "approver@example.com"
+    address: "approver@example.com" # Replace with actual target email address
     subject: "Approval Request from Kubechain"
     contextAboutUser: "Primary approver for web fetch operations"
 EOF
@@ -1099,14 +1098,32 @@ spec:
   transport: "stdio"
   command: "uvx"
   args: ["mcp-server-fetch"]
-  # if approvalContactChannel is set,
-  # all tools on this MCP server will require human approval before executing
+  # When an approvalContactChannel is specified, 
+  # all tools on this MCP server will wait for human approval prior executing.
   approvalContactChannel:
-    name: email-approval
+    name: approval-channel 
 EOF
 ```
 
-We can create a new task that uses the `fetch` tool to test the human approval workflow.
+Be sure you have an agent that references the above `MCPServer` by running `kubectl describe agent` or create a fresh `agent` with:
+
+```bash
+cat <<EOF | kubectl apply -f -
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: Agent
+metadata:
+  name: agent-with-fetch
+spec:
+  llmRef:
+    name: gpt-4o
+  system: |
+    You are a helpful assistant. Your job is to help the user with their tasks.
+  mcpServers:
+    - name: fetch
+EOF
+```
+
+The fun part: Create a new task that uses the `fetch` tool to test the human approval workflow.
 
 ```bash
 cat <<EOF | kubectl apply -f -
@@ -1116,8 +1133,8 @@ metadata:
   name: approved-fetch-task
 spec:
   agentRef:
-    name: my-assistant
-  message: "what is the data at https://swapi.dev/api/people/2?"
+    name: agent-with-fetch 
+  message: "Write me a haiku about the character found at https://swapi.dev/api/people/2?"
 EOF
 ```
 
@@ -1128,20 +1145,114 @@ kubectl get taskruntoolcall
 ```
 
 ```
-#TODO paste output
+$ kubectl get taskruntoolcall                                                              
+NAME                          PHASE     TASKRUN                 TOOL
+approved-fetch-task-1-tc-01   Pending   approved-fetch-task-1   fetch__fetch
 ```
 
-and we can describe the tool call to see that its waiting for human approval:
+and we run `describe` against the tool call to see that its waiting for human approval:
 
 
 ```
-kubectl describe taskruntoolcall fetch-task-2-toolcall-01
+kubectl describe taskruntoolcall approved-fetch-task-1-tc-01  
 ```
 
 ```
-#TODO paste output
+Name:         approved-fetch-task-1-tc-01
+Namespace:    default
+Labels:       kubechain.humanlayer.dev/taskruntoolcall=approved-fetch-task-1
+Annotations:  <none>
+API Version:  kubechain.humanlayer.dev/v1alpha1
+Kind:         TaskRunToolCall
+Metadata:
+  Creation Timestamp:  2025-04-01T16:09:02Z
+  Generation:          1
+  Owner References:
+    API Version:     kubechain.humanlayer.dev/v1alpha1
+    Controller:      true
+    Kind:            TaskRun
+    Name:            approved-fetch-task-1
+    UID:             52893dec-c5a5-424d-983f-13a89215b084
+  Resource Version:  91939
+  UID:               3f8c4eaf-0e46-44f6-9741-f32809747099
+Spec:
+  Arguments:  {"url":"https://swapi.dev/api/people/2"}
+  Task Run Ref:
+    Name:        approved-fetch-task-1
+  Tool Call Id:  call_7PCkM1y2v8wFOC2vKtDrweor
+  Tool Ref:
+    Name:  fetch__fetch
+Status:
+  External Call ID:  ec-3257d3e
+  Phase:             Pending
+  Start Time:        2025-04-01T16:09:02Z
+  Status:            AwaitingHumanApproval
+  Status Detail:     Waiting for human approval via contact channel approval-channel
+Events:
+  Type    Reason                 Age    From                        Message
+  ----    ------                 ----   ----                        -------
+  Normal  AwaitingHumanApproval  2m42s  taskruntoolcall-controller  Tool execution requires approval via contact channel approval-channel
+  Normal  HumanLayerRequestSent  2m41s  taskruntoolcall-controller  HumanLayer request sent
 ```
 
+Note as well, at this point our `taskrun` has not completed. If we run `kubectl get taskrun approved-fetch-task-1` no `OUTPUT` has yet been returned.
+
+Go ahead and approve the email you should have received via HumanLayer requesting approval to run our `fetch` tool. After a few seconds, running `kubectl get taskruntoolcall approved-fetch-task-1-tc-01` should show our tool has been called. Additionally, if we run `kubectl describe taskrun approved-fetch-task-1`, we should see the following (truncated a bit for brevity):
+
+```
+$ kubectl describe taskrun approved-fetch-task-1
+Name:         approved-fetch-task-1
+Kind:         TaskRun
+Metadata:
+  Creation Timestamp:  2025-04-01T16:16:13Z
+  UID:               58c9d760-a160-4386-9d8d-ae9da0286125
+Spec:
+  Task Ref:
+    Name:  approved-fetch-task
+Status:
+  Context Window:
+    Content:  You are a helpful assistant. Your job is to help the user with their tasks.
+
+    Role:     system
+    Content:  Write me a haiku about the character found at https://swapi.dev/api/people/2?
+    Role:     user
+    Content:
+    Role:     assistant
+    Tool Calls:
+      Function:
+        Arguments:  {"url":"https://swapi.dev/api/people/2"}
+        Name:       fetch__fetch
+      Id:           call_FZaXJq1FKuBVLYr9HHJwcnOb
+      Type:         function
+    Content:        Content type application/json cannot be simplified to markdown, but here is the raw content:
+Contents of https://swapi.dev/api/people/2:
+{"name":"C-3PO","height":"167","mass":"75","hair_color":"n/a","skin_color":"gold","eye_color":"yellow","birth_year":"112BBY","gender":"n/a","homeworld":"https://swapi.dev/api/planets/1/","films":["https://swapi.dev/api/films/1/","https://swapi.dev/api/films/2/","https://swapi.dev/api/films/3/","https://swapi.dev/api/films/4/","https://swapi.dev/api/films/5/","https://swapi.dev/api/films/6/"],"species":["https://swapi.dev/api/species/2/"],"vehicles":[],"starships":[],"created":"2014-12-10T15:10:51.357000Z","edited":"2014-12-20T21:17:50.309000Z","url":"https://swapi.dev/api/people/2/"}
+    Role:          tool
+    Tool Call Id:  call_FZaXJq1FKuBVLYr9HHJwcnOb
+    Content:       Golden C-3PO,
+Speaks in many languages,
+Droid with gentle heart.
+    Role:  assistant
+  Output:  Golden C-3PO,
+Speaks in many languages,
+Droid with gentle heart.
+  Phase:  FinalAnswer
+  Ready:  true
+  Span Context:
+    Span ID:      3fd054c970f50fc1
+    Trace ID:     21e2b0e7457ae78cce4abaf1b1c02819
+  Status:         Ready
+  Status Detail:  LLM final response received
+Events:
+  Type    Reason                     Age               From                Message
+  ----    ------                     ----              ----                -------
+  Normal  ValidationSucceeded        48s               taskrun-controller  Task validated successfully
+  Normal  ToolCallsPending           47s               taskrun-controller  LLM response received, tool calls pending
+  Normal  ToolCallCreated            47s               taskrun-controller  Created TaskRunToolCall approved-fetch-task-1-tc-01
+  Normal  SendingContextWindowToLLM  7s (x2 over 48s)  taskrun-controller  Sending context window to LLM
+  Normal  AllToolCallsCompleted      7s                taskrun-controller  All tool calls completed, ready to send tool results to LLM
+  Normal  LLMFinalAnswer             6s                taskrun-controller  LLM response received successfully
+```
 
 ### Using other Language Models
 
