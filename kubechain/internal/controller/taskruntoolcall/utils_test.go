@@ -380,6 +380,7 @@ type SetupTestApprovalConfig struct {
 	TaskRunToolCallStatus *kubechainv1alpha1.TaskRunToolCallStatus
 	TaskRunToolCallName   string
 	TaskRunToolCallArgs   string
+	ContactChannelType    string // "slack" or "email"
 }
 
 // setupTestApprovalResources sets up all resources needed for testing approval
@@ -387,6 +388,14 @@ func setupTestApprovalResources(ctx context.Context, config *SetupTestApprovalCo
 	By("creating the secret")
 	testSecret.Setup(ctx)
 	By("creating the contact channel")
+
+	// Set contact channel type based on config or default to "slack"
+	channelType := "slack"
+	if config != nil && config.ContactChannelType != "" {
+		channelType = config.ContactChannelType
+	}
+
+	testContactChannel.channelType = channelType
 	testContactChannel.SetupWithStatus(ctx, kubechainv1alpha1.ContactChannelStatus{
 		Ready:  true,
 		Status: "Ready",

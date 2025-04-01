@@ -577,8 +577,8 @@ func (r *TaskRunToolCallReconciler) processExternalAPI(ctx context.Context, trtc
 		kwargs, _ = kwargsVal.(map[string]interface{})
 	}
 
-	// Generate call ID
-	callID := "call-" + uuid.New().String()
+	// Generate call ID - using a shorter format while maintaining uniqueness
+	callID := "c" + uuid.New().String()[:7]
 
 	// Prepare function call spec
 	functionSpec := map[string]interface{}{
@@ -742,11 +742,15 @@ func (r *TaskRunToolCallReconciler) postToHumanLayer(ctx context.Context, trtc *
 	}
 	client.SetFunctionCallSpec(toolName, args)
 
-	client.SetCallID("call-" + uuid.New().String())
+	client.SetCallID("ec-" + uuid.New().String()[:7])
 	client.SetRunID(trtc.Name)
 	client.SetAPIKey(apiKey)
 
 	functionCall, statusCode, err := client.RequestApproval(ctx)
+
+	if err == nil {
+		r.recorder.Event(trtc, corev1.EventTypeNormal, "HumanLayerRequestSent", "HumanLayer request sent")
+	}
 
 	return functionCall, statusCode, err
 }

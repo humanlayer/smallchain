@@ -42,6 +42,9 @@ func NewHumanLayerClientFactory(optionalApiBase string) (HumanLayerClientFactory
 		},
 	}
 
+	// Enable debug mode to log request/response
+	// config.Debug = true
+
 	// Create the API client with the configuration
 	client := humanlayerapi.NewAPIClient(config)
 

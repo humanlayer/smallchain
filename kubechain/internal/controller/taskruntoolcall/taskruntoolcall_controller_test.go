@@ -275,6 +275,64 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 		})
 	})
 
+	Context("Pending -> AwaitingHumanApproval (MCP Tool, Email Contact Channel)", func() {
+		It("transitions to AwaitingHumanApproval when MCPServer has email approval channel", func() {
+			// Set up resources with email contact channel
+			trtc, teardown := setupTestApprovalResources(ctx, &SetupTestApprovalConfig{
+				ContactChannelType: "email",
+			})
+			defer teardown()
+
+			By("reconciling the taskruntoolcall that uses MCP tool with email approval")
+			reconciler, recorder := reconciler()
+
+			reconciler.MCPManager = &MockMCPManager{
+				NeedsApproval: true,
+			}
+
+			reconciler.HLClientFactory = &humanlayer.MockHumanLayerClientFactory{
+				ShouldFail:  false,
+				StatusCode:  200,
+				ReturnError: nil,
+			}
+
+			result, err := reconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      trtc.Name,
+					Namespace: trtc.Namespace,
+				},
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.RequeueAfter).To(Equal(5 * time.Second)) // Should requeue after 5 seconds
+
+			By("checking the taskruntoolcall status is set to AwaitingHumanApproval")
+			updatedTRTC := &kubechainv1alpha1.TaskRunToolCall{}
+			err = k8sClient.Get(ctx, types.NamespacedName{
+				Name:      trtc.Name,
+				Namespace: trtc.Namespace,
+			}, updatedTRTC)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedTRTC.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunToolCallPhasePending))
+			Expect(updatedTRTC.Status.Status).To(Equal(kubechainv1alpha1.TaskRunToolCallStatusTypeAwaitingHumanApproval))
+			Expect(updatedTRTC.Status.StatusDetail).To(ContainSubstring("Waiting for human approval via contact channel"))
+
+			By("checking that appropriate events were emitted")
+			utils.ExpectRecorder(recorder).ToEmitEventContaining("AwaitingHumanApproval")
+			Expect(updatedTRTC.Status.Status).To(Equal(kubechainv1alpha1.TaskRunToolCallStatusTypeAwaitingHumanApproval))
+
+			By("verifying the contact channel type is email")
+			var contactChannel kubechainv1alpha1.ContactChannel
+			err = k8sClient.Get(ctx, types.NamespacedName{
+				Name:      testContactChannel.name,
+				Namespace: "default",
+			}, &contactChannel)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(contactChannel.Spec.Type).To(Equal("email"))
+		})
+	})
+
 	Context("AwaitingHumanApproval -> ReadyToExecuteApprovedTool", func() {
 		It("transitions from AwaitingHumanApproval to ReadyToExecuteApprovedTool when MCP tool is approved", func() {
 			trtc, teardown := setupTestApprovalResources(ctx, &SetupTestApprovalConfig{
