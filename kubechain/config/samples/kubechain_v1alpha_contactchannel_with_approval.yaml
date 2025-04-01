@@ -4,14 +4,18 @@ kind: ContactChannel
 metadata:
   name: make-fetch-happen-channel
 spec:
-  channelType: slack
+  channelType: email
   apiKeyFrom:
     secretKeyRef:
       name: humanlayer-api-key
       key: api-key
-  slackConfig:
-    channelOrUserID: "C07HR5JL15F"  # Replace with actual Slack channel ID
+  slack:
+    channelOrUserID: "C07HR5JL15F" # Replace with actual Slack channel ID
     contextAboutChannelOrUser: "Channel for approving web fetch operations"
+  email:
+    address: "sundeep@humanlayer.dev"
+    subject: "Approval Request from Kubechain"
+    contextAboutUser: "Primary approver for web fetch operations"
 ---
 apiVersion: kubechain.humanlayer.dev/v1alpha1
 kind: LLM

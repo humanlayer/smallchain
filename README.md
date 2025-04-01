@@ -7,7 +7,7 @@
 KubeChain is a cloud-native orchestrator for AI Agents built on Kubernetes. It supports [long-lived outer-loop agents](https://theouterloop.substack.com/p/openais-realtime-api-is-a-step-towards) that can process asynchronous execution of both LLM inference and long-running tool calls. It's designed for simplicity and gives strong durability and reliability guarantees for agents that make asynchronous tool calls like contacting humans or delegating work to other agents.
 
 :warning: **Note** - KubeChain is experimental and some known issues and race conditions. Use at your own risk.
- 
+
 <div align="center">
 
 <h3>
@@ -82,10 +82,10 @@ kubectl create secret generic openai \
 
 
 > [!TIP]
-> For better visibility when running tutorial, we recommend starting 
+> For better visibility when running tutorial, we recommend starting
 > a stream to watch all the events as they're happening,
 > for example:
-> 
+>
 > ```bash
 > kubectl get events --watch
 > ```
@@ -151,24 +151,24 @@ graph RL
 ```
 
 Check the created LLM:
-   
+
 ```bash
 kubectl get llm
 ```
-   
+
    Output:
 ```
 NAME     PROVIDER   READY   STATUS
 gpt-4o   openai     true    Ready
 ```
-   
+
 <details>
 <summary>Using `-o wide` and `describe`</summary>
-   
+
 ```bash
 kubectl get llm -o wide
 ```
-   
+
    Output:
 ```
 NAME     PROVIDER   READY   STATUS   DETAIL
@@ -250,24 +250,24 @@ graph RL
 ```
 
    Check the created Agent:
-   
+
 ```bash
 kubectl get agent
 ```
-   
+
    Output:
 ```
 NAME           READY   STATUS
 my-assistant   true    Ready
 ```
-   
+
 <details>
 <summary>Using `-o wide` and `describe`</summary>
-   
+
 ```bash
 kubectl get agent -o wide
 ```
-   
+
    Output:
 ```
 NAME           READY   STATUS   DETAIL
@@ -355,21 +355,21 @@ graph RL
     end
 ```
 Check the created Task:
-   
+
 ```bash
 kubectl get task
 ```
-   
+
    Output:
 
 ```
 NAME               READY   STATUS   AGENT          MESSAGE
 hello-world-task   true    Ready    my-assistant   What is the capital of the moon?
 ```
-   
+
 <details>
 <summary>Using `-o wide` and `describe`</summary>
-   
+
 ```bash
 kubectl get task -o wide
 ```
@@ -460,7 +460,7 @@ graph RL
 For now, our task run should complete quickly and return a FinalAnswer.
 
 ```bash
-kubectl get taskrun 
+kubectl get taskrun
 ```
 
 Output:
@@ -476,7 +476,7 @@ To get just the output, run
 kubectl get taskrun -o jsonpath='{.items[*].status.output}'
 ```
 
-and you'll see 
+and you'll see
 
 
 > The Moon does not have a capital. It is a natural satellite of Earth and lacks any governmental structure or human habitation that would necessitate a capital city.
@@ -532,7 +532,7 @@ We saw above how you can get the status of a taskrun with `kubectl get taskrun`.
 For more detailed information, like to see the full context window, you can use:
 
 ```bash
-kubectl describe taskrun 
+kubectl describe taskrun
 ```
 
 ```
@@ -655,7 +655,7 @@ fetch    true    Ready
 ```bash
 kubectl describe mcpserver
 ```
-Output: 
+Output:
 
 ```
 Name:         fetch
@@ -780,7 +780,7 @@ spec:
 EOF
 ```
 
-You should see some events in the output of 
+You should see some events in the output of
 
 ```
 kubectl get events --watch
@@ -803,7 +803,7 @@ kubectl get taskrun fetch-task-1 -o jsonpath='{.status.output}'
 ```
 
 > The URL [https://swapi.dev/api/people/1](https://swapi.dev/api/people/1) contains the following data about a Star Wars character:
-> 
+>
 > - **Name**: Luke Skywalker
 > - **Height**: 172 cm
 > - **Mass**: 77 kg
@@ -832,7 +832,7 @@ kubectl get taskrun fetch-task-1 -o jsonpath='{.status.output}'
 and you can describe the taskrun to see the full context window and tool-calling turns
 
 ```
-kubectl describe taskrun fetch-task-1 
+kubectl describe taskrun fetch-task-1
 ```
 
 A simplified view of the taskrun:
@@ -862,11 +862,11 @@ flowchart TD
     Task2[Task]
     Agent2[Agent]
 
-    UserMessage --> Task --> Agent --> LLM 
+    UserMessage --> Task --> Agent --> LLM
     Provider --> OpenAI
     Secret --> Credentials
     Credentials --> OpenAI
-    OpenAI --> ToolCall-1 
+    OpenAI --> ToolCall-1
     ToolCall-1 --> Task2 --> Agent2 --> fetch
     fetch --> ToolResponse-1
     ToolResponse-1 --> OpenAI2[OpenAI]
@@ -1050,29 +1050,31 @@ That's it! Go add your favorite MCPs and start running durable agents in Kuberne
 
 ### Incorporating Human Approval
 
-For certain classes of MCP tools, you may want to incorporate human approval into the agent's workflow. 
+For certain classes of MCP tools, you may want to incorporate human approval into an agent's workflow.
 
-KubeChain supports this via [HumanLayer](https://github.com/humanlayer/humanlayer) contact [channels](https://www.humanlayer.dev/docs/channels/introduction) 
-to request human approval and input across slack, email, and more.
+KubeChain supports this via [HumanLayer's](https://github.com/humanlayer/humanlayer) [contact channels](https://www.humanlayer.dev/docs/channels/introduction)
+to request human approval and input across Slack, email, and more.
 
-**Note**: directly approving tool calls with `kubectl` or a `kubechain` CLI is planned but not yet supported.
+**Note**: Directly approving tool calls with `kubectl` or a `kubechain` CLI is planned but not yet supported.
+
+**Note**: We recommend running through the above examples first prior exploring this section. Several Kubernetes resources created in that section will be assumed to exist.
 
 You'll need a HumanLayer API key to get started:
 
-```
+```bash
 kubectl create secret generic humanlayer --from-literal=HUMANLAYER_API_KEY=$HUMANLAYER_API_KEY
 ```
 
-then you can create a ContactChannel resource. In this case, we'll use email:
+Next, create a ContactChannel resource. In this example, we'll use an email contact channel (be sure to swap the `approver@example.com` address for an alternate):
 
-```
+```bash
 cat <<EOF | kubectl apply -f -
 apiVersion: kubechain.humanlayer.dev/v1alpha1
 kind: ContactChannel
 metadata:
   name: email-approval
 spec:
-  type: email
+  channelType: email
   apiKeyFrom:
     secretKeyRef:
       name: humanlayer
@@ -1080,13 +1082,15 @@ spec:
   # these match the HumanLayer ContactChannel model
   email:
     address: "approver@example.com"
+    subject: "Approval Request from Kubechain"
     contextAboutUser: "Primary approver for web fetch operations"
+EOF
 ```
 
-Now, let's patch our MCP server to reference this contact channel. 
+Now, let's update our MCP server from the earlier example so that it references our contact channel.
 
-```
-cat <<EOF | kubectl patch -f -
+```bash
+cat <<EOF | kubectl apply -f -
 apiVersion: kubechain.humanlayer.dev/v1alpha1
 kind: MCPServer
 metadata:
@@ -1102,14 +1106,14 @@ spec:
 EOF
 ```
 
-Now, we can create a new task that uses the fetch tool to test the human approval workflow.
+We can create a new task that uses the `fetch` tool to test the human approval workflow.
 
 ```bash
 cat <<EOF | kubectl apply -f -
 apiVersion: kubechain.humanlayer.dev/v1alpha1
 kind: Task
 metadata:
-  name: fetch-task-2
+  name: approved-fetch-task
 spec:
   agentRef:
     name: my-assistant
@@ -1189,7 +1193,7 @@ Remove our agent, task and related resources:
 kubectl delete taskruntoolcall --all
 kubectl delete taskrun --all
 kubectl delete task --all
-kubectl delete agent --all 
+kubectl delete agent --all
 kubectl delete mcpserver --all
 kubectl delete llm --all
 ```
@@ -1211,12 +1215,12 @@ kubectl delete -f https://raw.githubusercontent.com/humanlayer/smallchain/refs/h
 If you made a kind cluster, you can delete it with:
 
 ```
-kind delete cluster 
+kind delete cluster
 ```
 
 ## Key Features
 
-- **Kubernetes-Native Architecture**: KubeChain is built as a Kubernetes operator, using Custom Resource Definitions (CRDs) to define and manage LLMs, Agents, Tools, Tasks, and TaskRuns. 
+- **Kubernetes-Native Architecture**: KubeChain is built as a Kubernetes operator, using Custom Resource Definitions (CRDs) to define and manage LLMs, Agents, Tools, Tasks, and TaskRuns.
 
 - **Durable Agent Execution**: KubeChain implements something like async/await at the infrastructure layer, checkpointing a conversation chain whenever a tool call or agent delegation occurs, with the ability to resume from that checkpoint when the operation completes.
 

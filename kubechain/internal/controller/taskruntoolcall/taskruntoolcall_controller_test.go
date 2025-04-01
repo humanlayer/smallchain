@@ -223,7 +223,7 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 	})
 
 	// Tests for approval workflow
-	Context("Pending -> AwaitingHumanApproval (MCP Tool)", func() {
+	Context("Pending -> AwaitingHumanApproval (MCP Tool, Slack Contact Channel)", func() {
 		It("transitions to AwaitingHumanApproval when MCPServer has approval channel", func() {
 			// Note setupTestApprovalResources sets up the MCP server, MCP tool, and TaskRunToolCall
 			trtc, teardown := setupTestApprovalResources(ctx, nil)
