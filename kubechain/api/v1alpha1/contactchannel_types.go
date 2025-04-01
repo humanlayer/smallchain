@@ -53,10 +53,10 @@ type ContactChannelSpec struct {
 	// Type is the type of channel (e.g. "slack", "email")
 	// Todo - consider removing this, HumanLayer ContactChannel models don't include it
 
-	// ChannelType is the type of channel (e.g. "slack", "email")
+	// Type is the type of channel (e.g. "slack", "email")
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Enum=slack;email
-	ChannelType string `json:"channelType"`
+	Type string `json:"type"`
 
 	// APIKeyFrom references the secret containing the API key or token
 	// +kubebuilder:validation:Required
@@ -89,7 +89,7 @@ type ContactChannelStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:name="ChannelType",type="string",JSONPath=".spec.channelType"
+// +kubebuilder:printcolumn:name="Type",type="string",JSONPath=".spec.type"
 // +kubebuilder:printcolumn:name="Ready",type="boolean",JSONPath=".status.ready"
 // +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.status"
 // +kubebuilder:printcolumn:name="Detail",type="string",JSONPath=".status.statusDetail",priority=1

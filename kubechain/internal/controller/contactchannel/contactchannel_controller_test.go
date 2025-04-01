@@ -101,7 +101,7 @@ var _ = Describe("ContactChannel Controller", func() {
 					Namespace: "default",
 				},
 				Spec: kubechainv1alpha1.ContactChannelSpec{
-					ChannelType: "slack",
+					Type: "slack",
 					APIKeyFrom: kubechainv1alpha1.APIKeySource{
 						SecretKeyRef: kubechainv1alpha1.SecretKeyRef{
 							Name: secretName,
@@ -158,7 +158,7 @@ var _ = Describe("ContactChannel Controller", func() {
 					Namespace: "default",
 				},
 				Spec: kubechainv1alpha1.ContactChannelSpec{
-					ChannelType: "email",
+					Type: "email",
 					APIKeyFrom: kubechainv1alpha1.APIKeySource{
 						SecretKeyRef: kubechainv1alpha1.SecretKeyRef{
 							Name: secretName,
@@ -216,7 +216,7 @@ var _ = Describe("ContactChannel Controller", func() {
 					Namespace: "default",
 				},
 				Spec: kubechainv1alpha1.ContactChannelSpec{
-					ChannelType: "slack",
+					Type: "slack",
 					APIKeyFrom: kubechainv1alpha1.APIKeySource{
 						SecretKeyRef: kubechainv1alpha1.SecretKeyRef{
 							Name: secretName,
@@ -270,7 +270,7 @@ var _ = Describe("ContactChannel Controller", func() {
 					Namespace: "default",
 				},
 				Spec: kubechainv1alpha1.ContactChannelSpec{
-					ChannelType: "slack",
+					Type: "slack",
 					APIKeyFrom: kubechainv1alpha1.APIKeySource{
 						SecretKeyRef: kubechainv1alpha1.SecretKeyRef{
 							Name: secretName,
@@ -314,7 +314,7 @@ var _ = Describe("ContactChannel Controller", func() {
 					Namespace: "default",
 				},
 				Spec: kubechainv1alpha1.ContactChannelSpec{
-					ChannelType: "slack",
+					Type: "slack",
 					APIKeyFrom: kubechainv1alpha1.APIKeySource{
 						SecretKeyRef: kubechainv1alpha1.SecretKeyRef{
 							Name: "nonexistent-secret",
@@ -370,7 +370,7 @@ var _ = Describe("ContactChannel Controller", func() {
 					Namespace: "default",
 				},
 				Spec: kubechainv1alpha1.ContactChannelSpec{
-					ChannelType: "email",
+					Type: "email",
 					APIKeyFrom: kubechainv1alpha1.APIKeySource{
 						SecretKeyRef: kubechainv1alpha1.SecretKeyRef{
 							Name: secretName,

@@ -118,7 +118,7 @@ func (r *ContactChannelReconciler) validateEmailAddress(email string) error {
 
 // validateChannelConfig validates the channel configuration based on channel type
 func (r *ContactChannelReconciler) validateChannelConfig(channel *kubechainv1alpha1.ContactChannel) error {
-	switch channel.Spec.ChannelType {
+	switch channel.Spec.Type {
 	case channelTypeSlack:
 		if channel.Spec.Slack == nil {
 			return fmt.Errorf("slackConfig is required for slack channel type")
@@ -133,7 +133,7 @@ func (r *ContactChannelReconciler) validateChannelConfig(channel *kubechainv1alp
 		return r.validateEmailAddress(channel.Spec.Email.Address)
 
 	default:
-		return fmt.Errorf("unsupported channel type: %s", channel.Spec.ChannelType)
+		return fmt.Errorf("unsupported channel type: %s", channel.Spec.Type)
 	}
 }
 
@@ -169,7 +169,7 @@ func (r *ContactChannelReconciler) validateSecret(ctx context.Context, channel *
 	channel.Status.HumanLayerProject = projectID
 
 	// Also validate channel-specific credential if needed
-	switch channel.Spec.ChannelType {
+	switch channel.Spec.Type {
 	case channelTypeSlack:
 		// For Slack channels, we may need to validate Slack token separately
 		// if the implementation requires a separate Slack token
@@ -181,7 +181,7 @@ func (r *ContactChannelReconciler) validateSecret(ctx context.Context, channel *
 		return nil
 
 	default:
-		return fmt.Errorf("unsupported channel type: %s", channel.Spec.ChannelType)
+		return fmt.Errorf("unsupported channel type: %s", channel.Spec.Type)
 	}
 }
 
@@ -195,7 +195,7 @@ func (r *ContactChannelReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	log.Info("Starting reconciliation", "namespacedName", req.NamespacedName, "channelType", channel.Spec.ChannelType)
+	log.Info("Starting reconciliation", "namespacedName", req.NamespacedName, "type", channel.Spec.Type)
 
 	// Create a copy for status update
 	statusUpdate := channel.DeepCopy()
@@ -242,7 +242,7 @@ func (r *ContactChannelReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	} else {
 		statusUpdate.Status.Ready = true
 		statusUpdate.Status.Status = statusReady
-		statusUpdate.Status.StatusDetail = fmt.Sprintf("HumanLayer %s channel validated successfully", channel.Spec.ChannelType)
+		statusUpdate.Status.StatusDetail = fmt.Sprintf("HumanLayer %s channel validated successfully", channel.Spec.Type)
 		r.recorder.Event(&channel, corev1.EventTypeNormal, eventReasonValidationSucceeded, statusUpdate.Status.StatusDetail)
 	}
 
@@ -253,7 +253,7 @@ func (r *ContactChannelReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	log.Info("Successfully reconciled ContactChannel",
-		"channelType", channel.Spec.ChannelType,
+		"type", channel.Spec.Type,
 		"ready", statusUpdate.Status.Ready,
 		"status", statusUpdate.Status.Status,
 		"statusDetail", statusUpdate.Status.StatusDetail)

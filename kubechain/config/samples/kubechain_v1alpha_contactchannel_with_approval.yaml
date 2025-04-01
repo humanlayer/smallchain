@@ -4,7 +4,7 @@ kind: ContactChannel
 metadata:
   name: make-fetch-happen-channel
 spec:
-  channelType: email
+  type: email
   apiKeyFrom:
     secretKeyRef:
       name: humanlayer-api-key

@@ -77,7 +77,7 @@ func (t *TestContactChannel) Setup(ctx context.Context) *kubechainv1alpha1.Conta
 			Namespace: "default",
 		},
 		Spec: kubechainv1alpha1.ContactChannelSpec{
-			ChannelType: t.channelType,
+			Type: t.channelType,
 			APIKeyFrom: kubechainv1alpha1.APIKeySource{
 				SecretKeyRef: kubechainv1alpha1.SecretKeyRef{
 					Name: t.secretName,

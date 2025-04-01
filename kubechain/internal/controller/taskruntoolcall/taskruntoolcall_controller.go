@@ -723,13 +723,13 @@ func (r *TaskRunToolCallReconciler) updateTRTCStatus(ctx context.Context, trtc *
 func (r *TaskRunToolCallReconciler) postToHumanLayer(ctx context.Context, trtc *kubechainv1alpha1.TaskRunToolCall, contactChannel *kubechainv1alpha1.ContactChannel, apiKey string) (*humanlayerapi.FunctionCallOutput, int, error) {
 	client := r.HLClientFactory.NewHumanLayerClient()
 
-	switch contactChannel.Spec.ChannelType {
+	switch contactChannel.Spec.Type {
 	case "slack":
 		client.SetSlackConfig(contactChannel.Spec.Slack)
 	case "email":
 		client.SetEmailConfig(contactChannel.Spec.Email)
 	default:
-		return nil, 0, fmt.Errorf("unsupported channel type: %s", contactChannel.Spec.ChannelType)
+		return nil, 0, fmt.Errorf("unsupported channel type: %s", contactChannel.Spec.Type)
 	}
 
 	toolName := trtc.Spec.ToolRef.Name

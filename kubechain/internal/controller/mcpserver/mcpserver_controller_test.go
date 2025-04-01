@@ -278,7 +278,7 @@ var _ = Describe("MCPServer Controller", func() {
 					Namespace: MCPServerNamespace,
 				},
 				Spec: kubechainv1alpha1.ContactChannelSpec{
-					ChannelType: "slack",
+					Type: "slack",
 					APIKeyFrom: kubechainv1alpha1.APIKeySource{
 						SecretKeyRef: kubechainv1alpha1.SecretKeyRef{
 							Name: "test-secret",

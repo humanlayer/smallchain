@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
 
@@ -12,13 +13,20 @@ import (
 	"github.com/humanlayer/smallchain/kubechain/internal/humanlayerapi"
 )
 
-func requestApproval(client humanlayer.HumanLayerClientWrapper) *humanlayerapi.FunctionCallOutput {
-	client.SetSlackConfig(&kubechainv1alpha1.SlackChannelConfig{
-		ChannelOrUserID:           "C07HR5JL15F",
-		ContextAboutChannelOrUser: "Channel for approving web fetch operations",
-	})
+func requestApproval(client humanlayer.HumanLayerClientWrapper, channelType string) *humanlayerapi.FunctionCallOutput {
+	if channelType == "slack" {
+		client.SetSlackConfig(&kubechainv1alpha1.SlackChannelConfig{
+			ChannelOrUserID:           "C07HR5JL15F",
+			ContextAboutChannelOrUser: "Channel for approving web fetch operations",
+		})
+	} else if channelType == "email" {
+		client.SetEmailConfig(&kubechainv1alpha1.EmailChannelConfig{
+			Address:          os.Getenv("HL_EXAMPLE_CONTACT_EMAIL"),
+			ContextAboutUser: "Primary approver for web fetch operations",
+		})
+	}
 
-	client.SetFunctionCallSpec("test-city", map[string]interface{}{
+	client.SetFunctionCallSpec("test-city", map[string]any{
 		"a": 1,
 		"b": 2,
 	})
@@ -46,6 +54,11 @@ func getFunctionCallStatus(client humanlayer.HumanLayerClientWrapper) *humanlaye
 }
 
 func main() {
+	// Define command line flags
+	callIDFlag := flag.String("call-id", "", "Existing call ID to check status for")
+	typeFlag := flag.String("channel", "slack", "Channel type (slack or email)")
+	flag.Parse()
+
 	factory, _ := humanlayer.NewHumanLayerClientFactory("")
 
 	client := factory.NewHumanLayerClient()
@@ -53,11 +66,11 @@ func main() {
 
 	var callID string
 
-	if len(os.Args) > 1 {
+	if *callIDFlag != "" {
 		fmt.Println("Call ID provided as argument - skipping approval request")
-		callID = os.Args[1]
+		callID = *callIDFlag
 	} else {
-		fc := requestApproval(client)
+		fc := requestApproval(client, *typeFlag)
 		callID = fc.GetCallId()
 	}
 

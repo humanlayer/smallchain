@@ -15,8 +15,8 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .spec.channelType
-      name: ChannelType
+    - jsonPath: .spec.type
+      name: Type
       type: string
     - jsonPath: .status.ready
       name: Ready
@@ -73,12 +73,6 @@ spec:
                 required:
                 - secretKeyRef
                 type: object
-              channelType:
-                description: ChannelType is the type of channel (e.g. "slack", "email")
-                enum:
-                - slack
-                - email
-                type: string
               email:
                 description: Email holds configuration specific to Email channels
                 properties:
@@ -117,9 +111,15 @@ spec:
                 required:
                 - channelOrUserID
                 type: object
+              type:
+                description: Type is the type of channel (e.g. "slack", "email")
+                enum:
+                - slack
+                - email
+                type: string
             required:
             - apiKeyFrom
-            - channelType
+            - type
             type: object
           status:
             description: ContactChannelStatus defines the observed state of ContactChannel.
