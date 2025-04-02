@@ -222,7 +222,7 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 		})
 	})
 
-	// Tests for approval workflow
+	// Tests for MCP tools with approval requirement
 	Context("Pending -> AwaitingHumanApproval (MCP Tool, Slack Contact Channel)", func() {
 		It("transitions to AwaitingHumanApproval when MCPServer has approval channel", func() {
 			// Note setupTestApprovalResources sets up the MCP server, MCP tool, and TaskRunToolCall
@@ -406,11 +406,14 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 				NeedsApproval: true,
 			}
 
+			rejectionComment := "You know what, I strongly disagree with this tool call and feel it should not be be given permission to execute. I, by the powers granted to me by The System, hereby reject it. If you too feel strongly, you can try again. I will reject it a second time, but with greater vigor."
+
 			reconciler.HLClientFactory = &humanlayer.MockHumanLayerClientFactory{
 				ShouldFail:            false,
 				StatusCode:            200,
 				ReturnError:           nil,
 				ShouldReturnRejection: true,
+				StatusComment:         rejectionComment,
 			}
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{
@@ -434,6 +437,7 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 			Expect(updatedTRTC.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunToolCallPhaseFailed))
 			Expect(updatedTRTC.Status.Status).To(Equal(kubechainv1alpha1.TaskRunToolCallStatusTypeToolCallRejected))
 			Expect(updatedTRTC.Status.StatusDetail).To(ContainSubstring("Tool execution rejected"))
+			Expect(updatedTRTC.Status.Result).To(Equal(rejectionComment))
 		})
 	})
 

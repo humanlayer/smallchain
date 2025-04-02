@@ -20,6 +20,7 @@ type MockHumanLayerClientFactory struct {
 	LastRunID             string
 	LastFunction          string
 	LastArguments         map[string]interface{}
+	StatusComment         string
 }
 
 // MockHumanLayerClientWrapper implements HumanLayerClientWrapper for testing
@@ -104,6 +105,7 @@ func (m *MockHumanLayerClientWrapper) GetFunctionCallStatus(ctx context.Context)
 			RequestedAt: *humanlayerapi.NewNullableTime(&now),
 			RespondedAt: *humanlayerapi.NewNullableTime(&now),
 			Approved:    *humanlayerapi.NewNullableBool(&approved),
+			Comment:     *humanlayerapi.NewNullableString(&m.parent.StatusComment),
 		})
 		return &humanlayerapi.FunctionCallOutput{
 			Status: *status,
