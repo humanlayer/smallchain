@@ -119,6 +119,7 @@ spec:
                 - AwaitingHumanApproval
                 - ReadyToExecuteApprovedTool
                 - ErrorRequestingHumanApproval
+                - ToolCallRejected
                 type: string
               ready:
                 description: Ready indicates if the tool call is ready to be executed
@@ -146,7 +147,6 @@ spec:
                 - Ready
                 - Error
                 - Pending
-                - ToolCallRejected
                 - Succeeded
                 type: string
               statusDetail:

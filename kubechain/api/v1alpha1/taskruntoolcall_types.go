@@ -7,11 +7,10 @@ import (
 type TaskRunToolCallStatusType string
 
 const (
-	TaskRunToolCallStatusTypeReady            TaskRunToolCallStatusType = "Ready"
-	TaskRunToolCallStatusTypeError            TaskRunToolCallStatusType = "Error"
-	TaskRunToolCallStatusTypePending          TaskRunToolCallStatusType = "Pending"
-	TaskRunToolCallStatusTypeToolCallRejected TaskRunToolCallStatusType = "ToolCallRejected"
-	TaskRunToolCallStatusTypeSucceeded        TaskRunToolCallStatusType = "Succeeded"
+	TaskRunToolCallStatusTypeReady     TaskRunToolCallStatusType = "Ready"
+	TaskRunToolCallStatusTypeError     TaskRunToolCallStatusType = "Error"
+	TaskRunToolCallStatusTypePending   TaskRunToolCallStatusType = "Pending"
+	TaskRunToolCallStatusTypeSucceeded TaskRunToolCallStatusType = "Succeeded"
 )
 
 // TaskRunToolCallSpec defines the desired state of TaskRunToolCall
@@ -43,7 +42,7 @@ type TaskRunToolCallStatus struct {
 	Ready bool `json:"ready,omitempty"`
 
 	// Status indicates the current status of the tool call
-	// +kubebuilder:validation:Enum=Ready;Error;Pending;ToolCallRejected;Succeeded
+	// +kubebuilder:validation:Enum=Ready;Error;Pending;Succeeded
 	Status TaskRunToolCallStatusType `json:"status,omitempty"`
 
 	// StatusDetail provides additional details about the current status
@@ -75,7 +74,7 @@ type TaskRunToolCallStatus struct {
 }
 
 // TaskRunToolCallPhase represents the phase of a TaskRunToolCall
-// +kubebuilder:validation:Enum=Pending;Running;Succeeded;Failed;AwaitingHumanInput;AwaitingSubAgent;AwaitingHumanApproval;ReadyToExecuteApprovedTool;ErrorRequestingHumanApproval
+// +kubebuilder:validation:Enum=Pending;Running;Succeeded;Failed;AwaitingHumanInput;AwaitingSubAgent;AwaitingHumanApproval;ReadyToExecuteApprovedTool;ErrorRequestingHumanApproval;ToolCallRejected
 type TaskRunToolCallPhase string
 
 const (
@@ -97,6 +96,8 @@ const (
 	TaskRunToolCallPhaseReadyToExecuteApprovedTool TaskRunToolCallPhase = "ReadyToExecuteApprovedTool"
 	// TaskRunToolCallPhaseErrorRequestingHumanApproval indicates there was an error requesting human approval
 	TaskRunToolCallPhaseErrorRequestingHumanApproval TaskRunToolCallPhase = "ErrorRequestingHumanApproval"
+	// TaskRunToolCallPhaseToolCallRejected indicates the tool call was rejected by human approval
+	TaskRunToolCallPhaseToolCallRejected TaskRunToolCallPhase = "ToolCallRejected"
 )
 
 // +kubebuilder:object:root=true

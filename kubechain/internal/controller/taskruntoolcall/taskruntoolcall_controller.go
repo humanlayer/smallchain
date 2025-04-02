@@ -101,8 +101,8 @@ func (r *TaskRunToolCallReconciler) updateTaskRunToolCall(ctx context.Context, w
 			trtc.Status.StatusDetail = DetailToolExecutedSuccess
 		} else {
 			trtc.Status.Result = "Rejected"
-			trtc.Status.Phase = kubechainv1alpha1.TaskRunToolCallPhaseFailed
-			trtc.Status.Status = kubechainv1alpha1.TaskRunToolCallStatusTypeError
+			trtc.Status.Phase = kubechainv1alpha1.TaskRunToolCallPhaseToolCallRejected
+			trtc.Status.Status = kubechainv1alpha1.TaskRunToolCallStatusTypeSucceeded
 			trtc.Status.StatusDetail = "Tool execution rejected"
 		}
 
@@ -724,7 +724,8 @@ func (r *TaskRunToolCallReconciler) updateTRTCStatus(ctx context.Context, trtc *
 	trtcDeepCopy.Status.StatusDetail = statusDetail
 	trtcDeepCopy.Status.Phase = trtcStatusPhase
 
-	if trtcStatusType == kubechainv1alpha1.TaskRunToolCallStatusTypeToolCallRejected {
+	// Store the result for tool call rejection
+	if trtcStatusPhase == kubechainv1alpha1.TaskRunToolCallPhaseToolCallRejected {
 		trtcDeepCopy.Status.Result = result
 	}
 
@@ -808,8 +809,8 @@ func (r *TaskRunToolCallReconciler) handlePendingApproval(ctx context.Context, t
 			"Ready to execute approved tool", "")
 	} else {
 		return r.updateTRTCStatus(ctx, trtc,
-			kubechainv1alpha1.TaskRunToolCallStatusTypeToolCallRejected,
-			kubechainv1alpha1.TaskRunToolCallPhaseFailed,
+			kubechainv1alpha1.TaskRunToolCallStatusTypeSucceeded,
+			kubechainv1alpha1.TaskRunToolCallPhaseToolCallRejected,
 			"Tool execution rejected", status.GetComment())
 	}
 }

@@ -427,8 +427,8 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 		})
 	})
 
-	Context("Ready:AwaitingHumanApproval -> ToolCallRejected", func() {
-		It("transitions from Ready:AwaitingHumanApproval to ToolCallRejected when MCP tool is rejected", func() {
+	Context("Ready:AwaitingHumanApproval -> Succeeded:ToolCallRejected", func() {
+		It("transitions from Ready:AwaitingHumanApproval to Succeeded:ToolCallRejected when MCP tool is rejected", func() {
 			trtc, teardown := setupTestApprovalResources(ctx, &SetupTestApprovalConfig{
 				TaskRunToolCallStatus: &kubechainv1alpha1.TaskRunToolCallStatus{
 					ExternalCallID: "call-tool-call-rejected-test",
@@ -468,7 +468,7 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Requeue).To(BeFalse())
 
-			By("checking the taskruntoolcall status is set to ToolCallRejected")
+			By("checking the taskruntoolcall has ToolCallRejected phase and Succeeded status")
 			updatedTRTC := &kubechainv1alpha1.TaskRunToolCall{}
 			err = k8sClient.Get(ctx, types.NamespacedName{
 				Name:      trtc.Name,
@@ -476,8 +476,8 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 			}, updatedTRTC)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(updatedTRTC.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunToolCallPhaseFailed))
-			Expect(updatedTRTC.Status.Status).To(Equal(kubechainv1alpha1.TaskRunToolCallStatusTypeToolCallRejected))
+			Expect(updatedTRTC.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunToolCallPhaseToolCallRejected))
+			Expect(updatedTRTC.Status.Status).To(Equal(kubechainv1alpha1.TaskRunToolCallStatusTypeSucceeded))
 			Expect(updatedTRTC.Status.StatusDetail).To(ContainSubstring("Tool execution rejected"))
 			Expect(updatedTRTC.Status.Result).To(Equal(rejectionComment))
 		})
