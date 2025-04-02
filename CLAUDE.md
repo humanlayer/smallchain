@@ -400,3 +400,40 @@ Examples of state transition Context blocks:
 - Consider using controller runtime fake clients for complex scenarios
 - Use the `gomock` package (github.com/golang/mock/gomock) for generating mocks of interfaces
 - For HTTP services, use httptest package from the standard library
+
+### Status vs Phase in Controllers
+
+When designing controllers, distinguish between Status and Phase:
+
+- **Status** indicates the health or readiness of a resource. It answers: "Is the resource working correctly?"
+  - Use StatusType values like "Ready", "Error", "Pending", "AwaitingHumanApproval"
+  - Status reflects the current operational state of the resource
+  - Status changes are typically cross-cutting (error handling, initialization)
+  - Example values: "Ready", "Error", "Pending", "AwaitingHumanApproval", "ErrorRequestingHumanApproval"
+
+- **Phase** indicates the progress of a resource in its lifecycle. It answers: "What stage of processing is the resource in?"
+  - Use PhaseType values like "Pending", "Running", "Succeeded", "Failed", "AwaitingHumanInput"
+  - Phase reflects the workflow stage of the resource
+  - Phase changes represent forward progression through a workflow
+  - Example values: "Pending", "Running", "Succeeded", "Failed", "AwaitingHumanInput", "AwaitingSubAgent"
+
+#### Guidelines for choosing between Status and Phase
+
+1. Use **Status** for a state when:
+   - It indicates whether the resource is operational or not
+   - It represents a cross-cutting concern affecting all states (like errors)
+   - It focuses on readiness rather than progress
+
+2. Use **Phase** for a state when:
+   - It's part of a sequential progression
+   - It represents a distinct stage in a workflow
+   - It indicates what the resource is currently doing
+
+3. When naming test cases, use the "Status:Phase -> Status:Phase" format to clearly communicate transitions:
+   ```go
+   Context("Pending:Pending -> Ready:Pending", func() {
+       It("moves from Pending:Pending to Ready:Pending during setup", func() {
+           // Test implementation
+       })
+   })
+   ```

@@ -11,8 +11,6 @@ const (
 	TaskRunToolCallStatusTypeError                        TaskRunToolCallStatusType = "Error"
 	TaskRunToolCallStatusTypePending                      TaskRunToolCallStatusType = "Pending"
 	TaskRunToolCallStatusTypeAwaitingHumanApproval        TaskRunToolCallStatusType = "AwaitingHumanApproval"
-	TaskRunToolCallStatusTypeAwaitingHumanInput           TaskRunToolCallStatusType = "AwaitingHumanInput"
-	TaskRunToolCallStatusTypeAwaitingSubAgent             TaskRunToolCallStatusType = "AwaitingSubAgent"
 	TaskRunToolCallStatusTypeErrorRequestingHumanApproval TaskRunToolCallStatusType = "ErrorRequestingHumanApproval"
 	TaskRunToolCallStatusTypeReadyToExecuteApprovedTool   TaskRunToolCallStatusType = "ReadyToExecuteApprovedTool"
 	TaskRunToolCallStatusTypeToolCallRejected             TaskRunToolCallStatusType = "ToolCallRejected"
@@ -47,7 +45,7 @@ type TaskRunToolCallStatus struct {
 	Ready bool `json:"ready,omitempty"`
 
 	// Status indicates the current status of the tool call
-	// +kubebuilder:validation:Enum=Ready;Error;Pending;AwaitingHumanApproval;AwaitingHumanInput;AwaitingSubAgent;ErrorRequestingHumanApproval;ReadyToExecuteApprovedTool;ToolCallRejected
+	// +kubebuilder:validation:Enum=Ready;Error;Pending;AwaitingHumanApproval;ErrorRequestingHumanApproval;ReadyToExecuteApprovedTool;ToolCallRejected
 	Status TaskRunToolCallStatusType `json:"status,omitempty"`
 
 	// StatusDetail provides additional details about the current status
@@ -79,7 +77,7 @@ type TaskRunToolCallStatus struct {
 }
 
 // TaskRunToolCallPhase represents the phase of a TaskRunToolCall
-// +kubebuilder:validation:Enum=Pending;Running;Succeeded;Failed
+// +kubebuilder:validation:Enum=Pending;Running;Succeeded;Failed;AwaitingHumanInput;AwaitingSubAgent
 type TaskRunToolCallPhase string
 
 const (
@@ -91,6 +89,10 @@ const (
 	TaskRunToolCallPhaseSucceeded TaskRunToolCallPhase = "Succeeded"
 	// TaskRunToolCallPhaseFailed indicates the tool call failed
 	TaskRunToolCallPhaseFailed TaskRunToolCallPhase = "Failed"
+	// TaskRunToolCallPhaseAwaitingHumanInput indicates the tool call is waiting for human input
+	TaskRunToolCallPhaseAwaitingHumanInput TaskRunToolCallPhase = "AwaitingHumanInput"
+	// TaskRunToolCallPhaseAwaitingSubAgent indicates the tool call is waiting for a sub-agent to complete
+	TaskRunToolCallPhaseAwaitingSubAgent TaskRunToolCallPhase = "AwaitingSubAgent"
 )
 
 // +kubebuilder:object:root=true
