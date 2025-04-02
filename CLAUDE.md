@@ -460,3 +460,39 @@ When designing controllers, distinguish between Status and Phase:
    // When a resource becomes ready
    trtc.Status.Status = kubechainv1alpha1.TaskRunToolCallStatusTypeReady
    ```
+
+3. **Use Error Status with Descriptive Phase Values**: When handling errors, set Status to Error and use Phase to describe the specific error scenario:
+   ```go
+   // Helper function for setting error states
+   func (r *MyReconciler) setStatusError(ctx context.Context, phase MyResourcePhase, eventType string, resource *MyResource, err error) {
+       resource.Status.Status = MyResourceStatusTypeError // Always use Error status
+       resource.Status.Phase = phase                     // Use specific Phase to describe the error
+       resource.Status.Error = err.Error()
+       r.recorder.Event(resource, corev1.EventTypeWarning, eventType, err.Error())
+   }
+   ```
+
+4. **Early Return for Terminal States**: For resources that have workflow-based lifecycles with terminal states, add an early check in the Reconcile function to avoid unnecessary processing:
+   ```go
+   // For workflow-based resources like TaskRunToolCall that reach terminal states
+   if resource.Status.Status == MyResourceStatusTypeError || 
+      resource.Status.Phase == MyResourcePhaseSucceeded || 
+      resource.Status.Phase == MyResourcePhaseFailed {
+       logger.Info("Resource in terminal state, nothing to do", 
+           "status", resource.Status.Status, 
+           "phase", resource.Status.Phase)
+       return ctrl.Result{}, nil
+   }
+   
+   // Note: This pattern may not apply to long-running resources like Servers or Agents
+   // that need to maintain their state continuously
+   ```
+
+5. **Test Error Transitions with Status:Phase Format**: When testing error transitions, follow the Status:Phase naming convention:
+   ```go
+   Context("Ready:Pending -> Error:ErrorRequestingApproval", func() {
+       It("transitions to Error:ErrorRequestingApproval when API call fails", func() {
+           // Test implementation
+       })
+   })
+   ```
