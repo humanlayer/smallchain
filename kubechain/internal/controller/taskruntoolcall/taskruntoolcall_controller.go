@@ -703,7 +703,7 @@ func (r *TaskRunToolCallReconciler) setStatusError(ctx context.Context, trtcStat
 	return ctrl.Result{}, nil, true
 }
 
-func (r *TaskRunToolCallReconciler) updateTRTCStatus(ctx context.Context, trtc *kubechainv1alpha1.TaskRunToolCall, trtcStatusType kubechainv1alpha1.TaskRunToolCallStatusType, trtcStatusPhase kubechainv1alpha1.TaskRunToolCallPhase, statusDetail string) (ctrl.Result, error, bool) {
+func (r *TaskRunToolCallReconciler) updateTRTCStatus(ctx context.Context, trtc *kubechainv1alpha1.TaskRunToolCall, trtcStatusType kubechainv1alpha1.TaskRunToolCallStatusType, trtcStatusPhase kubechainv1alpha1.TaskRunToolCallPhase, statusDetail string, result string) (ctrl.Result, error, bool) {
 	logger := log.FromContext(ctx)
 
 	trtcDeepCopy := trtc.DeepCopy()
@@ -711,6 +711,10 @@ func (r *TaskRunToolCallReconciler) updateTRTCStatus(ctx context.Context, trtc *
 	trtcDeepCopy.Status.Status = trtcStatusType
 	trtcDeepCopy.Status.StatusDetail = statusDetail
 	trtcDeepCopy.Status.Phase = trtcStatusPhase
+
+	if trtcStatusType == kubechainv1alpha1.TaskRunToolCallStatusTypeToolCallRejected {
+		trtcDeepCopy.Status.Result = result
+	}
 
 	if err := r.Status().Update(ctx, trtcDeepCopy); err != nil {
 		logger.Error(err, "Failed to update status")
@@ -789,12 +793,12 @@ func (r *TaskRunToolCallReconciler) handlePendingApproval(ctx context.Context, t
 		return r.updateTRTCStatus(ctx, trtc,
 			kubechainv1alpha1.TaskRunToolCallStatusTypeReadyToExecuteApprovedTool,
 			kubechainv1alpha1.TaskRunToolCallPhasePending,
-			"Ready to execute approved tool")
+			"Ready to execute approved tool", "")
 	} else {
 		return r.updateTRTCStatus(ctx, trtc,
 			kubechainv1alpha1.TaskRunToolCallStatusTypeToolCallRejected,
 			kubechainv1alpha1.TaskRunToolCallPhaseFailed,
-			"Tool execution rejected")
+			"Tool execution rejected", status.GetComment())
 	}
 }
 
