@@ -770,14 +770,14 @@ func (r *TaskRunToolCallReconciler) postToHumanLayer(ctx context.Context, trtc *
 func (r *TaskRunToolCallReconciler) handlePendingApproval(ctx context.Context, trtc *kubechainv1alpha1.TaskRunToolCall, apiKey string) (ctrl.Result, error, bool) {
 	logger := log.FromContext(ctx)
 
-	// Only process if in the pending approval state
-	if trtc.Status.Status != kubechainv1alpha1.TaskRunToolCallStatusTypeAwaitingHumanApproval {
+	// Only process if in the awaiting human approval phase
+	if trtc.Status.Phase != kubechainv1alpha1.TaskRunToolCallPhaseAwaitingHumanApproval {
 		return ctrl.Result{}, nil, false
 	}
 
 	// Verify we have a call ID
 	if trtc.Status.ExternalCallID == "" {
-		logger.Info("Missing ExternalCallID in pending approval state")
+		logger.Info("Missing ExternalCallID in AwaitingHumanApproval phase")
 		return ctrl.Result{}, nil, false
 	}
 
@@ -821,8 +821,8 @@ func (r *TaskRunToolCallReconciler) requestHumanApproval(ctx context.Context, tr
 		return ctrl.Result{}, nil
 	}
 
-	// Update status to awaiting approval
-	trtc.Status.Status = "AwaitingHumanApproval"
+	// Update to awaiting approval phase while maintaining current status
+	trtc.Status.Phase = kubechainv1alpha1.TaskRunToolCallPhaseAwaitingHumanApproval
 	trtc.Status.StatusDetail = fmt.Sprintf("Waiting for human approval via contact channel %s", mcpServer.Spec.ApprovalContactChannel.Name)
 	r.recorder.Event(trtc, corev1.EventTypeNormal, "AwaitingHumanApproval",
 		fmt.Sprintf("Tool execution requires approval via contact channel %s", mcpServer.Spec.ApprovalContactChannel.Name))
@@ -902,7 +902,7 @@ func (r *TaskRunToolCallReconciler) handleMCPApprovalFlow(ctx context.Context, t
 	}
 
 	// Handle pending approval check first
-	if trtc.Status.Status == kubechainv1alpha1.TaskRunToolCallStatusTypeAwaitingHumanApproval {
+	if trtc.Status.Phase == kubechainv1alpha1.TaskRunToolCallPhaseAwaitingHumanApproval {
 		result, err, handled := r.handlePendingApproval(ctx, trtc, apiKey)
 		if handled {
 			return result, err, true

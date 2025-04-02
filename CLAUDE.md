@@ -437,3 +437,26 @@ When designing controllers, distinguish between Status and Phase:
        })
    })
    ```
+
+#### Implementation Guidelines
+
+1. **Preserve Status During Phase Transitions**: When implementing workflow progression that only changes the Phase:
+   ```go
+   // Good: Only update Phase when transitioning to a new workflow stage
+   // while preserving current Status (health)
+   trtc.Status.Phase = kubechainv1alpha1.TaskRunToolCallPhaseAwaitingHumanApproval
+   trtc.Status.StatusDetail = "Waiting for human approval"
+   
+   // Avoid: Don't modify Status when the change is just about workflow progress
+   // trtc.Status.Status = someNewStatus // Don't do this when only the Phase is changing
+   ```
+
+2. **Change Status Only When Health State Changes**: Status should change only when the health or readiness of the resource changes:
+   ```go
+   // When a resource encounters an error
+   trtc.Status.Status = kubechainv1alpha1.TaskRunToolCallStatusTypeError
+   trtc.Status.Error = err.Error()
+   
+   // When a resource becomes ready
+   trtc.Status.Status = kubechainv1alpha1.TaskRunToolCallStatusTypeReady
+   ```
