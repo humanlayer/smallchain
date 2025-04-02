@@ -375,8 +375,8 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 		})
 	})
 
-	Context("Ready:AwaitingHumanApproval -> Ready:Pending", func() {
-		It("transitions from Ready:AwaitingHumanApproval to ReadyToExecuteApprovedTool status when MCP tool is approved", func() {
+	Context("Ready:AwaitingHumanApproval -> Ready:ReadyToExecuteApprovedTool", func() {
+		It("transitions from Ready:AwaitingHumanApproval to Ready:ReadyToExecuteApprovedTool when MCP tool is approved", func() {
 			trtc, teardown := setupTestApprovalResources(ctx, &SetupTestApprovalConfig{
 				TaskRunToolCallStatus: &kubechainv1alpha1.TaskRunToolCallStatus{
 					ExternalCallID: "call-ready-to-execute-test",
@@ -421,8 +421,8 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 			}, updatedTRTC)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(updatedTRTC.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunToolCallPhasePending))
-			Expect(updatedTRTC.Status.Status).To(Equal(kubechainv1alpha1.TaskRunToolCallStatusTypeReadyToExecuteApprovedTool))
+			Expect(updatedTRTC.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunToolCallPhaseReadyToExecuteApprovedTool))
+			Expect(updatedTRTC.Status.Status).To(Equal(kubechainv1alpha1.TaskRunToolCallStatusTypeReady))
 			Expect(updatedTRTC.Status.StatusDetail).To(ContainSubstring("Ready to execute approved tool"))
 		})
 	})
@@ -483,13 +483,13 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 		})
 	})
 
-	Context("ReadyToExecuteApprovedTool -> Succeeded", func() {
-		It("transitions from ReadyToExecuteApprovedTool to Succeeded when a tool is executed", func() {
+	Context("Ready:ReadyToExecuteApprovedTool -> Ready:Succeeded", func() {
+		It("transitions from Ready:ReadyToExecuteApprovedTool to Ready:Succeeded when a tool is executed", func() {
 			trtc, teardown := setupTestApprovalResources(ctx, &SetupTestApprovalConfig{
 				TaskRunToolCallStatus: &kubechainv1alpha1.TaskRunToolCallStatus{
 					ExternalCallID: "call-ready-to-execute-test",
-					Phase:          kubechainv1alpha1.TaskRunToolCallPhasePending,
-					Status:         kubechainv1alpha1.TaskRunToolCallStatusTypeReadyToExecuteApprovedTool,
+					Phase:          kubechainv1alpha1.TaskRunToolCallPhaseReadyToExecuteApprovedTool,
+					Status:         kubechainv1alpha1.TaskRunToolCallStatusTypeReady,
 					StatusDetail:   "Ready to execute tool, with great vigor",
 					StartTime:      &metav1.Time{Time: time.Now().Add(-1 * time.Minute)},
 				},

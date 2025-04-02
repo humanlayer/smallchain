@@ -11,7 +11,6 @@ const (
 	TaskRunToolCallStatusTypeError                        TaskRunToolCallStatusType = "Error"
 	TaskRunToolCallStatusTypePending                      TaskRunToolCallStatusType = "Pending"
 	TaskRunToolCallStatusTypeErrorRequestingHumanApproval TaskRunToolCallStatusType = "ErrorRequestingHumanApproval"
-	TaskRunToolCallStatusTypeReadyToExecuteApprovedTool   TaskRunToolCallStatusType = "ReadyToExecuteApprovedTool"
 	TaskRunToolCallStatusTypeToolCallRejected             TaskRunToolCallStatusType = "ToolCallRejected"
 )
 
@@ -44,7 +43,7 @@ type TaskRunToolCallStatus struct {
 	Ready bool `json:"ready,omitempty"`
 
 	// Status indicates the current status of the tool call
-	// +kubebuilder:validation:Enum=Ready;Error;Pending;ErrorRequestingHumanApproval;ReadyToExecuteApprovedTool;ToolCallRejected
+	// +kubebuilder:validation:Enum=Ready;Error;Pending;ErrorRequestingHumanApproval;ToolCallRejected
 	Status TaskRunToolCallStatusType `json:"status,omitempty"`
 
 	// StatusDetail provides additional details about the current status
@@ -76,7 +75,7 @@ type TaskRunToolCallStatus struct {
 }
 
 // TaskRunToolCallPhase represents the phase of a TaskRunToolCall
-// +kubebuilder:validation:Enum=Pending;Running;Succeeded;Failed;AwaitingHumanInput;AwaitingSubAgent;AwaitingHumanApproval
+// +kubebuilder:validation:Enum=Pending;Running;Succeeded;Failed;AwaitingHumanInput;AwaitingSubAgent;AwaitingHumanApproval;ReadyToExecuteApprovedTool
 type TaskRunToolCallPhase string
 
 const (
@@ -94,6 +93,8 @@ const (
 	TaskRunToolCallPhaseAwaitingSubAgent TaskRunToolCallPhase = "AwaitingSubAgent"
 	// TaskRunToolCallPhaseAwaitingHumanApproval indicates the tool call is waiting for human approval
 	TaskRunToolCallPhaseAwaitingHumanApproval TaskRunToolCallPhase = "AwaitingHumanApproval"
+	// TaskRunToolCallPhaseReadyToExecuteApprovedTool indicates the tool call is ready to execute after receiving approval
+	TaskRunToolCallPhaseReadyToExecuteApprovedTool TaskRunToolCallPhase = "ReadyToExecuteApprovedTool"
 )
 
 // +kubebuilder:object:root=true

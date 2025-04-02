@@ -799,8 +799,8 @@ func (r *TaskRunToolCallReconciler) handlePendingApproval(ctx context.Context, t
 
 	if *approved {
 		return r.updateTRTCStatus(ctx, trtc,
-			kubechainv1alpha1.TaskRunToolCallStatusTypeReadyToExecuteApprovedTool,
-			kubechainv1alpha1.TaskRunToolCallPhasePending,
+			kubechainv1alpha1.TaskRunToolCallStatusTypeReady,
+			kubechainv1alpha1.TaskRunToolCallPhaseReadyToExecuteApprovedTool,
 			"Ready to execute approved tool", "")
 	} else {
 		return r.updateTRTCStatus(ctx, trtc,
@@ -817,7 +817,7 @@ func (r *TaskRunToolCallReconciler) requestHumanApproval(ctx context.Context, tr
 	logger := log.FromContext(ctx)
 
 	// Skip if already in progress or approved
-	if trtc.Status.Status == kubechainv1alpha1.TaskRunToolCallStatusTypeReadyToExecuteApprovedTool {
+	if trtc.Status.Phase == kubechainv1alpha1.TaskRunToolCallPhaseReadyToExecuteApprovedTool {
 		return ctrl.Result{}, nil
 	}
 
@@ -866,7 +866,7 @@ func (r *TaskRunToolCallReconciler) requestHumanApproval(ctx context.Context, tr
 // handleMCPApprovalFlow encapsulates the MCP approval flow logic
 func (r *TaskRunToolCallReconciler) handleMCPApprovalFlow(ctx context.Context, trtc *kubechainv1alpha1.TaskRunToolCall) (result ctrl.Result, err error, handled bool) {
 	// We've already been through the approval flow and are ready to execute the tool
-	if trtc.Status.Status == kubechainv1alpha1.TaskRunToolCallStatusTypeReadyToExecuteApprovedTool {
+	if trtc.Status.Phase == kubechainv1alpha1.TaskRunToolCallPhaseReadyToExecuteApprovedTool {
 		return ctrl.Result{}, nil, false
 	}
 
