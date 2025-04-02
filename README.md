@@ -875,64 +875,7 @@ flowchart TD
 
 * * *
 
-Putting another way, the TaskRun controller is responsible for sending the context window to the LLM, and
-for processing the LLM response with the appropriate tool calls from MCP servers.
-
-```mermaid
-flowchart RL
-    Agent
-    LLM
-    Secret
-
-    LLMRef --> LLM
-    Credentials --> Secret
-    AgentRef --> Agent
-    TaskRef --> Task
-
-
-    subgraph LLM
-      Provider
-      Credentials
-      ModelParameters
-    end
-
-    subgraph Agent
-      LLMRef
-      SystemPrompt
-      MCPServers
-    end
-
-    subgraph Task
-      AgentRef
-      Message
-    end
-
-    subgraph MCPServer
-      fetch[fetch server]
-    end
-
-    MCPServers --> MCPServer
-
-
-    subgraph TaskRun
-      TaskRef
-      subgraph ContextWindow
-        direction LR
-        SystemMessage
-        UserMessage
-        ToolCall-1
-        ToolResponse-1
-        ToolCall-2
-        ToolResponse-2
-        AssistantMessage
-      end
-    end
-
-    ContextWindow <--> MCPServer <--> fetch
-    ContextWindow <--> Provider <--> OpenAI
-
-
-```
+Your describe should return:
 
 ```
 Name:         fetch-task-1
