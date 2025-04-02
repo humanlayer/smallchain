@@ -207,12 +207,6 @@ func (r *TaskRunToolCallReconciler) completeSetup(ctx context.Context, trtc *kub
 func (r *TaskRunToolCallReconciler) checkCompletedOrExisting(ctx context.Context, trtc *kubechainv1alpha1.TaskRunToolCall) (completed bool, err error, handled bool) {
 	logger := log.FromContext(ctx)
 
-	// Check if already completed
-	if trtc.Status.Phase == kubechainv1alpha1.TaskRunToolCallPhaseSucceeded || trtc.Status.Phase == kubechainv1alpha1.TaskRunToolCallPhaseFailed {
-		logger.Info("TaskRunToolCall already completed, nothing to do", "phase", trtc.Status.Phase)
-		return true, nil, true
-	}
-
 	// Check if a child TaskRun already exists for this tool call
 	var taskRunList kubechainv1alpha1.TaskRunList
 	if err := r.List(ctx, &taskRunList, client.InNamespace(trtc.Namespace), client.MatchingLabels{"kubechain.humanlayer.dev/taskruntoolcall": trtc.Name}); err != nil {
