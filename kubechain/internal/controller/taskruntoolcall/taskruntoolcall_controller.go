@@ -97,7 +97,7 @@ func (r *TaskRunToolCallReconciler) updateTaskRunToolCall(ctx context.Context, w
 		if *webhook.Status.Approved {
 			trtc.Status.Result = "Approved"
 			trtc.Status.Phase = kubechainv1alpha1.TaskRunToolCallPhaseSucceeded
-			trtc.Status.Status = kubechainv1alpha1.TaskRunToolCallStatusTypeReady
+			trtc.Status.Status = kubechainv1alpha1.TaskRunToolCallStatusTypeSucceeded
 			trtc.Status.StatusDetail = DetailToolExecutedSuccess
 		} else {
 			trtc.Status.Result = "Rejected"
@@ -167,7 +167,7 @@ func (r *TaskRunToolCallReconciler) executeMCPTool(ctx context.Context, trtc *ku
 	// Update TaskRunToolCall status with the MCP tool result
 	trtc.Status.Result = result
 	trtc.Status.Phase = kubechainv1alpha1.TaskRunToolCallPhaseSucceeded
-	trtc.Status.Status = kubechainv1alpha1.TaskRunToolCallStatusTypeReady
+	trtc.Status.Status = kubechainv1alpha1.TaskRunToolCallStatusTypeSucceeded
 	trtc.Status.StatusDetail = "MCP tool executed successfully"
 
 	return nil
@@ -431,7 +431,7 @@ func (r *TaskRunToolCallReconciler) processBuiltinFunction(ctx context.Context, 
 	// Update TaskRunToolCall status with the function result
 	trtc.Status.Result = fmt.Sprintf("%v", res)
 	trtc.Status.Phase = kubechainv1alpha1.TaskRunToolCallPhaseSucceeded
-	trtc.Status.Status = kubechainv1alpha1.TaskRunToolCallStatusTypeReady
+	trtc.Status.Status = kubechainv1alpha1.TaskRunToolCallStatusTypeSucceeded
 	trtc.Status.StatusDetail = DetailToolExecutedSuccess
 	if err := r.Status().Update(ctx, trtc); err != nil {
 		logger.Error(err, "Failed to update TaskRunToolCall status after execution")
@@ -602,7 +602,7 @@ func (r *TaskRunToolCallReconciler) processExternalAPI(ctx context.Context, trtc
 
 	// Update TaskRunToolCall with the result
 	trtc.Status.Phase = kubechainv1alpha1.TaskRunToolCallPhaseSucceeded
-	trtc.Status.Status = kubechainv1alpha1.TaskRunToolCallStatusTypeReady
+	trtc.Status.Status = kubechainv1alpha1.TaskRunToolCallStatusTypeSucceeded
 	trtc.Status.StatusDetail = DetailToolExecutedSuccess
 	if err := r.Status().Update(ctx, trtc); err != nil {
 		logger.Error(err, "Failed to update TaskRunToolCall status")
@@ -958,9 +958,10 @@ func (r *TaskRunToolCallReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 	logger.Info("Reconciling TaskRunToolCall", "name", trtc.Name)
 
-	// 1. Check for terminal error states - early return
-	if trtc.Status.Status == kubechainv1alpha1.TaskRunToolCallStatusTypeError {
-		logger.Info("TaskRunToolCall in error state, nothing to do", "status", trtc.Status.Status, "phase", trtc.Status.Phase)
+	// 1. Check for terminal states - early return
+	if trtc.Status.Status == kubechainv1alpha1.TaskRunToolCallStatusTypeError ||
+		trtc.Status.Status == kubechainv1alpha1.TaskRunToolCallStatusTypeSucceeded {
+		logger.Info("TaskRunToolCall in terminal state, nothing to do", "status", trtc.Status.Status, "phase", trtc.Status.Phase)
 		return ctrl.Result{}, nil
 	}
 

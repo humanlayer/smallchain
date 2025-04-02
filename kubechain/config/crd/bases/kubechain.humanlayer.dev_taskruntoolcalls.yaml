@@ -147,6 +147,7 @@ spec:
                 - Error
                 - Pending
                 - ToolCallRejected
+                - Succeeded
                 type: string
               statusDetail:
                 description: StatusDetail provides additional details about the current

@@ -11,6 +11,7 @@ const (
 	TaskRunToolCallStatusTypeError            TaskRunToolCallStatusType = "Error"
 	TaskRunToolCallStatusTypePending          TaskRunToolCallStatusType = "Pending"
 	TaskRunToolCallStatusTypeToolCallRejected TaskRunToolCallStatusType = "ToolCallRejected"
+	TaskRunToolCallStatusTypeSucceeded        TaskRunToolCallStatusType = "Succeeded"
 )
 
 // TaskRunToolCallSpec defines the desired state of TaskRunToolCall
@@ -42,7 +43,7 @@ type TaskRunToolCallStatus struct {
 	Ready bool `json:"ready,omitempty"`
 
 	// Status indicates the current status of the tool call
-	// +kubebuilder:validation:Enum=Ready;Error;Pending;ToolCallRejected
+	// +kubebuilder:validation:Enum=Ready;Error;Pending;ToolCallRejected;Succeeded
 	Status TaskRunToolCallStatusType `json:"status,omitempty"`
 
 	// StatusDetail provides additional details about the current status

@@ -91,8 +91,8 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 		})
 	})
 
-	Context("Ready:Pending -> Ready:Succeeded", func() {
-		It("moves to Succeeded after executing a simple function tool call", func() {
+	Context("Ready:Pending -> Succeeded:Succeeded", func() {
+		It("moves to Succeeded:Succeeded after executing a simple function tool call", func() {
 			ctx := context.Background()
 
 			teardown := setupTestAddTool(ctx)
@@ -128,7 +128,7 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedTRTC.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunToolCallPhaseSucceeded))
 			Expect(updatedTRTC.Status.Result).To(Equal("5")) // 2 + 3 = 5
-			Expect(updatedTRTC.Status.Status).To(Equal(kubechainv1alpha1.TaskRunToolCallStatusTypeReady))
+			Expect(updatedTRTC.Status.Status).To(Equal(kubechainv1alpha1.TaskRunToolCallStatusTypeSucceeded))
 			Expect(updatedTRTC.Status.StatusDetail).To(Equal("Tool executed successfully"))
 
 			By("checking that execution events were emitted")
@@ -190,7 +190,7 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 	})
 
 	// Tests for MCP tools without approval requirement
-	Context("Pending:Pending -> Ready:Succeeded (MCP Tool)", func() {
+	Context("Pending:Pending -> Succeeded:Succeeded (MCP Tool)", func() {
 		It("successfully executes an MCP tool without requiring approval", func() {
 			// Setup MCP server without approval channel
 			testSecret.Setup(ctx)
@@ -256,7 +256,7 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedTRTC.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunToolCallPhaseSucceeded))
-			Expect(updatedTRTC.Status.Status).To(Equal(kubechainv1alpha1.TaskRunToolCallStatusTypeReady))
+			Expect(updatedTRTC.Status.Status).To(Equal(kubechainv1alpha1.TaskRunToolCallStatusTypeSucceeded))
 			Expect(updatedTRTC.Status.Result).To(Equal("5")) // From our mock implementation
 
 			By("checking that appropriate events were emitted")
@@ -483,8 +483,8 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 		})
 	})
 
-	Context("Ready:ReadyToExecuteApprovedTool -> Ready:Succeeded", func() {
-		It("transitions from Ready:ReadyToExecuteApprovedTool to Ready:Succeeded when a tool is executed", func() {
+	Context("Ready:ReadyToExecuteApprovedTool -> Succeeded:Succeeded", func() {
+		It("transitions from Ready:ReadyToExecuteApprovedTool to Succeeded:Succeeded when a tool is executed", func() {
 			trtc, teardown := setupTestApprovalResources(ctx, &SetupTestApprovalConfig{
 				TaskRunToolCallStatus: &kubechainv1alpha1.TaskRunToolCallStatus{
 					ExternalCallID: "call-ready-to-execute-test",
@@ -519,7 +519,7 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedTRTC.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunToolCallPhaseSucceeded))
-			Expect(updatedTRTC.Status.Status).To(Equal(kubechainv1alpha1.TaskRunToolCallStatusTypeReady))
+			Expect(updatedTRTC.Status.Status).To(Equal(kubechainv1alpha1.TaskRunToolCallStatusTypeSucceeded))
 			Expect(updatedTRTC.Status.Result).To(Equal("5")) // From our mock implementation
 		})
 	})
