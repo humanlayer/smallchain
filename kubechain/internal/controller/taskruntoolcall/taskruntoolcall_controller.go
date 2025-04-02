@@ -995,19 +995,29 @@ func (r *TaskRunToolCallReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		}
 	}
 
-	// 5. Handle MCP approval flow
+	// 5. Check that we're in Ready status before continuing
+	if trtc.Status.Status != kubechainv1alpha1.TaskRunToolCallStatusTypeReady {
+		logger.Error(nil, "TaskRunToolCall not in Ready status before execution",
+			"status", trtc.Status.Status,
+			"phase", trtc.Status.Phase)
+		result, err, _ := r.setStatusError(ctx, kubechainv1alpha1.TaskRunToolCallPhaseFailed,
+			"ExecutionFailedNotReady", &trtc, fmt.Errorf("TaskRunToolCall must be in Ready status before execution"))
+		return result, err
+	}
+
+	// 6. Handle MCP approval flow
 	result, err, handled := r.handleMCPApprovalFlow(ctx, &trtc)
 	if handled {
 		return result, err
 	}
 
-	// 6. Parse arguments for execution
+	// 7. Parse arguments for execution
 	args, err := r.parseArguments(ctx, &trtc)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
-	// 7. Execute the appropriate tool type
+	// 8. Execute the appropriate tool type
 	return r.dispatchToolExecution(ctx, &trtc, args)
 }
 
