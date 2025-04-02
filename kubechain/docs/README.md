@@ -15,6 +15,7 @@ Kubechain is a Kubernetes operator for managing Large Language Model (LLM) workf
 - [MCP Server Guide](./mcp-server.md) - Working with Model Control Protocol servers
 - [CRD Reference](./crd-reference.md) - Complete reference for all Custom Resource Definitions
 - [Kubebuilder Guide](./kubebuilder-guide.md) - How to develop with Kubebuilder in this project
+- [Debugging Guide](./debugging-guide.md) - How to debug the operator locally with VS Code
 
 ## Example Resources
 
