@@ -118,6 +118,7 @@ spec:
                 - AwaitingSubAgent
                 - AwaitingHumanApproval
                 - ReadyToExecuteApprovedTool
+                - ErrorRequestingHumanApproval
                 type: string
               ready:
                 description: Ready indicates if the tool call is ready to be executed
@@ -145,7 +146,6 @@ spec:
                 - Ready
                 - Error
                 - Pending
-                - ErrorRequestingHumanApproval
                 - ToolCallRejected
                 type: string
               statusDetail:

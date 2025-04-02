@@ -689,10 +689,14 @@ func (r *TaskRunToolCallReconciler) getHumanLayerAPIKey(ctx context.Context, sec
 }
 
 //nolint:unparam
-func (r *TaskRunToolCallReconciler) setStatusError(ctx context.Context, trtcStatus kubechainv1alpha1.TaskRunToolCallStatusType, eventType string, trtc *kubechainv1alpha1.TaskRunToolCall, err error) (ctrl.Result, error, bool) {
+func (r *TaskRunToolCallReconciler) setStatusError(ctx context.Context, trtcPhase kubechainv1alpha1.TaskRunToolCallPhase, eventType string, trtc *kubechainv1alpha1.TaskRunToolCall, err error) (ctrl.Result, error, bool) {
 	trtcDeepCopy := trtc.DeepCopy()
 	logger := log.FromContext(ctx)
-	trtcDeepCopy.Status.Status = trtcStatus
+
+	// Always set Status to Error when using setStatusError
+	trtcDeepCopy.Status.Status = kubechainv1alpha1.TaskRunToolCallStatusTypeError
+	// Set Phase to the provided Phase value
+	trtcDeepCopy.Status.Phase = trtcPhase
 
 	// Handle nil error case
 	errorMessage := "Unknown error occurred"
@@ -835,7 +839,7 @@ func (r *TaskRunToolCallReconciler) requestHumanApproval(ctx context.Context, tr
 	// Verify HLClient is initialized
 	if r.HLClientFactory == nil {
 		err := fmt.Errorf("HLClient not initialized")
-		result, errStatus, _ := r.setStatusError(ctx, kubechainv1alpha1.TaskRunToolCallStatusTypeErrorRequestingHumanApproval,
+		result, errStatus, _ := r.setStatusError(ctx, kubechainv1alpha1.TaskRunToolCallPhaseErrorRequestingHumanApproval,
 			"NoHumanLayerClient", trtc, err)
 		return result, errStatus
 	}
@@ -847,7 +851,7 @@ func (r *TaskRunToolCallReconciler) requestHumanApproval(ctx context.Context, tr
 		if err != nil {
 			errorMsg = fmt.Errorf("HumanLayer request failed with status code %d: %v", statusCode, err)
 		}
-		result, errStatus, _ := r.setStatusError(ctx, kubechainv1alpha1.TaskRunToolCallStatusTypeErrorRequestingHumanApproval,
+		result, errStatus, _ := r.setStatusError(ctx, kubechainv1alpha1.TaskRunToolCallPhaseErrorRequestingHumanApproval,
 			"HumanLayerRequestFailed", trtc, errorMsg)
 		return result, errStatus
 	}
@@ -885,7 +889,7 @@ func (r *TaskRunToolCallReconciler) handleMCPApprovalFlow(ctx context.Context, t
 	trtcNamespace := trtc.Namespace
 	contactChannel, err := r.getContactChannel(ctx, mcpServer, trtcNamespace)
 	if err != nil {
-		result, errStatus, _ := r.setStatusError(ctx, kubechainv1alpha1.TaskRunToolCallStatusTypeErrorRequestingHumanApproval,
+		result, errStatus, _ := r.setStatusError(ctx, kubechainv1alpha1.TaskRunToolCallPhaseErrorRequestingHumanApproval,
 			"NoContactChannel", trtc, err)
 		return result, errStatus, true
 	}
@@ -896,7 +900,7 @@ func (r *TaskRunToolCallReconciler) handleMCPApprovalFlow(ctx context.Context, t
 		trtcNamespace)
 
 	if err != nil || apiKey == "" {
-		result, errStatus, _ := r.setStatusError(ctx, kubechainv1alpha1.TaskRunToolCallStatusTypeErrorRequestingHumanApproval,
+		result, errStatus, _ := r.setStatusError(ctx, kubechainv1alpha1.TaskRunToolCallPhaseErrorRequestingHumanApproval,
 			"NoAPIKey", trtc, err)
 		return result, errStatus, true
 	}
@@ -955,8 +959,8 @@ func (r *TaskRunToolCallReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	logger.Info("Reconciling TaskRunToolCall", "name", trtc.Name)
 
 	// 1. Check for terminal error states - early return
-	if trtc.Status.Status == kubechainv1alpha1.TaskRunToolCallStatusTypeErrorRequestingHumanApproval {
-		logger.Info("TaskRunToolCall in terminal error state, nothing to do", "status", trtc.Status.Status)
+	if trtc.Status.Status == kubechainv1alpha1.TaskRunToolCallStatusTypeError {
+		logger.Info("TaskRunToolCall in error state, nothing to do", "status", trtc.Status.Status, "phase", trtc.Status.Phase)
 		return ctrl.Result{}, nil
 	}
 

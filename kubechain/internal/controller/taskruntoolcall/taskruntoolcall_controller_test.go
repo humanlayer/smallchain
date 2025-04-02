@@ -524,8 +524,8 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 		})
 	})
 
-	Context("Pending -> ErrorRequestingHumanApproval (MCP Tool)", func() {
-		It("transitions to ErrorRequestingHumanApproval when request to HumanLayer fails", func() {
+	Context("Ready:Pending -> Error:ErrorRequestingHumanApproval (MCP Tool)", func() {
+		It("transitions to Error:ErrorRequestingHumanApproval when request to HumanLayer fails", func() {
 			// Note setupTestApprovalResources sets up the MCP server, MCP tool, and TaskRunToolCall
 			trtc, teardown := setupTestApprovalResources(ctx, nil)
 			defer teardown()
@@ -553,7 +553,7 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Requeue).To(BeFalse())
 
-			By("checking the taskruntoolcall status is set to ErrorRequestingHumanApproval")
+			By("checking the taskruntoolcall has ErrorRequestingHumanApproval phase and Error status")
 			updatedTRTC := &kubechainv1alpha1.TaskRunToolCall{}
 			err = k8sClient.Get(ctx, types.NamespacedName{
 				Name:      trtc.Name,
@@ -561,8 +561,8 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 			}, updatedTRTC)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(updatedTRTC.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunToolCallPhaseAwaitingHumanApproval))
-			Expect(updatedTRTC.Status.Status).To(Equal(kubechainv1alpha1.TaskRunToolCallStatusTypeErrorRequestingHumanApproval))
+			Expect(updatedTRTC.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunToolCallPhaseErrorRequestingHumanApproval))
+			Expect(updatedTRTC.Status.Status).To(Equal(kubechainv1alpha1.TaskRunToolCallStatusTypeError))
 		})
 	})
 })
