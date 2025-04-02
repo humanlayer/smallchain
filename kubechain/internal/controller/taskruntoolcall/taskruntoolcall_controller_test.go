@@ -16,8 +16,8 @@ import (
 )
 
 var _ = Describe("TaskRunToolCall Controller", func() {
-	Context("'' -> Pending", func() {
-		It("moves to Pending:Initializing", func() {
+	Context("'':'' -> Pending:Pending", func() {
+		It("moves to Pending:Pending", func() {
 			teardown := setupTestAddTool(ctx)
 			defer teardown()
 
@@ -51,18 +51,58 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 		})
 	})
 
-	Context("Pending -> Succeeded", func() {
+	Context("Pending:Pending -> Ready:Pending", func() {
+		It("moves from Pending:Pending to Ready:Pending during completeSetup", func() {
+			teardown := setupTestAddTool(ctx)
+			defer teardown()
+
+			// Create TaskRunToolCall with Pending status (after initialization)
+			taskRunToolCall := trtcForAddTool.SetupWithStatus(ctx, kubechainv1alpha1.TaskRunToolCallStatus{
+				Phase:        kubechainv1alpha1.TaskRunToolCallPhasePending,
+				Status:       kubechainv1alpha1.TaskRunToolCallStatusTypePending,
+				StatusDetail: "Initializing",
+				StartTime:    &metav1.Time{Time: time.Now().Add(-1 * time.Minute)},
+			})
+
+			By("reconciling the taskruntoolcall")
+			reconciler, _ := reconciler()
+
+			result, err := reconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      taskRunToolCall.Name,
+					Namespace: taskRunToolCall.Namespace,
+				},
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeFalse())
+
+			By("checking the taskruntoolcall status has changed to Ready:Pending")
+			updatedTRTC := &kubechainv1alpha1.TaskRunToolCall{}
+			err = k8sClient.Get(ctx, types.NamespacedName{
+				Name:      taskRunToolCall.Name,
+				Namespace: taskRunToolCall.Namespace,
+			}, updatedTRTC)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedTRTC.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunToolCallPhasePending))
+			Expect(updatedTRTC.Status.Status).To(Equal(kubechainv1alpha1.TaskRunToolCallStatusTypeReady))
+			Expect(updatedTRTC.Status.StatusDetail).To(Equal("Setup complete"))
+		})
+	})
+
+	Context("Ready:Pending -> Ready:Succeeded", func() {
 		It("moves to Succeeded after executing a simple function tool call", func() {
 			ctx := context.Background()
 
 			teardown := setupTestAddTool(ctx)
 			defer teardown()
 
-			// Create TaskRunToolCall with Pending status
+			// Create TaskRunToolCall with Ready:Pending status
 			taskRunToolCall := trtcForAddTool.SetupWithStatus(ctx, kubechainv1alpha1.TaskRunToolCallStatus{
 				Phase:        kubechainv1alpha1.TaskRunToolCallPhasePending,
-				Status:       "Pending",
-				StatusDetail: "Ready for execution",
+				Status:       kubechainv1alpha1.TaskRunToolCallStatusTypeReady,
+				StatusDetail: "Setup complete",
 				StartTime:    &metav1.Time{Time: time.Now().Add(-1 * time.Minute)},
 			})
 
@@ -96,12 +136,12 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 		})
 	})
 
-	Context("Pending -> Failed", func() {
+	Context("Ready:Pending -> Error:Pending", func() {
 		It("fails when arguments are invalid", func() {
 			teardown := setupTestAddTool(ctx)
 			defer teardown()
 
-			// Create TaskRunToolCall with Pending status but invalid arguments
+			// Create TaskRunToolCall with Ready:Pending status but invalid arguments
 			taskRunToolCall := &TestTaskRunToolCall{
 				name:      "invalid-args-trtc",
 				toolName:  addTool.name,
@@ -110,8 +150,8 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 
 			trtc := taskRunToolCall.SetupWithStatus(ctx, kubechainv1alpha1.TaskRunToolCallStatus{
 				Phase:        kubechainv1alpha1.TaskRunToolCallPhasePending,
-				Status:       "Pending",
-				StatusDetail: "Ready for execution",
+				Status:       kubechainv1alpha1.TaskRunToolCallStatusTypeReady,
+				StatusDetail: "Setup complete",
 				StartTime:    &metav1.Time{Time: time.Now().Add(-1 * time.Minute)},
 			})
 
@@ -139,6 +179,8 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedTRTC.Status.Status).To(Equal(kubechainv1alpha1.TaskRunToolCallStatusTypeError))
+			// TODO: Is this the right Phase for this case?
+			Expect(updatedTRTC.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunToolCallPhasePending))
 			Expect(updatedTRTC.Status.StatusDetail).To(Equal("Invalid arguments JSON"))
 			Expect(updatedTRTC.Status.Error).NotTo(BeEmpty())
 
@@ -148,7 +190,7 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 	})
 
 	// Tests for MCP tools without approval requirement
-	Context("Pending -> Succeeded (MCP Tool)", func() {
+	Context("Pending:Pending -> Ready:Succeeded (MCP Tool)", func() {
 		It("successfully executes an MCP tool without requiring approval", func() {
 			// Setup MCP server without approval channel
 			testSecret.Setup(ctx)
@@ -183,8 +225,8 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 			}
 			trtc := taskRunToolCall.SetupWithStatus(ctx, kubechainv1alpha1.TaskRunToolCallStatus{
 				Phase:        kubechainv1alpha1.TaskRunToolCallPhasePending,
-				Status:       "Pending",
-				StatusDetail: "Ready for execution",
+				Status:       kubechainv1alpha1.TaskRunToolCallStatusTypeReady,
+				StatusDetail: "Setup complete",
 				StartTime:    &metav1.Time{Time: time.Now().Add(-1 * time.Minute)},
 			})
 			defer taskRunToolCall.Teardown(ctx)
@@ -223,7 +265,7 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 	})
 
 	// Tests for MCP tools with approval requirement
-	Context("Pending -> AwaitingHumanApproval (MCP Tool, Slack Contact Channel)", func() {
+	Context("Pending:Pending -> AwaitingHumanApproval:Pending (MCP Tool, Slack Contact Channel)", func() {
 		It("transitions to AwaitingHumanApproval when MCPServer has approval channel", func() {
 			// Note setupTestApprovalResources sets up the MCP server, MCP tool, and TaskRunToolCall
 			trtc, teardown := setupTestApprovalResources(ctx, nil)

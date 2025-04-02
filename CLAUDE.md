@@ -172,6 +172,28 @@ Alternatively, clean up components individually:
 - Ensure the PROJECT file contains entries for all resources before running `make manifests`
 - Follow the detailed guidance in the [Kubebuilder Guide](/kubechain/docs/kubebuilder-guide.md)
 
+### Status vs Phase in Controllers
+
+When designing controllers, distinguish between Status and Phase:
+
+- **Status** indicates the health or readiness of a resource. It answers: "Is the resource working correctly?"
+  - Use StatusType values like "Ready", "Error", "Pending"
+  - Status reflects the current operational state of the resource
+  - Status changes are typically cross-cutting (error handling, initialization)
+
+- **Phase** indicates the progress of a resource in its lifecycle. It answers: "What stage of processing is the resource in?"
+  - Use PhaseType values like "Pending", "Running", "Succeeded", "Failed"
+  - Phase reflects the workflow stage of the resource
+  - Phase changes represent forward progression through a workflow
+
+- **Implementation Guidelines:**
+  - Use typed enums rather than raw strings for both Status and Phase
+  - Name test contexts using "Status:Phase -> Status:Phase" format
+  - Make status conditions explicit in controller reconciliation logic
+  - Use pattern: Pending:Pending (initialization) -> Ready:Pending (setup) -> Ready:Running (processing) -> Ready:Succeeded (completion)
+  - Use pattern: Pending:Pending (initialization) -> Ready:Pending (setup) -> Error:Failed (error handling)
+  - Keep transition logic focused and clear, with explicit condition checks in the Reconcile function
+
 ### Kubernetes Resource Design
 
 #### Don't use "config" in field names:
@@ -264,8 +286,8 @@ Testing is a critical part of the development process, especially for Kubernetes
 
 Example state transition test structure:
 ```go
-Context("'' -> Initializing", func() {
-    It("moves to Initializing and sets required fields", func() {
+Context("'':'' -> Pending:Pending", func() {
+    It("initializes to Pending:Pending and sets required fields", func() {
         // Set up resources needed for this specific test
         resource := testFixture.Setup(ctx)
         defer testFixture.Teardown(ctx)
@@ -277,8 +299,10 @@ Context("'' -> Initializing", func() {
         Expect(err).NotTo(HaveOccurred())
         
         // Verify expected state transition
-        Expect(resource.Status.Phase).To(Equal(ExpectedPhase))
-        Expect(resource.Status.RequiredField).NotTo(BeNil())
+        Expect(resource.Status.Status).To(Equal(myresource.StatusTypePending))
+        Expect(resource.Status.Phase).To(Equal(myresource.PhasePending))
+        Expect(resource.Status.StatusDetail).To(Equal("Initializing"))
+        Expect(resource.Status.StartTime).NotTo(BeNil())
     })
 })
 ```
@@ -338,11 +362,12 @@ func (t *TestResource) Teardown(ctx context.Context) {
 - When testing a multi-step workflow, break it into individual state transitions
 
 Examples of state transition Context blocks:
-- `Context("'' -> Initializing")` - Initial reconciliation
-- `Context("Initializing -> Ready")` - Normal progression
-- `Context("Initializing -> Error")` - Error handling
-- `Context("Error -> ErrorBackoff")` - Recovery attempts
-- `Context("Ready -> Updating")` - Changes after ready state
+- `Context("'':'' -> Pending:Pending")` - Initial reconciliation
+- `Context("Pending:Pending -> Ready:Pending")` - Setup completion
+- `Context("Ready:Pending -> Ready:Running")` - Start processing
+- `Context("Ready:Running -> Ready:Succeeded")` - Successful completion
+- `Context("Ready:Pending -> Error:Failed")` - Error handling
+- `Context("Error:Failed -> Ready:Pending")` - Recovery attempts
 
 #### Test Implementation Best Practices
 - Use descriptive By() statements to explain test steps
