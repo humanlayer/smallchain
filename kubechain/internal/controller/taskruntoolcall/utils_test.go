@@ -435,8 +435,8 @@ func setupTestApprovalResources(ctx context.Context, config *SetupTestApprovalCo
 
 	status := kubechainv1alpha1.TaskRunToolCallStatus{
 		Phase:        kubechainv1alpha1.TaskRunToolCallPhasePending,
-		Status:       "Pending",
-		StatusDetail: "Ready for execution",
+		Status:       kubechainv1alpha1.TaskRunToolCallStatusTypeReady,
+		StatusDetail: "Setup complete",
 		StartTime:    &metav1.Time{Time: time.Now().Add(-1 * time.Minute)},
 	}
 

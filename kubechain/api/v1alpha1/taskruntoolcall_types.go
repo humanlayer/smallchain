@@ -7,15 +7,10 @@ import (
 type TaskRunToolCallStatusType string
 
 const (
-	TaskRunToolCallStatusTypeReady                        TaskRunToolCallStatusType = "Ready"
-	TaskRunToolCallStatusTypeError                        TaskRunToolCallStatusType = "Error"
-	TaskRunToolCallStatusTypePending                      TaskRunToolCallStatusType = "Pending"
-	TaskRunToolCallStatusTypeAwaitingHumanApproval        TaskRunToolCallStatusType = "AwaitingHumanApproval"
-	TaskRunToolCallStatusTypeAwaitingHumanInput           TaskRunToolCallStatusType = "AwaitingHumanInput"
-	TaskRunToolCallStatusTypeAwaitingSubAgent             TaskRunToolCallStatusType = "AwaitingSubAgent"
-	TaskRunToolCallStatusTypeErrorRequestingHumanApproval TaskRunToolCallStatusType = "ErrorRequestingHumanApproval"
-	TaskRunToolCallStatusTypeReadyToExecuteApprovedTool   TaskRunToolCallStatusType = "ReadyToExecuteApprovedTool"
-	TaskRunToolCallStatusTypeToolCallRejected             TaskRunToolCallStatusType = "ToolCallRejected"
+	TaskRunToolCallStatusTypeReady     TaskRunToolCallStatusType = "Ready"
+	TaskRunToolCallStatusTypeError     TaskRunToolCallStatusType = "Error"
+	TaskRunToolCallStatusTypePending   TaskRunToolCallStatusType = "Pending"
+	TaskRunToolCallStatusTypeSucceeded TaskRunToolCallStatusType = "Succeeded"
 )
 
 // TaskRunToolCallSpec defines the desired state of TaskRunToolCall
@@ -47,7 +42,7 @@ type TaskRunToolCallStatus struct {
 	Ready bool `json:"ready,omitempty"`
 
 	// Status indicates the current status of the tool call
-	// +kubebuilder:validation:Enum=Ready;Error;Pending;AwaitingHumanApproval;AwaitingHumanInput;AwaitingSubAgent;ErrorRequestingHumanApproval;ReadyToExecuteApprovedTool;ToolCallRejected
+	// +kubebuilder:validation:Enum=Ready;Error;Pending;Succeeded
 	Status TaskRunToolCallStatusType `json:"status,omitempty"`
 
 	// StatusDetail provides additional details about the current status
@@ -79,7 +74,7 @@ type TaskRunToolCallStatus struct {
 }
 
 // TaskRunToolCallPhase represents the phase of a TaskRunToolCall
-// +kubebuilder:validation:Enum=Pending;Running;Succeeded;Failed
+// +kubebuilder:validation:Enum=Pending;Running;Succeeded;Failed;AwaitingHumanInput;AwaitingSubAgent;AwaitingHumanApproval;ReadyToExecuteApprovedTool;ErrorRequestingHumanApproval;ToolCallRejected
 type TaskRunToolCallPhase string
 
 const (
@@ -91,6 +86,18 @@ const (
 	TaskRunToolCallPhaseSucceeded TaskRunToolCallPhase = "Succeeded"
 	// TaskRunToolCallPhaseFailed indicates the tool call failed
 	TaskRunToolCallPhaseFailed TaskRunToolCallPhase = "Failed"
+	// TaskRunToolCallPhaseAwaitingHumanInput indicates the tool call is waiting for human input
+	TaskRunToolCallPhaseAwaitingHumanInput TaskRunToolCallPhase = "AwaitingHumanInput"
+	// TaskRunToolCallPhaseAwaitingSubAgent indicates the tool call is waiting for a sub-agent to complete
+	TaskRunToolCallPhaseAwaitingSubAgent TaskRunToolCallPhase = "AwaitingSubAgent"
+	// TaskRunToolCallPhaseAwaitingHumanApproval indicates the tool call is waiting for human approval
+	TaskRunToolCallPhaseAwaitingHumanApproval TaskRunToolCallPhase = "AwaitingHumanApproval"
+	// TaskRunToolCallPhaseReadyToExecuteApprovedTool indicates the tool call is ready to execute after receiving approval
+	TaskRunToolCallPhaseReadyToExecuteApprovedTool TaskRunToolCallPhase = "ReadyToExecuteApprovedTool"
+	// TaskRunToolCallPhaseErrorRequestingHumanApproval indicates there was an error requesting human approval
+	TaskRunToolCallPhaseErrorRequestingHumanApproval TaskRunToolCallPhase = "ErrorRequestingHumanApproval"
+	// TaskRunToolCallPhaseToolCallRejected indicates the tool call was rejected by human approval
+	TaskRunToolCallPhaseToolCallRejected TaskRunToolCallPhase = "ToolCallRejected"
 )
 
 // +kubebuilder:object:root=true
