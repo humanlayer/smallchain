@@ -172,28 +172,6 @@ Alternatively, clean up components individually:
 - Ensure the PROJECT file contains entries for all resources before running `make manifests`
 - Follow the detailed guidance in the [Kubebuilder Guide](/kubechain/docs/kubebuilder-guide.md)
 
-### Status vs Phase in Controllers
-
-When designing controllers, distinguish between Status and Phase:
-
-- **Status** indicates the health or readiness of a resource. It answers: "Is the resource working correctly?"
-  - Use StatusType values like "Ready", "Error", "Pending"
-  - Status reflects the current operational state of the resource
-  - Status changes are typically cross-cutting (error handling, initialization)
-
-- **Phase** indicates the progress of a resource in its lifecycle. It answers: "What stage of processing is the resource in?"
-  - Use PhaseType values like "Pending", "Running", "Succeeded", "Failed"
-  - Phase reflects the workflow stage of the resource
-  - Phase changes represent forward progression through a workflow
-
-- **Implementation Guidelines:**
-  - Use typed enums rather than raw strings for both Status and Phase
-  - Name test contexts using "Status:Phase -> Status:Phase" format
-  - Make status conditions explicit in controller reconciliation logic
-  - Use pattern: Pending:Pending (initialization) -> Ready:Pending (setup) -> Ready:Running (processing) -> Ready:Succeeded (completion)
-  - Use pattern: Pending:Pending (initialization) -> Ready:Pending (setup) -> Error:Failed (error handling)
-  - Keep transition logic focused and clear, with explicit condition checks in the Reconcile function
-
 ### Kubernetes Resource Design
 
 #### Don't use "config" in field names:
