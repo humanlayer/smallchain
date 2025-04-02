@@ -230,6 +230,7 @@ func (r *TaskRunToolCallReconciler) parseArguments(ctx context.Context, trtc *ku
 	if err := json.Unmarshal([]byte(trtc.Spec.Arguments), &args); err != nil {
 		logger.Error(err, "Failed to parse arguments")
 		trtc.Status.Status = kubechainv1alpha1.TaskRunToolCallStatusTypeError
+		trtc.Status.Phase = kubechainv1alpha1.TaskRunToolCallPhaseFailed
 		trtc.Status.StatusDetail = DetailInvalidArgsJSON
 		trtc.Status.Error = err.Error()
 		r.recorder.Event(trtc, corev1.EventTypeWarning, "ExecutionFailed", err.Error())

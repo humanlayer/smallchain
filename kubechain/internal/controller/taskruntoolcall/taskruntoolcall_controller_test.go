@@ -179,8 +179,7 @@ var _ = Describe("TaskRunToolCall Controller", func() {
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedTRTC.Status.Status).To(Equal(kubechainv1alpha1.TaskRunToolCallStatusTypeError))
-			// TODO: Is this the right Phase for this case?
-			Expect(updatedTRTC.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunToolCallPhasePending))
+			Expect(updatedTRTC.Status.Phase).To(Equal(kubechainv1alpha1.TaskRunToolCallPhaseFailed))
 			Expect(updatedTRTC.Status.StatusDetail).To(Equal("Invalid arguments JSON"))
 			Expect(updatedTRTC.Status.Error).NotTo(BeEmpty())
 
