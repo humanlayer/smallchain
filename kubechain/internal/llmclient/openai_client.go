@@ -12,6 +12,22 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
+// LLMRequestError represents an error that occurred during an LLM request
+// and includes HTTP status code information
+type LLMRequestError struct {
+	StatusCode int
+	Message    string
+	Err        error
+}
+
+func (e *LLMRequestError) Error() string {
+	return fmt.Sprintf("LLM request failed with status %d: %s", e.StatusCode, e.Message)
+}
+
+func (e *LLMRequestError) Unwrap() error {
+	return e.Err
+}
+
 // OpenAIClient interface for mocking in tests
 type OpenAIClient interface {
 	SendRequest(ctx context.Context, messages []v1alpha1.Message, tools []Tool) (*v1alpha1.Message, error)
@@ -175,7 +191,11 @@ func (c *rawOpenAIClient) SendRequest(ctx context.Context, messages []v1alpha1.M
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(body))
+		return nil, &LLMRequestError{
+			StatusCode: resp.StatusCode,
+			Message:    string(body),
+			Err:        fmt.Errorf("OpenAI API request failed"),
+		}
 	}
 
 	var completion chatCompletionResponse
@@ -234,6 +254,10 @@ func (m *MockRawOpenAIClient) SendRequest(ctx context.Context, messages []v1alph
 		if err := m.ValidateContextWindow(messages); err != nil {
 			return nil, err
 		}
+	}
+
+	if m.Error != nil {
+		return m.Response, m.Error
 	}
 
 	if m.Response == nil {

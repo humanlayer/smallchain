@@ -2,6 +2,7 @@ package taskrun
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -697,7 +698,19 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		statusUpdate.Status.Status = StatusError
 		statusUpdate.Status.StatusDetail = fmt.Sprintf("LLM request failed: %v", err)
 		statusUpdate.Status.Error = err.Error()
-		r.recorder.Event(&taskRun, corev1.EventTypeWarning, "LLMRequestFailed", err.Error())
+
+		// Check for LLMRequestError with 4xx status code
+		var llmErr *llmclient.LLMRequestError
+		if errors.As(err, &llmErr) && llmErr.StatusCode >= 400 && llmErr.StatusCode < 500 {
+			logger.Info("LLM request failed with 4xx status code, marking as failed",
+				"statusCode", llmErr.StatusCode,
+				"message", llmErr.Message)
+			statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseFailed
+			r.recorder.Event(&taskRun, corev1.EventTypeWarning, "LLMRequestFailed4xx",
+				fmt.Sprintf("LLM request failed with status %d: %s", llmErr.StatusCode, llmErr.Message))
+		} else {
+			r.recorder.Event(&taskRun, corev1.EventTypeWarning, "LLMRequestFailed", err.Error())
+		}
 
 		// Record error in span
 		if childSpan != nil {
