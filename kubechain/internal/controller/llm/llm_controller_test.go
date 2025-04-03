@@ -613,10 +613,8 @@ var _ = Describe("LLM Controller", func() {
 						FrequencyPenalty: "0.5",
 						PresencePenalty:  "0.5",
 					},
-					ProviderConfig: kubechainv1alpha1.ProviderConfig{
-						OpenAIConfig: &kubechainv1alpha1.OpenAIConfig{
-							Organization: "test-org",
-						},
+					OpenAI: &kubechainv1alpha1.OpenAIConfig{
+						Organization: "test-org",
 					},
 				},
 			}
