@@ -12,6 +12,7 @@ import (
 
 	kubechain "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
 	"github.com/humanlayer/smallchain/kubechain/internal/llmclient"
+	"github.com/humanlayer/smallchain/kubechain/test/utils"
 )
 
 var _ = Describe("TaskRun Controller", func() {
@@ -40,6 +41,8 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(taskRun.Status.SpanContext).NotTo(BeNil())
 			Expect(taskRun.Status.SpanContext.TraceID).NotTo(BeEmpty())
 			Expect(taskRun.Status.SpanContext.SpanID).NotTo(BeEmpty())
+
+			// Skip event validation for initialization since there is no event emitted
 		})
 	})
 	Context("Initializing -> Error", func() {
@@ -50,7 +53,7 @@ var _ = Describe("TaskRun Controller", func() {
 			defer testTaskRun.Teardown(ctx)
 
 			By("reconciling the taskrun")
-			reconciler, _ := reconciler()
+			reconciler, recorder := reconciler()
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: types.NamespacedName{Name: testTaskRun.name, Namespace: "default"},
@@ -63,6 +66,9 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTaskRun.name, Namespace: "default"}, taskRun)).To(Succeed())
 			Expect(taskRun.Status.Phase).To(Equal(kubechain.TaskRunPhaseFailed))
 			Expect(taskRun.Status.Error).To(Equal("Task \"test-task\" not found"))
+
+			By("checking that an error event was emitted")
+			utils.ExpectRecorder(recorder).ToEmitEventContaining("TaskValidationFailed")
 		})
 	})
 	Context("Initializing -> Pending", func() {
@@ -78,7 +84,7 @@ var _ = Describe("TaskRun Controller", func() {
 			defer testTaskRun.Teardown(ctx)
 
 			By("reconciling the taskrun")
-			reconciler, _ := reconciler()
+			reconciler, recorder := reconciler()
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: types.NamespacedName{Name: testTaskRun.name, Namespace: "default"},
@@ -90,6 +96,9 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTaskRun.name, Namespace: "default"}, taskRun)).To(Succeed())
 			Expect(taskRun.Status.Phase).To(Equal(kubechain.TaskRunPhasePending))
 			Expect(taskRun.Status.StatusDetail).To(Equal("Waiting for task \"test-task\" to become ready"))
+
+			By("checking that a pending event was emitted")
+			utils.ExpectRecorder(recorder).ToEmitEventContaining("TaskNotReady")
 		})
 	})
 
@@ -104,7 +113,7 @@ var _ = Describe("TaskRun Controller", func() {
 			defer testTaskRun.Teardown(ctx)
 
 			By("reconciling the taskrun")
-			reconciler, _ := reconciler()
+			reconciler, recorder := reconciler()
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: types.NamespacedName{Name: testTaskRun.name, Namespace: "default"},
@@ -120,6 +129,9 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(taskRun.Status.ContextWindow[0].Content).To(Equal(testAgent.system))
 			Expect(taskRun.Status.ContextWindow[1].Role).To(Equal("user"))
 			Expect(taskRun.Status.ContextWindow[1].Content).To(Equal(testTask.message))
+
+			By("checking that a validation succeeded event was emitted")
+			utils.ExpectRecorder(recorder).ToEmitEventContaining("ValidationSucceeded")
 		})
 	})
 
@@ -134,7 +146,7 @@ var _ = Describe("TaskRun Controller", func() {
 			defer testTaskRun.Teardown(ctx)
 
 			By("reconciling the taskrun")
-			reconciler, _ := reconciler()
+			reconciler, recorder := reconciler()
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: types.NamespacedName{Name: testTaskRun.name, Namespace: "default"},
@@ -150,6 +162,9 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(taskRun.Status.ContextWindow[0].Content).To(Equal(testAgent.system))
 			Expect(taskRun.Status.ContextWindow[1].Role).To(Equal("user"))
 			Expect(taskRun.Status.ContextWindow[1].Content).To(Equal(testTask.message))
+
+			By("checking that a validation succeeded event was emitted")
+			utils.ExpectRecorder(recorder).ToEmitEventContaining("ValidationSucceeded")
 		})
 	})
 
@@ -174,7 +189,7 @@ var _ = Describe("TaskRun Controller", func() {
 			defer testTaskRun.Teardown(ctx)
 
 			By("creating a reconciler with a mock OpenAI client")
-			reconciler, _ := reconciler()
+			reconciler, recorder := reconciler()
 			mockClient := &MockOpenAIClient{
 				SendRequestFunc: func(ctx context.Context, messages []kubechain.Message, tools []llmclient.Tool) (*kubechain.Message, error) {
 					return &kubechain.Message{
@@ -200,6 +215,9 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(taskRun.Status.ContextWindow).To(HaveLen(3))
 			Expect(taskRun.Status.ContextWindow[2].Role).To(Equal("assistant"))
 			Expect(taskRun.Status.ContextWindow[2].Content).To(Equal("The moon does not have a capital."))
+
+			By("checking that a final answer event was emitted")
+			utils.ExpectRecorder(recorder).ToEmitEventContaining("LLMFinalAnswer")
 		})
 	})
 
@@ -224,7 +242,7 @@ var _ = Describe("TaskRun Controller", func() {
 			defer testTaskRun.Teardown(ctx)
 
 			By("creating a reconciler with a mock OpenAI client that returns tools")
-			reconciler, _ := reconciler()
+			reconciler, recorder := reconciler()
 			mockClient := &MockOpenAIClient{
 				SendRequestFunc: func(ctx context.Context, messages []kubechain.Message, tools []llmclient.Tool) (*kubechain.Message, error) {
 					return &kubechain.Message{
@@ -269,6 +287,9 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(toolCallList.Items).To(HaveLen(1))
 			Expect(toolCallList.Items[0].Spec.ToolCallId).To(Equal("1"))
 			Expect(toolCallList.Items[0].Spec.ToolRef.Name).To(Equal("fetch__fetch"))
+
+			By("checking that a tool calls pending event was emitted")
+			utils.ExpectRecorder(recorder).ToEmitEventContaining("ToolCallsPending")
 		})
 	})
 
@@ -301,6 +322,9 @@ var _ = Describe("TaskRun Controller", func() {
 			By("checking the taskrun status")
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTaskRun.name, Namespace: "default"}, taskRun)).To(Succeed())
 			Expect(taskRun.Status.Phase).To(Equal(kubechain.TaskRunPhaseToolCallsPending))
+
+			// During this reconciliation, no event is actually emitted because we remain in the same state
+			// We don't check for events in this test
 		})
 	})
 	Context("ToolCallsPending -> ReadyForLLM", func() {
@@ -344,7 +368,7 @@ var _ = Describe("TaskRun Controller", func() {
 			defer testTaskRunToolCall.Teardown(ctx)
 
 			By("reconciling the taskrun")
-			reconciler, _ := reconciler()
+			reconciler, recorder := reconciler()
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: types.NamespacedName{Name: testTaskRun.name, Namespace: "default"},
@@ -358,6 +382,9 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(taskRun.Status.ContextWindow).To(HaveLen(4))
 			Expect(taskRun.Status.ContextWindow[3].Role).To(Equal("tool"))
 			Expect(taskRun.Status.ContextWindow[3].Content).To(Equal(`{"data": "test-data"}`))
+
+			By("checking that a tool calls complete event was emitted")
+			utils.ExpectRecorder(recorder).ToEmitEventContaining("AllToolCallsCompleted")
 		})
 	})
 })
