@@ -188,41 +188,65 @@ func convertToLangchainTools(tools []Tool) []llms.Tool {
 	return langchainTools
 }
 
-// convertFromLangchainResponse converts a langchaingo response to Kubechain format
+// convertFromLangchainResponse converts a langchaingo response to Kubechain format.
+// It handles different response structures from various LLM providers by
+// collecting all tool calls from all choices.
 func convertFromLangchainResponse(response *llms.ContentResponse) *kubechainv1alpha1.Message {
+	// Create base message with assistant role
+	message := &kubechainv1alpha1.Message{
+		Role: "assistant",
+	}
+
 	// Handle empty response
 	if len(response.Choices) == 0 {
-		return &kubechainv1alpha1.Message{
-			Role:    "assistant",
-			Content: "",
+		message.Content = ""
+		return message
+	}
+
+	// Extract all tool calls across all choices (provider-agnostic)
+	var toolCalls []kubechainv1alpha1.ToolCall
+	var contentText string
+	var hasContent bool
+
+	for _, choice := range response.Choices {
+		// Extract content from the first non-empty choice
+		if !hasContent && choice.Content != "" {
+			contentText = choice.Content
+			hasContent = true
+		}
+
+		// Extract tool calls from this choice
+		if len(choice.ToolCalls) > 0 {
+			for _, tc := range choice.ToolCalls {
+				toolCalls = append(toolCalls, kubechainv1alpha1.ToolCall{
+					ID:   tc.ID,
+					Type: tc.Type,
+					Function: kubechainv1alpha1.ToolCallFunction{
+						Name:      tc.FunctionCall.Name,
+						Arguments: tc.FunctionCall.Arguments,
+					},
+				})
+			}
 		}
 	}
 
-	choice := response.Choices[0]
-
-	// Create base message
-	message := &kubechainv1alpha1.Message{
-		Role:    "assistant",
-		Content: choice.Content,
+	// Prioritize tool calls if present
+	if len(toolCalls) > 0 {
+		message.ToolCalls = toolCalls
+		// Clear content when there are tool calls to ensure controller
+		// takes the tool call execution path
+		message.Content = ""
+		return message
 	}
 
-	// Handle tool calls
-	if len(choice.ToolCalls) > 0 {
-		message.Content = "" // Clear content when tool calls are present
-		message.ToolCalls = make([]kubechainv1alpha1.ToolCall, 0, len(choice.ToolCalls))
-
-		for _, toolCall := range choice.ToolCalls {
-			message.ToolCalls = append(message.ToolCalls, kubechainv1alpha1.ToolCall{
-				ID:   toolCall.ID,
-				Type: toolCall.Type,
-				Function: kubechainv1alpha1.ToolCallFunction{
-					Name:      toolCall.FunctionCall.Name,
-					Arguments: toolCall.FunctionCall.Arguments,
-				},
-			})
-		}
+	// Fall back to content if available
+	if hasContent {
+		message.Content = contentText
+		return message
 	}
 
+	// Handle edge case where no content or tool calls were found
+	message.Content = ""
 	return message
 }
 

@@ -2,6 +2,7 @@ package taskrun
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -420,24 +421,25 @@ func (r *TaskRunReconciler) endTaskRunSpan(ctx context.Context, taskRun *kubecha
 func (r *TaskRunReconciler) processLLMResponse(ctx context.Context, output *kubechainv1alpha1.Message, taskRun *kubechainv1alpha1.TaskRun, statusUpdate *kubechainv1alpha1.TaskRun) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
-	if output.Content != "" {
-		// final answer branch
-		statusUpdate.Status.Output = output.Content
-		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseFinalAnswer
-		statusUpdate.Status.Ready = true
-		statusUpdate.Status.ContextWindow = append(statusUpdate.Status.ContextWindow, kubechainv1alpha1.Message{
-			Role:    "assistant",
-			Content: output.Content,
-		})
-		statusUpdate.Status.Status = StatusReady
-		statusUpdate.Status.StatusDetail = "LLM final response received"
-		statusUpdate.Status.Error = ""
-		r.recorder.Event(taskRun, corev1.EventTypeNormal, "LLMFinalAnswer", "LLM response received successfully")
+	// Log complete output message for debugging
+	outputBytes, _ := json.Marshal(output)
+	logger.Info("DEBUG: Processing LLM response", "outputMessage", string(outputBytes))
 
-		// End the parent span since we've reached a terminal state
-		r.endTaskRunSpan(ctx, taskRun, codes.Ok, "TaskRun completed successfully with final answer")
-	} else {
+	// Check if we have any tool calls
+	hasToolCalls := len(output.ToolCalls) > 0
+	logger.Info("DEBUG: LLM response stats", "hasContent", output.Content != "", "hasToolCalls", hasToolCalls, "toolCallCount", len(output.ToolCalls))
+
+	if hasToolCalls {
 		// tool call branch: create TaskRunToolCall objects for each tool call returned by the LLM.
+		logger.Info("DEBUG: Taking tool calls branch because tool calls are present", "contentPresent", output.Content != "")
+
+		// If content is also present, log a warning as this is unusual for some models
+		if output.Content != "" {
+			logger.Info("DEBUG: UNUSUAL: LLM returned both content and tool calls",
+				"content", output.Content,
+				"toolCalls", fmt.Sprintf("%v", output.ToolCalls))
+		}
+
 		statusUpdate.Status.Output = ""
 		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseToolCallsPending
 		statusUpdate.Status.ContextWindow = append(statusUpdate.Status.ContextWindow, kubechainv1alpha1.Message{
@@ -457,6 +459,34 @@ func (r *TaskRunReconciler) processLLMResponse(ctx context.Context, output *kube
 		}
 
 		return r.createToolCalls(ctx, taskRun, statusUpdate, output.ToolCalls)
+	} else if output.Content != "" {
+		// final answer branch
+		logger.Info("DEBUG: Taking final answer branch because there are no tool calls and content is present")
+		statusUpdate.Status.Output = output.Content
+		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseFinalAnswer
+		statusUpdate.Status.Ready = true
+		statusUpdate.Status.ContextWindow = append(statusUpdate.Status.ContextWindow, kubechainv1alpha1.Message{
+			Role:    "assistant",
+			Content: output.Content,
+		})
+		statusUpdate.Status.Status = StatusReady
+		statusUpdate.Status.StatusDetail = "LLM final response received"
+		statusUpdate.Status.Error = ""
+		r.recorder.Event(taskRun, corev1.EventTypeNormal, "LLMFinalAnswer", "LLM response received successfully")
+
+		// End the parent span since we've reached a terminal state
+		r.endTaskRunSpan(ctx, taskRun, codes.Ok, "TaskRun completed successfully with final answer")
+	} else {
+		// Empty response - this is an error condition
+		logger.Error(fmt.Errorf("empty response from LLM"), "LLM returned neither content nor tool calls")
+		statusUpdate.Status.Ready = false
+		statusUpdate.Status.Status = StatusError
+		statusUpdate.Status.StatusDetail = "LLM returned an empty response with no tool calls"
+		statusUpdate.Status.Error = "Empty response from LLM"
+		r.recorder.Event(taskRun, corev1.EventTypeWarning, "EmptyLLMResponse", "LLM returned neither content nor tool calls")
+
+		// End the parent span since we've reached a terminal error state
+		r.endTaskRunSpan(ctx, taskRun, codes.Error, "LLM returned an empty response")
 	}
 	return ctrl.Result{}, nil
 }
