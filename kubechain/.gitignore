@@ -7,6 +7,9 @@
 bin/*
 Dockerfile.cross
 
+# Developer playground samples
+config/samples/*.play.yaml
+
 # Test binary, built with `go test -c`
 *.test
 

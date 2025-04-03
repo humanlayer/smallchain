@@ -20,6 +20,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+type ContactChannelType string
+
+const (
+	ContactChannelTypeSlack ContactChannelType = "slack"
+	ContactChannelTypeEmail ContactChannelType = "email"
+)
+
 // SlackChannelConfig defines configuration specific to Slack channels
 type SlackChannelConfig struct {
 	// ChannelOrUserID is the Slack channel ID (C...) or user ID (U...)
@@ -50,22 +57,25 @@ type EmailChannelConfig struct {
 
 // ContactChannelSpec defines the desired state of ContactChannel.
 type ContactChannelSpec struct {
-	// ChannelType is the type of channel (e.g. "slack", "email")
+	// Type is the type of channel (e.g. "slack", "email")
+	// TODO(4) - consider removing this, HumanLayer ContactChannel models don't include it
+
+	// Type is the type of channel (e.g. "slack", "email")
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Enum=slack;email
-	ChannelType string `json:"channelType"`
+	Type ContactChannelType `json:"type"`
 
 	// APIKeyFrom references the secret containing the API key or token
 	// +kubebuilder:validation:Required
 	APIKeyFrom APIKeySource `json:"apiKeyFrom"`
 
-	// SlackConfig holds configuration specific to Slack channels
+	// Slack holds configuration specific to Slack channels
 	// +optional
-	SlackConfig *SlackChannelConfig `json:"slackConfig,omitempty"`
+	Slack *SlackChannelConfig `json:"slack,omitempty"`
 
-	// EmailConfig holds configuration specific to Email channels
+	// Email holds configuration specific to Email channels
 	// +optional
-	EmailConfig *EmailChannelConfig `json:"emailConfig,omitempty"`
+	Email *EmailChannelConfig `json:"email,omitempty"`
 }
 
 // ContactChannelStatus defines the observed state of ContactChannel.
@@ -86,7 +96,7 @@ type ContactChannelStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:name="ChannelType",type="string",JSONPath=".spec.channelType"
+// +kubebuilder:printcolumn:name="Type",type="string",JSONPath=".spec.type"
 // +kubebuilder:printcolumn:name="Ready",type="boolean",JSONPath=".status.ready"
 // +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.status"
 // +kubebuilder:printcolumn:name="Detail",type="string",JSONPath=".status.statusDetail",priority=1

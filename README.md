@@ -7,12 +7,12 @@
 KubeChain is a cloud-native orchestrator for AI Agents built on Kubernetes. It supports [long-lived outer-loop agents](https://theouterloop.substack.com/p/openais-realtime-api-is-a-step-towards) that can process asynchronous execution of both LLM inference and long-running tool calls. It's designed for simplicity and gives strong durability and reliability guarantees for agents that make asynchronous tool calls like contacting humans or delegating work to other agents.
 
 :warning: **Note** - KubeChain is experimental and some known issues and race conditions. Use at your own risk.
- 
+
 <div align="center">
 
 <h3>
 
-[Discord](https://discord.gg/AK6bWGFY7d) | [Documentation](./docs) | [Examples](./kubechain-example)
+[Discord](https://discord.gg/AK6bWGFY7d) | [Documentation](./kubechain/docs) | [Examples](./kubechain-example)
 
 </h3>
 
@@ -46,7 +46,7 @@ KubeChain is a cloud-native orchestrator for AI Agents built on Kubernetes. It s
 
 - **LLM**: Provider + API Keys + Parameters
 - **Agent**: LLM + System Prompt + Tools
-- **Tool**: Function, API, Docker container, or another Agent
+- **Tool**: MCP server or another Agent
 - **Task**: Agent + User Message
 - **TaskRun**: Task + Current context window
 
@@ -66,15 +66,11 @@ To run KubeChain locally on macos, you'll also need:
 
 ### Setting Up a Local Cluster
 
-
-
-1. **Create a Kind cluster**
-
 ```bash
 kind create cluster
 ```
 
-2. **Add your OpenAI API key as a Kubernetes secret**
+### Add your OpenAI API key as a Kubernetes secret
 
 ```bash
 kubectl create secret generic openai \
@@ -86,10 +82,10 @@ kubectl create secret generic openai \
 
 
 > [!TIP]
-> For better visibility when running tutorial, we recommend starting 
+> For better visibility when running tutorial, we recommend starting
 > a stream to watch all the events as they're happening,
 > for example:
-> 
+>
 > ```bash
 > kubectl get events --watch
 > ```
@@ -155,24 +151,24 @@ graph RL
 ```
 
 Check the created LLM:
-   
+
 ```bash
 kubectl get llm
 ```
-   
+
    Output:
 ```
 NAME     PROVIDER   READY   STATUS
 gpt-4o   openai     true    Ready
 ```
-   
+
 <details>
 <summary>Using `-o wide` and `describe`</summary>
-   
+
 ```bash
 kubectl get llm -o wide
 ```
-   
+
    Output:
 ```
 NAME     PROVIDER   READY   STATUS   DETAIL
@@ -254,24 +250,24 @@ graph RL
 ```
 
    Check the created Agent:
-   
+
 ```bash
 kubectl get agent
 ```
-   
+
    Output:
 ```
 NAME           READY   STATUS
 my-assistant   true    Ready
 ```
-   
+
 <details>
 <summary>Using `-o wide` and `describe`</summary>
-   
+
 ```bash
 kubectl get agent -o wide
 ```
-   
+
    Output:
 ```
 NAME           READY   STATUS   DETAIL
@@ -359,21 +355,21 @@ graph RL
     end
 ```
 Check the created Task:
-   
+
 ```bash
 kubectl get task
 ```
-   
+
    Output:
 
 ```
 NAME               READY   STATUS   AGENT          MESSAGE
 hello-world-task   true    Ready    my-assistant   What is the capital of the moon?
 ```
-   
+
 <details>
 <summary>Using `-o wide` and `describe`</summary>
-   
+
 ```bash
 kubectl get task -o wide
 ```
@@ -464,7 +460,7 @@ graph RL
 For now, our task run should complete quickly and return a FinalAnswer.
 
 ```bash
-kubectl get taskrun 
+kubectl get taskrun
 ```
 
 Output:
@@ -480,7 +476,7 @@ To get just the output, run
 kubectl get taskrun -o jsonpath='{.items[*].status.output}'
 ```
 
-and you'll see 
+and you'll see
 
 
 > The Moon does not have a capital. It is a natural satellite of Earth and lacks any governmental structure or human habitation that would necessitate a capital city.
@@ -536,7 +532,7 @@ We saw above how you can get the status of a taskrun with `kubectl get taskrun`.
 For more detailed information, like to see the full context window, you can use:
 
 ```bash
-kubectl describe taskrun 
+kubectl describe taskrun
 ```
 
 ```
@@ -659,7 +655,7 @@ fetch    true    Ready
 ```bash
 kubectl describe mcpserver
 ```
-Output: 
+Output:
 
 ```
 Name:         fetch
@@ -784,7 +780,7 @@ spec:
 EOF
 ```
 
-You should see some events in the output of 
+You should see some events in the output of
 
 ```
 kubectl get events --watch
@@ -807,7 +803,7 @@ kubectl get taskrun fetch-task-1 -o jsonpath='{.status.output}'
 ```
 
 > The URL [https://swapi.dev/api/people/1](https://swapi.dev/api/people/1) contains the following data about a Star Wars character:
-> 
+>
 > - **Name**: Luke Skywalker
 > - **Height**: 172 cm
 > - **Mass**: 77 kg
@@ -836,7 +832,7 @@ kubectl get taskrun fetch-task-1 -o jsonpath='{.status.output}'
 and you can describe the taskrun to see the full context window and tool-calling turns
 
 ```
-kubectl describe taskrun fetch-task-1 
+kubectl describe taskrun fetch-task-1
 ```
 
 A simplified view of the taskrun:
@@ -866,11 +862,11 @@ flowchart TD
     Task2[Task]
     Agent2[Agent]
 
-    UserMessage --> Task --> Agent --> LLM 
+    UserMessage --> Task --> Agent --> LLM
     Provider --> OpenAI
     Secret --> Credentials
     Credentials --> OpenAI
-    OpenAI --> ToolCall-1 
+    OpenAI --> ToolCall-1
     ToolCall-1 --> Task2 --> Agent2 --> fetch
     fetch --> ToolResponse-1
     ToolResponse-1 --> OpenAI2[OpenAI]
@@ -879,64 +875,7 @@ flowchart TD
 
 * * *
 
-Putting another way, the TaskRun controller is responsible for sending the context window to the LLM, and
-for processing the LLM response with the appropriate tool calls from MCP servers.
-
-```mermaid
-flowchart RL
-    Agent
-    LLM
-    Secret
-
-    LLMRef --> LLM
-    Credentials --> Secret
-    AgentRef --> Agent
-    TaskRef --> Task
-
-
-    subgraph LLM
-      Provider
-      Credentials
-      ModelParameters
-    end
-
-    subgraph Agent
-      LLMRef
-      SystemPrompt
-      MCPServers
-    end
-
-    subgraph Task
-      AgentRef
-      Message
-    end
-
-    subgraph MCPServer
-      fetch[fetch server]
-    end
-
-    MCPServers --> MCPServer
-
-
-    subgraph TaskRun
-      TaskRef
-      subgraph ContextWindow
-        direction LR
-        SystemMessage
-        UserMessage
-        ToolCall-1
-        ToolResponse-1
-        ToolCall-2
-        ToolResponse-2
-        AssistantMessage
-      end
-    end
-
-    ContextWindow <--> MCPServer <--> fetch
-    ContextWindow <--> Provider <--> OpenAI
-
-
-```
+Your describe should return:
 
 ```
 Name:         fetch-task-1
@@ -1052,6 +991,253 @@ Events:
 
 That's it! Go add your favorite MCPs and start running durable agents in Kubernetes!
 
+### Incorporating Human Approval
+
+For certain classes of MCP tools, you may want to incorporate human approval into an agent's workflow.
+
+KubeChain supports this via [HumanLayer's](https://github.com/humanlayer/humanlayer) [contact channels](https://www.humanlayer.dev/docs/channels/introduction)
+to request human approval and input across Slack, email, and more.
+
+**Note**: Directly approving tool calls with `kubectl` or a `kubechain` CLI is planned but not yet supported.
+
+**Note**: We recommend running through the above examples first prior exploring this section. Several Kubernetes resources created in that section will be assumed to exist. If you'd like to see a full running version of the Kubernetes configuration used in this section, check out [kubechain_v1alpha_contactchannel_with_approval.yaml](./config/samples/kubechain_v1alpha_contactchannel_with_approval.yaml)
+
+You'll need a HumanLayer API key to get started:
+
+```bash
+kubectl create secret generic humanlayer --from-literal=HUMANLAYER_API_KEY=$HUMANLAYER_API_KEY
+```
+
+Next, create a ContactChannel resource. In this example, we'll use an email contact channel (be sure to swap the `approver@example.com` address for a real target email address):
+
+```bash
+cat <<EOF | kubectl apply -f -
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: ContactChannel
+metadata:
+  name: approval-channel 
+spec:
+  type: email # Replace with "slack" if using Slack
+  apiKeyFrom:
+    secretKeyRef:
+      name: humanlayer
+      key: HUMANLAYER_API_KEY
+  email:
+    address: "approver@example.com" # Replace with actual target email address
+    subject: "Approval Request from Kubechain"
+    contextAboutUser: "Primary approver for web fetch operations"
+EOF
+```
+
+Now, let's update our MCP server from the earlier example so that it references our contact channel.
+
+```bash
+cat <<EOF | kubectl apply -f -
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: MCPServer
+metadata:
+  name: fetch
+spec:
+  transport: "stdio"
+  command: "uvx"
+  args: ["mcp-server-fetch"]
+  # When an approvalContactChannel is specified, 
+  # all tools on this MCP server will wait for human approval prior executing.
+  approvalContactChannel:
+    name: approval-channel 
+EOF
+```
+
+Be sure you have an agent that references the above `MCPServer` by running `kubectl describe agent` or create a fresh `agent` with:
+
+```bash
+cat <<EOF | kubectl apply -f -
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: Agent
+metadata:
+  name: agent-with-fetch
+spec:
+  llmRef:
+    name: gpt-4o
+  system: |
+    You are a helpful assistant. Your job is to help the user with their tasks.
+  mcpServers:
+    - name: fetch
+EOF
+```
+
+The fun part: Create a new task that uses the `fetch` tool to test the human approval workflow.
+
+```bash
+cat <<EOF | kubectl apply -f -
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: Task
+metadata:
+  name: approved-fetch-task
+spec:
+  agentRef:
+    name: agent-with-fetch 
+  message: "Write me a haiku about the character found at https://swapi.dev/api/people/2?"
+EOF
+```
+
+Once this hits the tool call, we can check out the tool calls to see the human approval workflow in action:
+
+```
+kubectl get taskruntoolcall
+```
+
+```
+$ kubectl get taskruntoolcall                                                              
+NAME                          PHASE     TASKRUN                 TOOL
+approved-fetch-task-1-tc-01   Pending   approved-fetch-task-1   fetch__fetch
+```
+
+and we run `describe` against the tool call to see that its waiting for human approval:
+
+
+```
+kubectl describe taskruntoolcall approved-fetch-task-1-tc-01  
+```
+
+```
+Name:         approved-fetch-task-1-tc-01
+Namespace:    default
+Labels:       kubechain.humanlayer.dev/taskruntoolcall=approved-fetch-task-1
+Annotations:  <none>
+API Version:  kubechain.humanlayer.dev/v1alpha1
+Kind:         TaskRunToolCall
+Metadata:
+  Creation Timestamp:  2025-04-01T16:09:02Z
+  Generation:          1
+  Owner References:
+    API Version:     kubechain.humanlayer.dev/v1alpha1
+    Controller:      true
+    Kind:            TaskRun
+    Name:            approved-fetch-task-1
+    UID:             52893dec-c5a5-424d-983f-13a89215b084
+  Resource Version:  91939
+  UID:               3f8c4eaf-0e46-44f6-9741-f32809747099
+Spec:
+  Arguments:  {"url":"https://swapi.dev/api/people/2"}
+  Task Run Ref:
+    Name:        approved-fetch-task-1
+  Tool Call Id:  call_7PCkM1y2v8wFOC2vKtDrweor
+  Tool Ref:
+    Name:  fetch__fetch
+Status:
+  External Call ID:  ec-3257d3e
+  Phase:             Pending
+  Start Time:        2025-04-01T16:09:02Z
+  Status:            AwaitingHumanApproval
+  Status Detail:     Waiting for human approval via contact channel approval-channel
+Events:
+  Type    Reason                 Age    From                        Message
+  ----    ------                 ----   ----                        -------
+  Normal  AwaitingHumanApproval  2m42s  taskruntoolcall-controller  Tool execution requires approval via contact channel approval-channel
+  Normal  HumanLayerRequestSent  2m41s  taskruntoolcall-controller  HumanLayer request sent
+```
+
+Note as well, at this point our `taskrun` has not completed. If we run `kubectl get taskrun approved-fetch-task-1` no `OUTPUT` has yet been returned.
+
+Go ahead and approve the email you should have received via HumanLayer requesting approval to run our `fetch` tool. After a few seconds, running `kubectl get taskruntoolcall approved-fetch-task-1-tc-01` should show our tool has been called. Additionally, if we run `kubectl describe taskrun approved-fetch-task-1`, we should see the following (truncated a bit for brevity):
+
+```
+$ kubectl describe taskrun approved-fetch-task-1
+Name:         approved-fetch-task-1
+Kind:         TaskRun
+Metadata:
+  Creation Timestamp:  2025-04-01T16:16:13Z
+  UID:               58c9d760-a160-4386-9d8d-ae9da0286125
+Spec:
+  Task Ref:
+    Name:  approved-fetch-task
+Status:
+  Context Window:
+    Content:  You are a helpful assistant. Your job is to help the user with their tasks.
+
+    Role:     system
+    Content:  Write me a haiku about the character found at https://swapi.dev/api/people/2?
+    Role:     user
+    Content:
+    Role:     assistant
+    Tool Calls:
+      Function:
+        Arguments:  {"url":"https://swapi.dev/api/people/2"}
+        Name:       fetch__fetch
+      Id:           call_FZaXJq1FKuBVLYr9HHJwcnOb
+      Type:         function
+    Content:        Content type application/json cannot be simplified to markdown, but here is the raw content:
+Contents of https://swapi.dev/api/people/2:
+{"name":"C-3PO","height":"167","mass":"75","hair_color":"n/a","skin_color":"gold","eye_color":"yellow","birth_year":"112BBY","gender":"n/a","homeworld":"https://swapi.dev/api/planets/1/","films":["https://swapi.dev/api/films/1/","https://swapi.dev/api/films/2/","https://swapi.dev/api/films/3/","https://swapi.dev/api/films/4/","https://swapi.dev/api/films/5/","https://swapi.dev/api/films/6/"],"species":["https://swapi.dev/api/species/2/"],"vehicles":[],"starships":[],"created":"2014-12-10T15:10:51.357000Z","edited":"2014-12-20T21:17:50.309000Z","url":"https://swapi.dev/api/people/2/"}
+    Role:          tool
+    Tool Call Id:  call_FZaXJq1FKuBVLYr9HHJwcnOb
+    Content:       Golden C-3PO,
+Speaks in many languages,
+Droid with gentle heart.
+    Role:  assistant
+  Output:  Golden C-3PO,
+Speaks in many languages,
+Droid with gentle heart.
+  Phase:  FinalAnswer
+  Ready:  true
+  Span Context:
+    Span ID:      3fd054c970f50fc1
+    Trace ID:     21e2b0e7457ae78cce4abaf1b1c02819
+  Status:         Ready
+  Status Detail:  LLM final response received
+Events:
+  Type    Reason                     Age               From                Message
+  ----    ------                     ----              ----                -------
+  Normal  ValidationSucceeded        48s               taskrun-controller  Task validated successfully
+  Normal  ToolCallsPending           47s               taskrun-controller  LLM response received, tool calls pending
+  Normal  ToolCallCreated            47s               taskrun-controller  Created TaskRunToolCall approved-fetch-task-1-tc-01
+  Normal  SendingContextWindowToLLM  7s (x2 over 48s)  taskrun-controller  Sending context window to LLM
+  Normal  AllToolCallsCompleted      7s                taskrun-controller  All tool calls completed, ready to send tool results to LLM
+  Normal  LLMFinalAnswer             6s                taskrun-controller  LLM response received successfully
+```
+
+### Using other Language Models
+
+So far we've been using the `gpt-4o` model from OpenAI. KubeChain also supports using other language models from OpenAI, Anthropic, Vertex, and more.
+
+
+Let's create a new LLM and Agent that uses the `claude-3-5-sonnet` model from Anthropic.
+
+#### Create a secret
+
+```
+cat <<EOF | kubectl create secret generic anthropic --from-literal=ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY
+```
+
+#### Create an LLM
+
+```
+cat <<EOF | kubectl apply -f -
+apiVersion: kubechain.humanlayer.dev/v1alpha1
+kind: LLM
+metadata:
+  name: claude-3-5-sonnet
+spec:
+  provider: anthropic
+  model: claude-3-5-sonnet
+EOF
+```
+
+fetch the LLM to verify it was created:
+
+```
+kubectl get llm claude-3-5-sonnet
+```
+
+```
+#TODO paste output
+```
+
+
+**Exercise for the reader**: create a new Agent that uses the `claude-3-5-sonnet` model and our MCP server, and assign it a task!
+
+
 
 ### Cleaning Up
 
@@ -1061,7 +1247,7 @@ Remove our agent, task and related resources:
 kubectl delete taskruntoolcall --all
 kubectl delete taskrun --all
 kubectl delete task --all
-kubectl delete agent --all 
+kubectl delete agent --all
 kubectl delete mcpserver --all
 kubectl delete llm --all
 ```
@@ -1070,6 +1256,8 @@ Remove the OpenAI secret:
 
 ```
 kubectl delete secret openai
+kubectl delete secret anthropic
+kubectl delete secret humanlayer
 ```
 
 Remove the operator, resources and custom resource definitions:
@@ -1081,12 +1269,12 @@ kubectl delete -f https://raw.githubusercontent.com/humanlayer/smallchain/refs/h
 If you made a kind cluster, you can delete it with:
 
 ```
-kind delete cluster 
+kind delete cluster
 ```
 
 ## Key Features
 
-- **Kubernetes-Native Architecture**: KubeChain is built as a Kubernetes operator, using Custom Resource Definitions (CRDs) to define and manage LLMs, Agents, Tools, Tasks, and TaskRuns. 
+- **Kubernetes-Native Architecture**: KubeChain is built as a Kubernetes operator, using Custom Resource Definitions (CRDs) to define and manage LLMs, Agents, Tools, Tasks, and TaskRuns.
 
 - **Durable Agent Execution**: KubeChain implements something like async/await at the infrastructure layer, checkpointing a conversation chain whenever a tool call or agent delegation occurs, with the ability to resume from that checkpoint when the operation completes.
 

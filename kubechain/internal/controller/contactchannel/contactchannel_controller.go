@@ -40,10 +40,6 @@ var (
 	statusError   = "Error"
 	statusPending = "Pending"
 
-	// Channel types
-	channelTypeSlack = "slack"
-	channelTypeEmail = "email"
-
 	// API endpoints - variables so they can be overridden in tests
 	humanLayerAPIURL = "https://api.humanlayer.dev/humanlayer/v1/project"
 
@@ -118,22 +114,22 @@ func (r *ContactChannelReconciler) validateEmailAddress(email string) error {
 
 // validateChannelConfig validates the channel configuration based on channel type
 func (r *ContactChannelReconciler) validateChannelConfig(channel *kubechainv1alpha1.ContactChannel) error {
-	switch channel.Spec.ChannelType {
-	case channelTypeSlack:
-		if channel.Spec.SlackConfig == nil {
+	switch channel.Spec.Type {
+	case kubechainv1alpha1.ContactChannelTypeSlack:
+		if channel.Spec.Slack == nil {
 			return fmt.Errorf("slackConfig is required for slack channel type")
 		}
 		// Slack channel ID validation is handled by the CRD validation
 		return nil
 
-	case channelTypeEmail:
-		if channel.Spec.EmailConfig == nil {
+	case kubechainv1alpha1.ContactChannelTypeEmail:
+		if channel.Spec.Email == nil {
 			return fmt.Errorf("emailConfig is required for email channel type")
 		}
-		return r.validateEmailAddress(channel.Spec.EmailConfig.Address)
+		return r.validateEmailAddress(channel.Spec.Email.Address)
 
 	default:
-		return fmt.Errorf("unsupported channel type: %s", channel.Spec.ChannelType)
+		return fmt.Errorf("unsupported channel type: %s", channel.Spec.Type)
 	}
 }
 
@@ -169,19 +165,19 @@ func (r *ContactChannelReconciler) validateSecret(ctx context.Context, channel *
 	channel.Status.HumanLayerProject = projectID
 
 	// Also validate channel-specific credential if needed
-	switch channel.Spec.ChannelType {
-	case channelTypeSlack:
+	switch channel.Spec.Type {
+	case kubechainv1alpha1.ContactChannelTypeSlack:
 		// For Slack channels, we may need to validate Slack token separately
 		// if the implementation requires a separate Slack token
 		// This would depend on how HumanLayer handles the integration
 		return nil
 
-	case channelTypeEmail:
+	case kubechainv1alpha1.ContactChannelTypeEmail:
 		// Email validation doesn't require additional API key validation
 		return nil
 
 	default:
-		return fmt.Errorf("unsupported channel type: %s", channel.Spec.ChannelType)
+		return fmt.Errorf("unsupported channel type: %s", channel.Spec.Type)
 	}
 }
 
@@ -195,7 +191,7 @@ func (r *ContactChannelReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	log.Info("Starting reconciliation", "namespacedName", req.NamespacedName, "channelType", channel.Spec.ChannelType)
+	log.Info("Starting reconciliation", "namespacedName", req.NamespacedName, "type", channel.Spec.Type)
 
 	// Create a copy for status update
 	statusUpdate := channel.DeepCopy()
@@ -242,7 +238,7 @@ func (r *ContactChannelReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	} else {
 		statusUpdate.Status.Ready = true
 		statusUpdate.Status.Status = statusReady
-		statusUpdate.Status.StatusDetail = fmt.Sprintf("HumanLayer %s channel validated successfully", channel.Spec.ChannelType)
+		statusUpdate.Status.StatusDetail = fmt.Sprintf("HumanLayer %s channel validated successfully", channel.Spec.Type)
 		r.recorder.Event(&channel, corev1.EventTypeNormal, eventReasonValidationSucceeded, statusUpdate.Status.StatusDetail)
 	}
 
@@ -253,7 +249,7 @@ func (r *ContactChannelReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	log.Info("Successfully reconciled ContactChannel",
-		"channelType", channel.Spec.ChannelType,
+		"type", channel.Spec.Type,
 		"ready", statusUpdate.Status.Ready,
 		"status", statusUpdate.Status.Status,
 		"statusDetail", statusUpdate.Status.StatusDetail)

@@ -172,6 +172,75 @@ Alternatively, clean up components individually:
 - Ensure the PROJECT file contains entries for all resources before running `make manifests`
 - Follow the detailed guidance in the [Kubebuilder Guide](/kubechain/docs/kubebuilder-guide.md)
 
+### Kubernetes Resource Design
+
+#### Don't use "config" in field names:
+
+Bad:
+
+```
+spec:
+  slackConfig:
+    #...
+  emailConfig:
+    #...
+```
+
+Good:
+
+```
+spec:
+  slack:
+    # ...
+  email:
+    # ...
+```
+
+#### Prefer nil-able sub-objects over "type" fields:
+
+This is more guidelines than rules, just consider it in cases when you a Resource that is a union type. There's
+no great answer here because of how Go handles unions. (maybe the state-of-the-art has progressed since the last time I checked) -- dex
+
+Bad:
+
+```
+spec: 
+  type: slack
+  slack:
+    channelOrUserID: C1234567890
+```
+
+Good:
+
+```
+spec: 
+  slack:
+    channelOrUserID: C1234567890
+```
+
+In code, instead of 
+
+```
+switch (resource.Spec.Type) {
+    case "slack":
+        // ...
+    case "email":
+        // ...
+}
+```
+
+check which object is non-nil and use that:
+
+```
+if resource.Spec.Slack != nil {
+    // ...
+} else if resource.Spec.Email != nil {
+    // ...
+} else if {
+    // ...
+}
+```
+
 ### Markdown
 - When writing markdown code blocks, do not indent the block, just use backticks to offset the code
 
@@ -195,8 +264,8 @@ Testing is a critical part of the development process, especially for Kubernetes
 
 Example state transition test structure:
 ```go
-Context("'' -> Initializing", func() {
-    It("moves to Initializing and sets required fields", func() {
+Context("'':'' -> Pending:Pending", func() {
+    It("initializes to Pending:Pending and sets required fields", func() {
         // Set up resources needed for this specific test
         resource := testFixture.Setup(ctx)
         defer testFixture.Teardown(ctx)
@@ -208,8 +277,10 @@ Context("'' -> Initializing", func() {
         Expect(err).NotTo(HaveOccurred())
         
         // Verify expected state transition
-        Expect(resource.Status.Phase).To(Equal(ExpectedPhase))
-        Expect(resource.Status.RequiredField).NotTo(BeNil())
+        Expect(resource.Status.Status).To(Equal(myresource.StatusTypePending))
+        Expect(resource.Status.Phase).To(Equal(myresource.PhasePending))
+        Expect(resource.Status.StatusDetail).To(Equal("Initializing"))
+        Expect(resource.Status.StartTime).NotTo(BeNil())
     })
 })
 ```
@@ -269,11 +340,12 @@ func (t *TestResource) Teardown(ctx context.Context) {
 - When testing a multi-step workflow, break it into individual state transitions
 
 Examples of state transition Context blocks:
-- `Context("'' -> Initializing")` - Initial reconciliation
-- `Context("Initializing -> Ready")` - Normal progression
-- `Context("Initializing -> Error")` - Error handling
-- `Context("Error -> ErrorBackoff")` - Recovery attempts
-- `Context("Ready -> Updating")` - Changes after ready state
+- `Context("'':'' -> Pending:Pending")` - Initial reconciliation
+- `Context("Pending:Pending -> Ready:Pending")` - Setup completion
+- `Context("Ready:Pending -> Ready:Running")` - Start processing
+- `Context("Ready:Running -> Ready:Succeeded")` - Successful completion
+- `Context("Ready:Pending -> Error:Failed")` - Error handling
+- `Context("Error:Failed -> Ready:Pending")` - Recovery attempts
 
 #### Test Implementation Best Practices
 - Use descriptive By() statements to explain test steps
@@ -306,3 +378,99 @@ Examples of state transition Context blocks:
 - Consider using controller runtime fake clients for complex scenarios
 - Use the `gomock` package (github.com/golang/mock/gomock) for generating mocks of interfaces
 - For HTTP services, use httptest package from the standard library
+
+### Status vs Phase in Controllers
+
+When designing controllers, distinguish between Status and Phase:
+
+- **Status** indicates the health or readiness of a resource. It answers: "Is the resource working correctly?"
+  - Use StatusType values like "Ready", "Error", "Pending", "AwaitingHumanApproval"
+  - Status reflects the current operational state of the resource
+  - Status changes are typically cross-cutting (error handling, initialization)
+  - Example values: "Ready", "Error", "Pending", "AwaitingHumanApproval", "ErrorRequestingHumanApproval"
+
+- **Phase** indicates the progress of a resource in its lifecycle. It answers: "What stage of processing is the resource in?"
+  - Use PhaseType values like "Pending", "Running", "Succeeded", "Failed", "AwaitingHumanInput"
+  - Phase reflects the workflow stage of the resource
+  - Phase changes represent forward progression through a workflow
+  - Example values: "Pending", "Running", "Succeeded", "Failed", "AwaitingHumanInput", "AwaitingSubAgent"
+
+#### Guidelines for choosing between Status and Phase
+
+1. Use **Status** for a state when:
+   - It indicates whether the resource is operational or not
+   - It represents a cross-cutting concern affecting all states (like errors)
+   - It focuses on readiness rather than progress
+
+2. Use **Phase** for a state when:
+   - It's part of a sequential progression
+   - It represents a distinct stage in a workflow
+   - It indicates what the resource is currently doing
+
+3. When naming test cases, use the "Status:Phase -> Status:Phase" format to clearly communicate transitions:
+   ```go
+   Context("Pending:Pending -> Ready:Pending", func() {
+       It("moves from Pending:Pending to Ready:Pending during setup", func() {
+           // Test implementation
+       })
+   })
+   ```
+
+#### Implementation Guidelines
+
+1. **Preserve Status During Phase Transitions**: When implementing workflow progression that only changes the Phase:
+   ```go
+   // Good: Only update Phase when transitioning to a new workflow stage
+   // while preserving current Status (health)
+   trtc.Status.Phase = kubechainv1alpha1.TaskRunToolCallPhaseAwaitingHumanApproval
+   trtc.Status.StatusDetail = "Waiting for human approval"
+   
+   // Avoid: Don't modify Status when the change is just about workflow progress
+   // trtc.Status.Status = someNewStatus // Don't do this when only the Phase is changing
+   ```
+
+2. **Change Status Only When Health State Changes**: Status should change only when the health or readiness of the resource changes:
+   ```go
+   // When a resource encounters an error
+   trtc.Status.Status = kubechainv1alpha1.TaskRunToolCallStatusTypeError
+   trtc.Status.Error = err.Error()
+   
+   // When a resource becomes ready
+   trtc.Status.Status = kubechainv1alpha1.TaskRunToolCallStatusTypeReady
+   ```
+
+3. **Use Error Status with Descriptive Phase Values**: When handling errors, set Status to Error and use Phase to describe the specific error scenario:
+   ```go
+   // Helper function for setting error states
+   func (r *MyReconciler) setStatusError(ctx context.Context, phase MyResourcePhase, eventType string, resource *MyResource, err error) {
+       resource.Status.Status = MyResourceStatusTypeError // Always use Error status
+       resource.Status.Phase = phase                     // Use specific Phase to describe the error
+       resource.Status.Error = err.Error()
+       r.recorder.Event(resource, corev1.EventTypeWarning, eventType, err.Error())
+   }
+   ```
+
+4. **Early Return for Terminal States**: For resources that have workflow-based lifecycles with terminal states, add an early check in the Reconcile function to avoid unnecessary processing:
+   ```go
+   // For workflow-based resources like TaskRunToolCall that reach terminal states
+   if resource.Status.Status == MyResourceStatusTypeError || 
+      resource.Status.Phase == MyResourcePhaseSucceeded || 
+      resource.Status.Phase == MyResourcePhaseFailed {
+       logger.Info("Resource in terminal state, nothing to do", 
+           "status", resource.Status.Status, 
+           "phase", resource.Status.Phase)
+       return ctrl.Result{}, nil
+   }
+   
+   // Note: This pattern may not apply to long-running resources like Servers or Agents
+   // that need to maintain their state continuously
+   ```
+
+5. **Test Error Transitions with Status:Phase Format**: When testing error transitions, follow the Status:Phase naming convention:
+   ```go
+   Context("Ready:Pending -> Error:ErrorRequestingApproval", func() {
+       It("transitions to Error:ErrorRequestingApproval when API call fails", func() {
+           // Test implementation
+       })
+   })
+   ```

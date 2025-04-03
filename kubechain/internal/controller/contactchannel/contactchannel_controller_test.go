@@ -101,14 +101,14 @@ var _ = Describe("ContactChannel Controller", func() {
 					Namespace: "default",
 				},
 				Spec: kubechainv1alpha1.ContactChannelSpec{
-					ChannelType: "slack",
+					Type: "slack",
 					APIKeyFrom: kubechainv1alpha1.APIKeySource{
 						SecretKeyRef: kubechainv1alpha1.SecretKeyRef{
 							Name: secretName,
 							Key:  secretKey,
 						},
 					},
-					SlackConfig: &kubechainv1alpha1.SlackChannelConfig{
+					Slack: &kubechainv1alpha1.SlackChannelConfig{
 						ChannelOrUserID:           "C12345678",
 						ContextAboutChannelOrUser: "A test channel",
 					},
@@ -158,14 +158,14 @@ var _ = Describe("ContactChannel Controller", func() {
 					Namespace: "default",
 				},
 				Spec: kubechainv1alpha1.ContactChannelSpec{
-					ChannelType: "email",
+					Type: "email",
 					APIKeyFrom: kubechainv1alpha1.APIKeySource{
 						SecretKeyRef: kubechainv1alpha1.SecretKeyRef{
 							Name: secretName,
 							Key:  secretKey,
 						},
 					},
-					EmailConfig: &kubechainv1alpha1.EmailChannelConfig{
+					Email: &kubechainv1alpha1.EmailChannelConfig{
 						Address:          "test@example.com",
 						ContextAboutUser: "Test user",
 						Subject:          "Test notification",
@@ -216,7 +216,7 @@ var _ = Describe("ContactChannel Controller", func() {
 					Namespace: "default",
 				},
 				Spec: kubechainv1alpha1.ContactChannelSpec{
-					ChannelType: "slack",
+					Type: "slack",
 					APIKeyFrom: kubechainv1alpha1.APIKeySource{
 						SecretKeyRef: kubechainv1alpha1.SecretKeyRef{
 							Name: secretName,
@@ -270,14 +270,14 @@ var _ = Describe("ContactChannel Controller", func() {
 					Namespace: "default",
 				},
 				Spec: kubechainv1alpha1.ContactChannelSpec{
-					ChannelType: "slack",
+					Type: "slack",
 					APIKeyFrom: kubechainv1alpha1.APIKeySource{
 						SecretKeyRef: kubechainv1alpha1.SecretKeyRef{
 							Name: secretName,
 							Key:  secretKey,
 						},
 					},
-					SlackConfig: &kubechainv1alpha1.SlackChannelConfig{
+					Slack: &kubechainv1alpha1.SlackChannelConfig{
 						ChannelOrUserID: "C12345678",
 					},
 				},
@@ -314,14 +314,14 @@ var _ = Describe("ContactChannel Controller", func() {
 					Namespace: "default",
 				},
 				Spec: kubechainv1alpha1.ContactChannelSpec{
-					ChannelType: "slack",
+					Type: "slack",
 					APIKeyFrom: kubechainv1alpha1.APIKeySource{
 						SecretKeyRef: kubechainv1alpha1.SecretKeyRef{
 							Name: "nonexistent-secret",
 							Key:  secretKey,
 						},
 					},
-					SlackConfig: &kubechainv1alpha1.SlackChannelConfig{
+					Slack: &kubechainv1alpha1.SlackChannelConfig{
 						ChannelOrUserID: "C12345678",
 					},
 				},
@@ -370,14 +370,14 @@ var _ = Describe("ContactChannel Controller", func() {
 					Namespace: "default",
 				},
 				Spec: kubechainv1alpha1.ContactChannelSpec{
-					ChannelType: "email",
+					Type: "email",
 					APIKeyFrom: kubechainv1alpha1.APIKeySource{
 						SecretKeyRef: kubechainv1alpha1.SecretKeyRef{
 							Name: secretName,
 							Key:  secretKey,
 						},
 					},
-					EmailConfig: &kubechainv1alpha1.EmailChannelConfig{
+					Email: &kubechainv1alpha1.EmailChannelConfig{
 						// Use an email that passes regex pattern but fails RFC5322 validation
 						Address: "test@example..com",
 					},

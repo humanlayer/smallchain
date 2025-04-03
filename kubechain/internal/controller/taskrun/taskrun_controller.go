@@ -467,7 +467,7 @@ func (r *TaskRunReconciler) createToolCalls(ctx context.Context, taskRun *kubech
 
 	// For each tool call, create a new TaskRunToolCall.
 	for i, tc := range toolCalls {
-		newName := fmt.Sprintf("%s-toolcall-%02d", statusUpdate.Name, i+1)
+		newName := fmt.Sprintf("%s-tc-%02d", statusUpdate.Name, i+1)
 		newTRTC := &kubechainv1alpha1.TaskRunToolCall{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      newName,

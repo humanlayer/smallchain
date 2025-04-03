@@ -3,6 +3,7 @@ package taskruntoolcall
 import (
 	"context"
 	"fmt"
+	"time"
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
@@ -19,23 +20,23 @@ var addTool = &TestTool{
 	toolType: "function",
 }
 
-// var testContactChannel = &TestContactChannel{
-// 	name:        "test-contact-channel",
-// 	channelType: "slack",
-// 	secretName:  testSecret.name,
-// }
+var testContactChannel = &TestContactChannel{
+	name:        "test-contact-channel",
+	channelType: kubechainv1alpha1.ContactChannelTypeSlack,
+	secretName:  testSecret.name,
+}
 
-// var testMCPServer = &TestMCPServer{
-// 	name:                   "test-mcp-server",
-// 	needsApproval:          true,
-// 	approvalContactChannel: testContactChannel.name,
-// }
+var testMCPServer = &TestMCPServer{
+	name:                   "test-mcp-server",
+	needsApproval:          true,
+	approvalContactChannel: testContactChannel.name,
+}
 
-// var testMCPTool = &TestMCPTool{
-// 	name:        "test-mcp-server-test-tool",
-// 	mcpServer:   testMCPServer.name,
-// 	mcpToolName: "test-tool",
-// }
+var testMCPTool = &TestMCPTool{
+	name:        "test-mcp-server-test-tool",
+	mcpServer:   testMCPServer.name,
+	mcpToolName: "test-tool",
+}
 
 var trtcForAddTool = &TestTaskRunToolCall{
 	name:      "test-taskruntoolcall",
@@ -63,7 +64,7 @@ type TestSecret struct {
 // TestContactChannel represents a test ContactChannel resource
 type TestContactChannel struct {
 	name           string
-	channelType    string
+	channelType    kubechainv1alpha1.ContactChannelType
 	secretName     string
 	contactChannel *kubechainv1alpha1.ContactChannel
 }
@@ -76,7 +77,7 @@ func (t *TestContactChannel) Setup(ctx context.Context) *kubechainv1alpha1.Conta
 			Namespace: "default",
 		},
 		Spec: kubechainv1alpha1.ContactChannelSpec{
-			ChannelType: t.channelType,
+			Type: t.channelType,
 			APIKeyFrom: kubechainv1alpha1.APIKeySource{
 				SecretKeyRef: kubechainv1alpha1.SecretKeyRef{
 					Name: t.secretName,
@@ -88,11 +89,11 @@ func (t *TestContactChannel) Setup(ctx context.Context) *kubechainv1alpha1.Conta
 
 	// Add specific config based on channel type
 	if t.channelType == "slack" {
-		contactChannel.Spec.SlackConfig = &kubechainv1alpha1.SlackChannelConfig{
+		contactChannel.Spec.Slack = &kubechainv1alpha1.SlackChannelConfig{
 			ChannelOrUserID: "C12345678",
 		}
 	} else if t.channelType == "email" {
-		contactChannel.Spec.EmailConfig = &kubechainv1alpha1.EmailChannelConfig{
+		contactChannel.Spec.Email = &kubechainv1alpha1.EmailChannelConfig{
 			Address: "test@example.com",
 		}
 	}
@@ -240,10 +241,8 @@ func setupTestAddTool(ctx context.Context) func() {
 
 // TestMCPServer represents a test MCPServer resource
 type TestMCPServer struct {
-	name string
-	// contactChannelName     string
-	needsApproval bool
-	// needsApprovalChecking  bool
+	name                   string
+	needsApproval          bool
 	approvalContactChannel string
 	mcpServer              *kubechainv1alpha1.MCPServer
 }
@@ -374,4 +373,83 @@ func reconciler() (*TaskRunToolCallReconciler, *record.FakeRecorder) {
 	}
 
 	return reconciler, recorder
+}
+
+// SetupTestApprovalConfig contains optional configuration for setupTestApprovalResources
+type SetupTestApprovalConfig struct {
+	TaskRunToolCallStatus *kubechainv1alpha1.TaskRunToolCallStatus
+	TaskRunToolCallName   string
+	TaskRunToolCallArgs   string
+	ContactChannelType    kubechainv1alpha1.ContactChannelType
+}
+
+// setupTestApprovalResources sets up all resources needed for testing approval
+func setupTestApprovalResources(ctx context.Context, config *SetupTestApprovalConfig) (*kubechainv1alpha1.TaskRunToolCall, func()) {
+	By("creating the secret")
+	testSecret.Setup(ctx)
+	By("creating the contact channel")
+
+	// Set contact channel type based on config or default to ContactChannelTypeSlack
+	channelType := kubechainv1alpha1.ContactChannelTypeSlack
+	if config != nil && config.ContactChannelType != "" {
+		switch config.ContactChannelType {
+		case "email":
+			channelType = kubechainv1alpha1.ContactChannelTypeEmail
+		default:
+			channelType = kubechainv1alpha1.ContactChannelTypeSlack
+		}
+	}
+
+	testContactChannel.channelType = channelType
+	testContactChannel.SetupWithStatus(ctx, kubechainv1alpha1.ContactChannelStatus{
+		Ready:  true,
+		Status: "Ready",
+	})
+	By("creating the MCP server")
+	testMCPServer.SetupWithStatus(ctx, kubechainv1alpha1.MCPServerStatus{
+		Connected: true,
+		Status:    "Ready",
+	})
+	By("creating the MCP tool")
+	mcpTool := testMCPTool.SetupWithStatus(ctx, kubechainv1alpha1.ToolStatus{
+		Ready:  true,
+		Status: "Ready",
+	})
+
+	name := "test-mcp-with-approval-trtc"
+	args := `{"a": 2, "b": 3}`
+	if config != nil {
+		if config.TaskRunToolCallName != "" {
+			name = config.TaskRunToolCallName
+		}
+		if config.TaskRunToolCallArgs != "" {
+			args = config.TaskRunToolCallArgs
+		}
+	}
+
+	taskRunToolCall := &TestTaskRunToolCall{
+		name:      name,
+		toolName:  mcpTool.Spec.Name,
+		arguments: args,
+	}
+
+	status := kubechainv1alpha1.TaskRunToolCallStatus{
+		Phase:        kubechainv1alpha1.TaskRunToolCallPhasePending,
+		Status:       kubechainv1alpha1.TaskRunToolCallStatusTypeReady,
+		StatusDetail: "Setup complete",
+		StartTime:    &metav1.Time{Time: time.Now().Add(-1 * time.Minute)},
+	}
+
+	if config != nil && config.TaskRunToolCallStatus != nil {
+		status = *config.TaskRunToolCallStatus
+	}
+
+	trtc := taskRunToolCall.SetupWithStatus(ctx, status)
+
+	return trtc, func() {
+		testMCPTool.Teardown(ctx)
+		testMCPServer.Teardown(ctx)
+		testContactChannel.Teardown(ctx)
+		testSecret.Teardown(ctx)
+	}
 }
