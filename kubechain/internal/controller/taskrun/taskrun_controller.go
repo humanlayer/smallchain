@@ -195,12 +195,12 @@ func (r *TaskRunReconciler) prepareForLLM(ctx context.Context, taskRun *kubechai
 func (r *TaskRunReconciler) processToolCalls(ctx context.Context, taskRun *kubechainv1alpha1.TaskRun) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
-	// List all tool calls for this ToolCallRequestId
+	// List all tool calls for this ToolCallRequestID
 	toolCallList := &kubechainv1alpha1.TaskRunToolCallList{}
-	logger.Info("Listing tool calls", "taskrun", taskRun.Name, "requestId", taskRun.Status.ToolCallRequestId)
+	logger.Info("Listing tool calls", "taskrun", taskRun.Name, "requestId", taskRun.Status.ToolCallRequestID)
 
 	if err := r.List(ctx, toolCallList, client.InNamespace(taskRun.Namespace),
-		client.MatchingLabels{"kubechain.humanlayer.dev/toolcallrequest": taskRun.Status.ToolCallRequestId}); err != nil {
+		client.MatchingLabels{"kubechain.humanlayer.dev/toolcallrequest": taskRun.Status.ToolCallRequestID}); err != nil {
 		logger.Error(err, "Failed to list tool calls")
 		return ctrl.Result{}, err
 	}
@@ -447,7 +447,7 @@ func (r *TaskRunReconciler) processLLMResponse(ctx context.Context, output *kube
 		// tool call branch: create TaskRunToolCall objects for each tool call returned by the LLM.
 		statusUpdate.Status.Output = ""
 		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseToolCallsPending
-		statusUpdate.Status.ToolCallRequestId = toolCallRequestId
+		statusUpdate.Status.ToolCallRequestID = toolCallRequestId
 		statusUpdate.Status.ContextWindow = append(statusUpdate.Status.ContextWindow, kubechainv1alpha1.Message{
 			Role:      "assistant",
 			ToolCalls: adapters.CastOpenAIToolCallsToKubechain(output.ToolCalls),
@@ -473,22 +473,22 @@ func (r *TaskRunReconciler) processLLMResponse(ctx context.Context, output *kube
 func (r *TaskRunReconciler) createToolCalls(ctx context.Context, taskRun *kubechainv1alpha1.TaskRun, statusUpdate *kubechainv1alpha1.TaskRun, toolCalls []kubechainv1alpha1.ToolCall) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
-	if statusUpdate.Status.ToolCallRequestId == "" {
-		err := fmt.Errorf("no ToolCallRequestId found in statusUpdate, cannot create tool calls")
-		logger.Error(err, "Missing ToolCallRequestId")
+	if statusUpdate.Status.ToolCallRequestID == "" {
+		err := fmt.Errorf("no ToolCallRequestID found in statusUpdate, cannot create tool calls")
+		logger.Error(err, "Missing ToolCallRequestID")
 		return ctrl.Result{}, err
 	}
 
-	// For each tool call, create a new TaskRunToolCall with a unique name using the ToolCallRequestId
+	// For each tool call, create a new TaskRunToolCall with a unique name using the ToolCallRequestID
 	for i, tc := range toolCalls {
-		newName := fmt.Sprintf("%s-%s-tc-%02d", statusUpdate.Name, statusUpdate.Status.ToolCallRequestId, i+1)
+		newName := fmt.Sprintf("%s-%s-tc-%02d", statusUpdate.Name, statusUpdate.Status.ToolCallRequestID, i+1)
 		newTRTC := &kubechainv1alpha1.TaskRunToolCall{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      newName,
 				Namespace: statusUpdate.Namespace,
 				Labels: map[string]string{
 					"kubechain.humanlayer.dev/taskruntoolcall": statusUpdate.Name,
-					"kubechain.humanlayer.dev/toolcallrequest": statusUpdate.Status.ToolCallRequestId,
+					"kubechain.humanlayer.dev/toolcallrequest": statusUpdate.Status.ToolCallRequestID,
 				},
 				OwnerReferences: []metav1.OwnerReference{
 					{
@@ -515,7 +515,7 @@ func (r *TaskRunReconciler) createToolCalls(ctx context.Context, taskRun *kubech
 			logger.Error(err, "Failed to create TaskRunToolCall", "name", newName)
 			return ctrl.Result{}, err
 		}
-		logger.Info("Created TaskRunToolCall", "name", newName, "requestId", statusUpdate.Status.ToolCallRequestId)
+		logger.Info("Created TaskRunToolCall", "name", newName, "requestId", statusUpdate.Status.ToolCallRequestID)
 		r.recorder.Event(taskRun, corev1.EventTypeNormal, "ToolCallCreated", "Created TaskRunToolCall "+newName)
 	}
 	return ctrl.Result{RequeueAfter: time.Second * 5}, nil

@@ -233,7 +233,7 @@ spec:
                   status
                 type: string
               toolCallRequestId:
-                description: ToolCallRequestId uniquely identifies a set of tool calls
+                description: ToolCallRequestID uniquely identifies a set of tool calls
                   from a single LLM response
                 type: string
               userMsgPreview:

@@ -376,7 +376,7 @@ var _ = Describe("TaskRun Controller", func() {
 
 			taskRun := testTaskRun.SetupWithStatus(ctx, kubechain.TaskRunStatus{
 				Phase:             kubechain.TaskRunPhaseToolCallsPending,
-				ToolCallRequestId: "test123",
+				ToolCallRequestID: "test123",
 			})
 			defer testTaskRun.Teardown(ctx)
 
@@ -407,7 +407,7 @@ var _ = Describe("TaskRun Controller", func() {
 			By("setting up the taskrun with a tool call pending")
 			taskRun := testTaskRun.SetupWithStatus(ctx, kubechain.TaskRunStatus{
 				Phase:             kubechain.TaskRunPhaseToolCallsPending,
-				ToolCallRequestId: "test123",
+				ToolCallRequestID: "test123",
 				ContextWindow: []kubechain.Message{
 					{
 						Role:    "system",
