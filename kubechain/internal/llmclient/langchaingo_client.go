@@ -11,6 +11,7 @@ import (
 	"github.com/tmc/langchaingo/llms/googleai/vertex"
 	"github.com/tmc/langchaingo/llms/mistral"
 	"github.com/tmc/langchaingo/llms/openai"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	kubechainv1alpha1 "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
 )
@@ -78,6 +79,8 @@ func NewLangchainClient(ctx context.Context, provider string, apiKey string, mod
 
 // SendRequest implements the LLMClient interface
 func (c *LangchainClient) SendRequest(ctx context.Context, messages []kubechainv1alpha1.Message, tools []Tool) (*kubechainv1alpha1.Message, error) {
+	logger := log.FromContext(ctx)
+
 	// Convert messages to langchaingo format
 	langchainMessages := convertToLangchainMessages(messages)
 
@@ -88,12 +91,21 @@ func (c *LangchainClient) SendRequest(ctx context.Context, messages []kubechainv
 	options := []llms.CallOption{}
 	if len(langchainTools) > 0 {
 		options = append(options, llms.WithTools(langchainTools))
+		logger.V(1).Info("Sending tools to LLM",
+			"modelType", fmt.Sprintf("%T", c.model),
+			"toolCount", len(langchainTools))
 	}
 
 	// Make the API call
 	response, err := c.model.GenerateContent(ctx, langchainMessages, options...)
 	if err != nil {
 		return nil, fmt.Errorf("langchain API call failed: %w", err)
+	}
+
+	// Log response characteristics for debugging
+	if len(response.Choices) > 1 {
+		logger.V(1).Info("LLM returned multiple choices",
+			"choiceCount", len(response.Choices))
 	}
 
 	// Convert response back to Kubechain format
@@ -192,6 +204,9 @@ func convertToLangchainTools(tools []Tool) []llms.Tool {
 // It handles different response structures from various LLM providers by
 // collecting all tool calls from all choices.
 func convertFromLangchainResponse(response *llms.ContentResponse) *kubechainv1alpha1.Message {
+	// Get logger for this context - using package logger since we don't have access to ctx
+	logger := log.Log.WithName("langchaingo")
+
 	// Create base message with assistant role
 	message := &kubechainv1alpha1.Message{
 		Role: "assistant",
@@ -199,6 +214,7 @@ func convertFromLangchainResponse(response *llms.ContentResponse) *kubechainv1al
 
 	// Handle empty response
 	if len(response.Choices) == 0 {
+		logger.V(1).Info("LLM returned an empty response with no choices")
 		message.Content = ""
 		return message
 	}
@@ -208,15 +224,23 @@ func convertFromLangchainResponse(response *llms.ContentResponse) *kubechainv1al
 	var contentText string
 	var hasContent bool
 
-	for _, choice := range response.Choices {
+	// Process all choices to collect content and tool calls
+	for i, choice := range response.Choices {
 		// Extract content from the first non-empty choice
 		if !hasContent && choice.Content != "" {
 			contentText = choice.Content
 			hasContent = true
+			logger.V(2).Info("Found content in choice",
+				"choiceIndex", i,
+				"contentPreview", truncateString(choice.Content, 50))
 		}
 
 		// Extract tool calls from this choice
 		if len(choice.ToolCalls) > 0 {
+			logger.V(2).Info("Found tool calls in choice",
+				"choiceIndex", i,
+				"toolCallCount", len(choice.ToolCalls))
+
 			for _, tc := range choice.ToolCalls {
 				toolCalls = append(toolCalls, kubechainv1alpha1.ToolCall{
 					ID:   tc.ID,
@@ -232,6 +256,10 @@ func convertFromLangchainResponse(response *llms.ContentResponse) *kubechainv1al
 
 	// Prioritize tool calls if present
 	if len(toolCalls) > 0 {
+		if hasContent {
+			logger.V(1).Info("LLM returned both content and tool calls - prioritizing tool calls")
+		}
+
 		message.ToolCalls = toolCalls
 		// Clear content when there are tool calls to ensure controller
 		// takes the tool call execution path
@@ -246,8 +274,17 @@ func convertFromLangchainResponse(response *llms.ContentResponse) *kubechainv1al
 	}
 
 	// Handle edge case where no content or tool calls were found
+	logger.V(1).Info("LLM returned choices with neither content nor tool calls")
 	message.Content = ""
 	return message
+}
+
+// truncateString truncates a string to the specified length if needed
+func truncateString(s string, maxLength int) string {
+	if len(s) <= maxLength {
+		return s
+	}
+	return s[:maxLength] + "..."
 }
 
 // FromKubechainTool converts a Kubechain Tool to the LLM client Tool format
