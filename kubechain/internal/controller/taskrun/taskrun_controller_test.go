@@ -10,10 +10,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	"github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
 	kubechain "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
 	"github.com/humanlayer/smallchain/kubechain/internal/llmclient"
-	. "github.com/humanlayer/smallchain/kubechain/test/utils"
 )
 
 var _ = Describe("TaskRun Controller", func() {
