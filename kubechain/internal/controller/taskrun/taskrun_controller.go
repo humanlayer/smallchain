@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -194,11 +195,12 @@ func (r *TaskRunReconciler) prepareForLLM(ctx context.Context, taskRun *kubechai
 func (r *TaskRunReconciler) processToolCalls(ctx context.Context, taskRun *kubechainv1alpha1.TaskRun) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
-	// List all tool calls for this TaskRun
+	// List all tool calls for this ToolCallRequestId
 	toolCallList := &kubechainv1alpha1.TaskRunToolCallList{}
-	logger.Info("Listing tool calls", "taskrun", taskRun.Name)
+	logger.Info("Listing tool calls", "taskrun", taskRun.Name, "requestId", taskRun.Status.ToolCallRequestId)
+
 	if err := r.List(ctx, toolCallList, client.InNamespace(taskRun.Namespace),
-		client.MatchingLabels{"kubechain.humanlayer.dev/taskruntoolcall": taskRun.Name}); err != nil {
+		client.MatchingLabels{"kubechain.humanlayer.dev/toolcallrequest": taskRun.Status.ToolCallRequestId}); err != nil {
 		logger.Error(err, "Failed to list tool calls")
 		return ctrl.Result{}, err
 	}
@@ -438,9 +440,14 @@ func (r *TaskRunReconciler) processLLMResponse(ctx context.Context, output *kube
 		// End the parent span since we've reached a terminal state
 		r.endTaskRunSpan(ctx, taskRun, codes.Ok, "TaskRun completed successfully with final answer")
 	} else {
+		// Generate a unique ID for this set of tool calls
+		toolCallRequestId := uuid.New().String()[:7] // Using first 7 characters for brevity
+		logger.Info("Generated toolCallRequestId for tool calls", "id", toolCallRequestId)
+
 		// tool call branch: create TaskRunToolCall objects for each tool call returned by the LLM.
 		statusUpdate.Status.Output = ""
 		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseToolCallsPending
+		statusUpdate.Status.ToolCallRequestId = toolCallRequestId
 		statusUpdate.Status.ContextWindow = append(statusUpdate.Status.ContextWindow, kubechainv1alpha1.Message{
 			Role:      "assistant",
 			ToolCalls: adapters.CastOpenAIToolCallsToKubechain(output.ToolCalls),
@@ -466,15 +473,22 @@ func (r *TaskRunReconciler) processLLMResponse(ctx context.Context, output *kube
 func (r *TaskRunReconciler) createToolCalls(ctx context.Context, taskRun *kubechainv1alpha1.TaskRun, statusUpdate *kubechainv1alpha1.TaskRun, toolCalls []kubechainv1alpha1.ToolCall) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
-	// For each tool call, create a new TaskRunToolCall.
+	if statusUpdate.Status.ToolCallRequestId == "" {
+		err := fmt.Errorf("no ToolCallRequestId found in statusUpdate, cannot create tool calls")
+		logger.Error(err, "Missing ToolCallRequestId")
+		return ctrl.Result{}, err
+	}
+
+	// For each tool call, create a new TaskRunToolCall with a unique name using the ToolCallRequestId
 	for i, tc := range toolCalls {
-		newName := fmt.Sprintf("%s-tc-%02d", statusUpdate.Name, i+1)
+		newName := fmt.Sprintf("%s-%s-tc-%02d", statusUpdate.Name, statusUpdate.Status.ToolCallRequestId, i+1)
 		newTRTC := &kubechainv1alpha1.TaskRunToolCall{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      newName,
 				Namespace: statusUpdate.Namespace,
 				Labels: map[string]string{
 					"kubechain.humanlayer.dev/taskruntoolcall": statusUpdate.Name,
+					"kubechain.humanlayer.dev/toolcallrequest": statusUpdate.Status.ToolCallRequestId,
 				},
 				OwnerReferences: []metav1.OwnerReference{
 					{
@@ -501,7 +515,7 @@ func (r *TaskRunReconciler) createToolCalls(ctx context.Context, taskRun *kubech
 			logger.Error(err, "Failed to create TaskRunToolCall", "name", newName)
 			return ctrl.Result{}, err
 		}
-		logger.Info("Created TaskRunToolCall", "name", newName)
+		logger.Info("Created TaskRunToolCall", "name", newName, "requestId", statusUpdate.Status.ToolCallRequestId)
 		r.recorder.Event(taskRun, corev1.EventTypeNormal, "ToolCallCreated", "Created TaskRunToolCall "+newName)
 	}
 	return ctrl.Result{RequeueAfter: time.Second * 5}, nil
@@ -731,8 +745,25 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	// Step 9: Process LLM response
-	if result, err := r.processLLMResponse(ctx, output, &taskRun, statusUpdate); err != nil || !result.IsZero() {
-		return result, err
+	var llmResult ctrl.Result
+	llmResult, err = r.processLLMResponse(ctx, output, &taskRun, statusUpdate)
+	if err != nil {
+		logger.Error(err, "Failed to process LLM response")
+		statusUpdate.Status.Status = StatusError
+		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseFailed
+		statusUpdate.Status.StatusDetail = fmt.Sprintf("Failed to process LLM response: %v", err)
+		statusUpdate.Status.Error = err.Error()
+		r.recorder.Event(&taskRun, corev1.EventTypeWarning, "LLMResponseProcessingFailed", err.Error())
+
+		if updateErr := r.Status().Update(ctx, statusUpdate); updateErr != nil {
+			logger.Error(updateErr, "Failed to update TaskRun status after LLM response processing error")
+			return ctrl.Result{}, updateErr
+		}
+		return ctrl.Result{}, nil // Don't return the error to avoid requeuing
+	}
+
+	if !llmResult.IsZero() {
+		return llmResult, nil
 	}
 
 	// Step 10: Update final status

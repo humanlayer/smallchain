@@ -121,6 +121,10 @@ type TaskRunStatus struct {
 	// SpanContext contains OpenTelemetry span context information
 	// +optional
 	SpanContext *SpanContext `json:"spanContext,omitempty"`
+
+	// ToolCallRequestId uniquely identifies a set of tool calls from a single LLM response
+	// +optional
+	ToolCallRequestId string `json:"toolCallRequestId,omitempty"`
 }
 
 type TaskRunStatusStatus string
