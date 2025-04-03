@@ -190,12 +190,10 @@ var _ = Describe("TaskRun Controller", func() {
 
 			By("creating a reconciler with a mock OpenAI client")
 			reconciler, recorder := reconciler()
-			mockClient := &MockOpenAIClient{
-				SendRequestFunc: func(ctx context.Context, messages []kubechain.Message, tools []llmclient.Tool) (*kubechain.Message, error) {
-					return &kubechain.Message{
-						Role:    "assistant",
-						Content: "The moon does not have a capital.",
-					}, nil
+			mockClient := &llmclient.MockRawOpenAIClient{
+				Response: &kubechain.Message{
+					Role:    "assistant",
+					Content: "The moon does not have a capital.",
 				},
 			}
 			reconciler.newLLMClient = func(apiKey string) (llmclient.OpenAIClient, error) {
@@ -243,20 +241,18 @@ var _ = Describe("TaskRun Controller", func() {
 
 			By("creating a reconciler with a mock OpenAI client that returns tools")
 			reconciler, recorder := reconciler()
-			mockClient := &MockOpenAIClient{
-				SendRequestFunc: func(ctx context.Context, messages []kubechain.Message, tools []llmclient.Tool) (*kubechain.Message, error) {
-					return &kubechain.Message{
-						Role: "assistant",
-						ToolCalls: []kubechain.ToolCall{
-							{
-								ID: "1",
-								Function: kubechain.ToolCallFunction{
-									Name:      "fetch__fetch",
-									Arguments: `{"url": "https://api.example.com/data"}`,
-								},
+			mockClient := &llmclient.MockRawOpenAIClient{
+				Response: &kubechain.Message{
+					Role: "assistant",
+					ToolCalls: []kubechain.ToolCall{
+						{
+							ID: "1",
+							Function: kubechain.ToolCallFunction{
+								Name:      "fetch__fetch",
+								Arguments: `{"url": "https://api.example.com/data"}`,
 							},
 						},
-					}, nil
+					},
 				},
 			}
 			reconciler.newLLMClient = func(apiKey string) (llmclient.OpenAIClient, error) {
@@ -389,14 +385,7 @@ var _ = Describe("TaskRun Controller", func() {
 	})
 })
 
-// Mock OpenAI client for testing
-type MockOpenAIClient struct {
-	SendRequestFunc func(ctx context.Context, messages []kubechain.Message, tools []llmclient.Tool) (*kubechain.Message, error)
-}
-
-func (m *MockOpenAIClient) SendRequest(ctx context.Context, messages []kubechain.Message, tools []llmclient.Tool) (*kubechain.Message, error) {
-	return m.SendRequestFunc(ctx, messages, tools)
-}
+// We're using the MockRawOpenAIClient from the llmclient package instead of a local mock
 
 // These tests are currently disabled to focus on the current implementation
 var _ = PDescribe("TaskRun Controller", func() {
