@@ -93,6 +93,36 @@ var _ = Describe("TaskRun Controller", func() {
 		})
 	})
 
+	Context("Initializing -> ReadyForLLM", func() {
+		It("moves to ReadyForLLM if the task is ready", func() {
+			_, _, _, _, teardown := setupSuiteObjects(ctx)
+			defer teardown()
+
+			taskRun := testTaskRun.SetupWithStatus(ctx, kubechain.TaskRunStatus{
+				Phase: kubechain.TaskRunPhaseInitializing,
+			})
+			defer testTaskRun.Teardown(ctx)
+
+			By("reconciling the taskrun")
+			reconciler, _ := reconciler()
+
+			result, err := reconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{Name: testTaskRun.name, Namespace: "default"},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeTrue())
+
+			By("checking the taskrun status")
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTaskRun.name, Namespace: "default"}, taskRun)).To(Succeed())
+			Expect(taskRun.Status.Phase).To(Equal(kubechain.TaskRunPhaseReadyForLLM))
+			Expect(taskRun.Status.ContextWindow).To(HaveLen(2))
+			Expect(taskRun.Status.ContextWindow[0].Role).To(Equal("system"))
+			Expect(taskRun.Status.ContextWindow[0].Content).To(Equal(testAgent.system))
+			Expect(taskRun.Status.ContextWindow[1].Role).To(Equal("user"))
+			Expect(taskRun.Status.ContextWindow[1].Content).To(Equal(testTask.message))
+		})
+	})
+
 	Context("Pending -> ReadyForLLM", func() {
 		It("moves to ReadyForLLM when task and agent are ready", func() {
 			_, _, _, _, teardown := setupSuiteObjects(ctx)
