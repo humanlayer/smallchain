@@ -77,49 +77,53 @@ func (r *LLMReconciler) validateProviderConfig(ctx context.Context, llm *kubecha
 	var err error
 	var model llms.Model
 
-	// Common options from BaseConfig
+	// Common options from Parameters
 	commonOpts := []llms.CallOption{}
-	if llm.Spec.BaseConfig.Model != "" {
-		commonOpts = append(commonOpts, llms.WithModel(llm.Spec.BaseConfig.Model))
+
+	// Get parameter configuration
+	params := llm.Spec.Parameters
+
+	if params.Model != "" {
+		commonOpts = append(commonOpts, llms.WithModel(params.Model))
 	}
-	if llm.Spec.BaseConfig.MaxTokens != nil {
-		commonOpts = append(commonOpts, llms.WithMaxTokens(*llm.Spec.BaseConfig.MaxTokens))
+	if params.MaxTokens != nil {
+		commonOpts = append(commonOpts, llms.WithMaxTokens(*params.MaxTokens))
 	}
-	if llm.Spec.BaseConfig.Temperature != "" {
+	if params.Temperature != "" {
 		// Parse temperature string to float64
 		var temp float64
-		_, err := fmt.Sscanf(llm.Spec.BaseConfig.Temperature, "%f", &temp)
+		_, err := fmt.Sscanf(params.Temperature, "%f", &temp)
 		if err == nil && temp >= 0 && temp <= 1 {
 			commonOpts = append(commonOpts, llms.WithTemperature(temp))
 		}
 	}
 	// Add TopP if configured
-	if llm.Spec.BaseConfig.TopP != "" {
+	if params.TopP != "" {
 		// Parse TopP string to float64
 		var topP float64
-		_, err := fmt.Sscanf(llm.Spec.BaseConfig.TopP, "%f", &topP)
+		_, err := fmt.Sscanf(params.TopP, "%f", &topP)
 		if err == nil && topP >= 0 && topP <= 1 {
 			commonOpts = append(commonOpts, llms.WithTopP(topP))
 		}
 	}
 	// Add TopK if configured
-	if llm.Spec.BaseConfig.TopK != nil {
-		commonOpts = append(commonOpts, llms.WithTopK(*llm.Spec.BaseConfig.TopK))
+	if params.TopK != nil {
+		commonOpts = append(commonOpts, llms.WithTopK(*params.TopK))
 	}
 	// Add FrequencyPenalty if configured
-	if llm.Spec.BaseConfig.FrequencyPenalty != "" {
+	if params.FrequencyPenalty != "" {
 		// Parse FrequencyPenalty string to float64
 		var freqPenalty float64
-		_, err := fmt.Sscanf(llm.Spec.BaseConfig.FrequencyPenalty, "%f", &freqPenalty)
+		_, err := fmt.Sscanf(params.FrequencyPenalty, "%f", &freqPenalty)
 		if err == nil && freqPenalty >= -2 && freqPenalty <= 2 {
 			commonOpts = append(commonOpts, llms.WithFrequencyPenalty(freqPenalty))
 		}
 	}
 	// Add PresencePenalty if configured
-	if llm.Spec.BaseConfig.PresencePenalty != "" {
+	if params.PresencePenalty != "" {
 		// Parse PresencePenalty string to float64
 		var presPenalty float64
-		_, err := fmt.Sscanf(llm.Spec.BaseConfig.PresencePenalty, "%f", &presPenalty)
+		_, err := fmt.Sscanf(params.PresencePenalty, "%f", &presPenalty)
 		if err == nil && presPenalty >= -2 && presPenalty <= 2 {
 			commonOpts = append(commonOpts, llms.WithPresencePenalty(presPenalty))
 		}
@@ -133,13 +137,13 @@ func (r *LLMReconciler) validateProviderConfig(ctx context.Context, llm *kubecha
 		providerOpts := []openai.Option{openai.WithToken(apiKey)}
 
 		// Configure BaseURL if provided
-		if llm.Spec.BaseConfig.BaseURL != "" {
-			providerOpts = append(providerOpts, openai.WithBaseURL(llm.Spec.BaseConfig.BaseURL))
+		if llm.Spec.Parameters.BaseURL != "" {
+			providerOpts = append(providerOpts, openai.WithBaseURL(llm.Spec.Parameters.BaseURL))
 		}
 
 		// Configure OpenAI specific options if provided
-		if llm.Spec.ProviderConfig.OpenAIConfig != nil {
-			config := llm.Spec.ProviderConfig.OpenAIConfig
+		if llm.Spec.OpenAI != nil {
+			config := llm.Spec.OpenAI
 
 			// Set organization if provided
 			if config.Organization != "" {
@@ -173,11 +177,11 @@ func (r *LLMReconciler) validateProviderConfig(ctx context.Context, llm *kubecha
 			return fmt.Errorf("apiKeyFrom is required for anthropic")
 		}
 		providerOpts := []anthropic.Option{anthropic.WithToken(apiKey)}
-		if llm.Spec.BaseConfig.BaseURL != "" {
-			providerOpts = append(providerOpts, anthropic.WithBaseURL(llm.Spec.BaseConfig.BaseURL))
+		if llm.Spec.Parameters.BaseURL != "" {
+			providerOpts = append(providerOpts, anthropic.WithBaseURL(llm.Spec.Parameters.BaseURL))
 		}
-		if llm.Spec.ProviderConfig.AnthropicConfig != nil && llm.Spec.ProviderConfig.AnthropicConfig.AnthropicBetaHeader != "" {
-			providerOpts = append(providerOpts, anthropic.WithAnthropicBetaHeader(llm.Spec.ProviderConfig.AnthropicConfig.AnthropicBetaHeader))
+		if llm.Spec.Anthropic != nil && llm.Spec.Anthropic.AnthropicBetaHeader != "" {
+			providerOpts = append(providerOpts, anthropic.WithAnthropicBetaHeader(llm.Spec.Anthropic.AnthropicBetaHeader))
 		}
 		model, err = anthropic.New(providerOpts...)
 
@@ -188,18 +192,18 @@ func (r *LLMReconciler) validateProviderConfig(ctx context.Context, llm *kubecha
 		providerOpts := []mistral.Option{mistral.WithAPIKey(apiKey)}
 
 		// Configure BaseURL as endpoint
-		if llm.Spec.BaseConfig.BaseURL != "" {
-			providerOpts = append(providerOpts, mistral.WithEndpoint(llm.Spec.BaseConfig.BaseURL))
+		if llm.Spec.Parameters.BaseURL != "" {
+			providerOpts = append(providerOpts, mistral.WithEndpoint(llm.Spec.Parameters.BaseURL))
 		}
 
 		// Configure model
-		if llm.Spec.BaseConfig.Model != "" {
-			providerOpts = append(providerOpts, mistral.WithModel(llm.Spec.BaseConfig.Model))
+		if llm.Spec.Parameters.Model != "" {
+			providerOpts = append(providerOpts, mistral.WithModel(llm.Spec.Parameters.Model))
 		}
 
 		// Configure Mistral-specific options if provided
-		if llm.Spec.ProviderConfig.MistralConfig != nil {
-			config := llm.Spec.ProviderConfig.MistralConfig
+		if llm.Spec.Mistral != nil {
+			config := llm.Spec.Mistral
 
 			// Set MaxRetries if provided
 			if config.MaxRetries != nil {
@@ -236,24 +240,24 @@ func (r *LLMReconciler) validateProviderConfig(ctx context.Context, llm *kubecha
 			return fmt.Errorf("apiKeyFrom is required for google")
 		}
 		providerOpts := []googleai.Option{googleai.WithAPIKey(apiKey)}
-		if llm.Spec.ProviderConfig.GoogleConfig != nil {
-			if llm.Spec.ProviderConfig.GoogleConfig.CloudProject != "" {
-				providerOpts = append(providerOpts, googleai.WithCloudProject(llm.Spec.ProviderConfig.GoogleConfig.CloudProject))
+		if llm.Spec.Google != nil {
+			if llm.Spec.Google.CloudProject != "" {
+				providerOpts = append(providerOpts, googleai.WithCloudProject(llm.Spec.Google.CloudProject))
 			}
-			if llm.Spec.ProviderConfig.GoogleConfig.CloudLocation != "" {
-				providerOpts = append(providerOpts, googleai.WithCloudLocation(llm.Spec.ProviderConfig.GoogleConfig.CloudLocation))
+			if llm.Spec.Google.CloudLocation != "" {
+				providerOpts = append(providerOpts, googleai.WithCloudLocation(llm.Spec.Google.CloudLocation))
 			}
 		}
-		if llm.Spec.BaseConfig.Model != "" {
-			providerOpts = append(providerOpts, googleai.WithDefaultModel(llm.Spec.BaseConfig.Model))
+		if llm.Spec.Parameters.Model != "" {
+			providerOpts = append(providerOpts, googleai.WithDefaultModel(llm.Spec.Parameters.Model))
 		}
 		model, err = googleai.New(ctx, providerOpts...)
 
 	case "vertex":
-		if llm.Spec.ProviderConfig.VertexConfig == nil {
-			return fmt.Errorf("vertexConfig is required for vertex")
+		if llm.Spec.Vertex == nil {
+			return fmt.Errorf("vertex configuration is required for vertex provider")
 		}
-		config := llm.Spec.ProviderConfig.VertexConfig
+		config := llm.Spec.Vertex
 		providerOpts := []googleai.Option{
 			googleai.WithCloudProject(config.CloudProject),
 			googleai.WithCloudLocation(config.CloudLocation),
@@ -261,8 +265,8 @@ func (r *LLMReconciler) validateProviderConfig(ctx context.Context, llm *kubecha
 		if llm.Spec.APIKeyFrom != nil && apiKey != "" {
 			providerOpts = append(providerOpts, googleai.WithCredentialsJSON([]byte(apiKey)))
 		}
-		if llm.Spec.BaseConfig.Model != "" {
-			providerOpts = append(providerOpts, googleai.WithDefaultModel(llm.Spec.BaseConfig.Model))
+		if llm.Spec.Parameters.Model != "" {
+			providerOpts = append(providerOpts, googleai.WithDefaultModel(llm.Spec.Parameters.Model))
 		}
 		model, err = vertex.New(ctx, providerOpts...)
 
@@ -278,8 +282,8 @@ func (r *LLMReconciler) validateProviderConfig(ctx context.Context, llm *kubecha
 	validateOptions := []llms.CallOption{llms.WithTemperature(0), llms.WithMaxTokens(1)}
 
 	// Add model option to ensure we validate with the correct model
-	if llm.Spec.BaseConfig.Model != "" {
-		validateOptions = append(validateOptions, llms.WithModel(llm.Spec.BaseConfig.Model))
+	if llm.Spec.Parameters.Model != "" {
+		validateOptions = append(validateOptions, llms.WithModel(llm.Spec.Parameters.Model))
 	}
 
 	_, err = llms.GenerateFromSinglePrompt(ctx, model, "test", validateOptions...)

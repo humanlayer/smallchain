@@ -8,7 +8,7 @@ import (
 
 // NewLLMClient creates a new LLM client based on the LLM configuration
 func NewLLMClient(ctx context.Context, llm kubechainv1alpha1.LLM, apiKey string) (LLMClient, error) {
-	return NewLangchainClient(ctx, llm.Spec.Provider, apiKey, llm.Spec.BaseConfig)
+	return NewLangchainClient(ctx, llm.Spec.Provider, apiKey, llm.Spec.Parameters)
 }
 
 // Legacy adapter for backward compatibility during transition
@@ -24,7 +24,7 @@ func NewRawOpenAIClient(apiKey string) (OpenAIClient, error) {
 	llm := kubechainv1alpha1.LLM{
 		Spec: kubechainv1alpha1.LLMSpec{
 			Provider: "openai",
-			BaseConfig: kubechainv1alpha1.BaseConfig{
+			Parameters: kubechainv1alpha1.BaseConfig{
 				Model: "gpt-4o",
 			},
 		},

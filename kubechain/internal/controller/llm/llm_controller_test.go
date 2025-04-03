@@ -88,11 +88,10 @@ func (f *LLMTestFixture) Setup(ctx context.Context, k8sClient client.Client) (*k
 					Key:  f.secretKey,
 				},
 			},
-			BaseConfig: kubechainv1alpha1.BaseConfig{
+			Parameters: kubechainv1alpha1.BaseConfig{
 				BaseURL: f.baseURL,
 				Model:   "test-model",
 			},
-			ProviderConfig: kubechainv1alpha1.ProviderConfig{},
 		},
 	}
 
@@ -110,30 +109,30 @@ func (f *LLMTestFixture) Setup(ctx context.Context, k8sClient client.Client) (*k
 func (f *LLMTestFixture) addProviderConfig(llm *kubechainv1alpha1.LLM) {
 	switch f.provider {
 	case "openai":
-		llm.Spec.ProviderConfig.OpenAIConfig = &kubechainv1alpha1.OpenAIConfig{
+		llm.Spec.OpenAI = &kubechainv1alpha1.OpenAIConfig{
 			Organization: "test-org",
 			APIType:      "OPEN_AI",
 		}
 	case "anthropic":
-		llm.Spec.ProviderConfig.AnthropicConfig = &kubechainv1alpha1.AnthropicConfig{
+		llm.Spec.Anthropic = &kubechainv1alpha1.AnthropicConfig{
 			AnthropicBetaHeader: "test-beta-header",
 		}
 	case "mistral":
 		maxRetries := 3
 		timeout := 30
 		randomSeed := 42
-		llm.Spec.ProviderConfig.MistralConfig = &kubechainv1alpha1.MistralConfig{
+		llm.Spec.Mistral = &kubechainv1alpha1.MistralConfig{
 			MaxRetries: &maxRetries,
 			Timeout:    &timeout,
 			RandomSeed: &randomSeed,
 		}
 	case "google":
-		llm.Spec.ProviderConfig.GoogleConfig = &kubechainv1alpha1.GoogleConfig{
+		llm.Spec.Google = &kubechainv1alpha1.GoogleConfig{
 			CloudProject:  "test-project",
 			CloudLocation: "us-central1",
 		}
 	case "vertex":
-		llm.Spec.ProviderConfig.VertexConfig = &kubechainv1alpha1.VertexConfig{
+		llm.Spec.Vertex = &kubechainv1alpha1.VertexConfig{
 			CloudProject:  "test-project",
 			CloudLocation: "us-central1",
 		}
@@ -150,11 +149,10 @@ func (f *LLMTestFixture) SetupWithoutAPIKey(ctx context.Context, k8sClient clien
 		},
 		Spec: kubechainv1alpha1.LLMSpec{
 			Provider: f.provider,
-			BaseConfig: kubechainv1alpha1.BaseConfig{
+			Parameters: kubechainv1alpha1.BaseConfig{
 				BaseURL: f.baseURL,
 				Model:   "test-model",
 			},
-			ProviderConfig: kubechainv1alpha1.ProviderConfig{},
 		},
 	}
 
@@ -198,7 +196,7 @@ func (f *LLMTestFixture) SetupWithoutProviderConfig(ctx context.Context, k8sClie
 					Key:  f.secretKey,
 				},
 			},
-			BaseConfig: kubechainv1alpha1.BaseConfig{
+			Parameters: kubechainv1alpha1.BaseConfig{
 				BaseURL: f.baseURL,
 				Model:   "test-model",
 			},
@@ -550,7 +548,7 @@ var _ = Describe("LLM Controller", func() {
 			// Create the fixture but don't add provider-specific config
 			llm, err := fixture.SetupWithoutProviderConfig(ctx, k8sClient)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(llm.Spec.ProviderConfig.VertexConfig).To(BeNil())
+			Expect(llm.Spec.Vertex).To(BeNil())
 
 			By("Reconciling the resource")
 			reconciler, eventRecorder := getReconciler()
@@ -566,7 +564,7 @@ var _ = Describe("LLM Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedLLM.Status.Ready).To(BeFalse())
 			Expect(updatedLLM.Status.Status).To(Equal("Error"))
-			Expect(updatedLLM.Status.StatusDetail).To(ContainSubstring("vertexConfig is required"))
+			Expect(updatedLLM.Status.StatusDetail).To(ContainSubstring("vertex configuration is required"))
 
 			By("checking that a failure event was created")
 			utils.ExpectRecorder(eventRecorder).ToEmitEventContaining("ValidationFailed")
@@ -605,7 +603,7 @@ var _ = Describe("LLM Controller", func() {
 							Key:  secretKey,
 						},
 					},
-					BaseConfig: kubechainv1alpha1.BaseConfig{
+					Parameters: kubechainv1alpha1.BaseConfig{
 						BaseURL:          mockServer.URL,
 						Model:            "gpt-4",
 						Temperature:      "0.7",

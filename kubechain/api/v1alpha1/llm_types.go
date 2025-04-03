@@ -147,11 +147,29 @@ type LLMSpec struct {
 	// APIKeyFrom references the secret containing the API key or credentials
 	APIKeyFrom *APIKeySource `json:"apiKeyFrom,omitempty"`
 
-	// BaseConfig holds common configuration options
-	BaseConfig BaseConfig `json:"baseConfig,omitempty"`
+	// Parameters holds common configuration options across providers
+	// +optional
+	Parameters BaseConfig `json:"parameters,omitempty"`
 
-	// ProviderConfig holds provider-specific configuration
-	ProviderConfig ProviderConfig `json:"providerConfig,omitempty"`
+	// OpenAI provider-specific configuration
+	// +optional
+	OpenAI *OpenAIConfig `json:"openai,omitempty"`
+
+	// Anthropic provider-specific configuration
+	// +optional
+	Anthropic *AnthropicConfig `json:"anthropic,omitempty"`
+
+	// Vertex provider-specific configuration
+	// +optional
+	Vertex *VertexConfig `json:"vertex,omitempty"`
+
+	// Mistral provider-specific configuration
+	// +optional
+	Mistral *MistralConfig `json:"mistral,omitempty"`
+
+	// Google provider-specific configuration
+	// +optional
+	Google *GoogleConfig `json:"google,omitempty"`
 }
 
 // LLMStatus defines the observed state of LLM
