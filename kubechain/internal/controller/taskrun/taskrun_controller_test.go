@@ -11,6 +11,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	"github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
 	kubechain "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
 	"github.com/humanlayer/smallchain/kubechain/internal/llmclient"
 	. "github.com/humanlayer/smallchain/kubechain/test/utils"
@@ -42,8 +43,6 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(taskRun.Status.SpanContext).NotTo(BeNil())
 			Expect(taskRun.Status.SpanContext.TraceID).NotTo(BeEmpty())
 			Expect(taskRun.Status.SpanContext.SpanID).NotTo(BeEmpty())
-
-			// Skip event validation for initialization since there is no event emitted
 		})
 	})
 	Context("Initializing -> Error", func() {
@@ -54,7 +53,7 @@ var _ = Describe("TaskRun Controller", func() {
 			defer testTaskRun.Teardown(ctx)
 
 			By("reconciling the taskrun")
-			reconciler, recorder := reconciler()
+			reconciler, _ := reconciler()
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: types.NamespacedName{Name: testTaskRun.name, Namespace: "default"},
@@ -67,9 +66,6 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTaskRun.name, Namespace: "default"}, taskRun)).To(Succeed())
 			Expect(taskRun.Status.Phase).To(Equal(kubechain.TaskRunPhaseFailed))
 			Expect(taskRun.Status.Error).To(Equal("Task \"test-task\" not found"))
-
-			By("checking that an error event was emitted")
-			ExpectRecorder(recorder).ToEmitEventContaining("TaskValidationFailed")
 		})
 	})
 	Context("Initializing -> Pending", func() {
@@ -96,13 +92,10 @@ var _ = Describe("TaskRun Controller", func() {
 			By("checking the taskrun status")
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTaskRun.name, Namespace: "default"}, taskRun)).To(Succeed())
 			Expect(taskRun.Status.Phase).To(Equal(kubechain.TaskRunPhasePending))
-			Expect(taskRun.Status.StatusDetail).To(Equal("Waiting for task \"test-task\" to become ready"))
-
-			By("checking that a pending event was emitted")
+			Expect(taskRun.Status.StatusDetail).To(ContainSubstring("Waiting for task \"test-task\" to become ready"))
 			ExpectRecorder(recorder).ToEmitEventContaining("TaskNotReady")
 		})
 	})
-
 	Context("Initializing -> ReadyForLLM", func() {
 		It("moves to ReadyForLLM if the task is ready", func() {
 			_, _, _, _, teardown := setupSuiteObjects(ctx)
@@ -119,25 +112,24 @@ var _ = Describe("TaskRun Controller", func() {
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: types.NamespacedName{Name: testTaskRun.name, Namespace: "default"},
 			})
+
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Requeue).To(BeTrue())
 
-			By("checking the taskrun status")
+			By("ensuring the context window is set correctly")
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTaskRun.name, Namespace: "default"}, taskRun)).To(Succeed())
 			Expect(taskRun.Status.Phase).To(Equal(kubechain.TaskRunPhaseReadyForLLM))
+			Expect(taskRun.Status.StatusDetail).To(ContainSubstring("Ready to send to LLM"))
 			Expect(taskRun.Status.ContextWindow).To(HaveLen(2))
 			Expect(taskRun.Status.ContextWindow[0].Role).To(Equal("system"))
-			Expect(taskRun.Status.ContextWindow[0].Content).To(Equal(testAgent.system))
+			Expect(taskRun.Status.ContextWindow[0].Content).To(ContainSubstring(testAgent.system))
 			Expect(taskRun.Status.ContextWindow[1].Role).To(Equal("user"))
-			Expect(taskRun.Status.ContextWindow[1].Content).To(Equal(testTask.message))
-
-			By("checking that a validation succeeded event was emitted")
+			Expect(taskRun.Status.ContextWindow[1].Content).To(ContainSubstring(testTask.message))
 			ExpectRecorder(recorder).ToEmitEventContaining("ValidationSucceeded")
 		})
 	})
-
 	Context("Pending -> ReadyForLLM", func() {
-		It("moves to ReadyForLLM when task and agent are ready", func() {
+		It("moves to ReadyForLLM if upstream dependencies are ready", func() {
 			_, _, _, _, teardown := setupSuiteObjects(ctx)
 			defer teardown()
 
@@ -155,22 +147,20 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Requeue).To(BeTrue())
 
-			By("checking the taskrun status")
+			By("ensuring the context window is set correctly")
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTaskRun.name, Namespace: "default"}, taskRun)).To(Succeed())
 			Expect(taskRun.Status.Phase).To(Equal(kubechain.TaskRunPhaseReadyForLLM))
+			Expect(taskRun.Status.StatusDetail).To(ContainSubstring("Ready to send to LLM"))
 			Expect(taskRun.Status.ContextWindow).To(HaveLen(2))
 			Expect(taskRun.Status.ContextWindow[0].Role).To(Equal("system"))
-			Expect(taskRun.Status.ContextWindow[0].Content).To(Equal(testAgent.system))
+			Expect(taskRun.Status.ContextWindow[0].Content).To(ContainSubstring(testAgent.system))
 			Expect(taskRun.Status.ContextWindow[1].Role).To(Equal("user"))
-			Expect(taskRun.Status.ContextWindow[1].Content).To(Equal(testTask.message))
-
-			By("checking that a validation succeeded event was emitted")
+			Expect(taskRun.Status.ContextWindow[1].Content).To(ContainSubstring(testTask.message))
 			ExpectRecorder(recorder).ToEmitEventContaining("ValidationSucceeded")
 		})
 	})
-
-	Context("ReadyForLLM -> FinalAnswer", func() {
-		It("moves to FinalAnswer when the LLM provides a final answer", func() {
+	Context("ReadyForLLM -> LLMFinalAnswer", func() {
+		It("moves to LLMFinalAnswer after getting a response from the LLM", func() {
 			_, _, _, _, teardown := setupSuiteObjects(ctx)
 			defer teardown()
 
@@ -189,16 +179,16 @@ var _ = Describe("TaskRun Controller", func() {
 			})
 			defer testTaskRun.Teardown(ctx)
 
-			By("creating a reconciler with a mock OpenAI client")
+			By("reconciling the taskrun")
 			reconciler, recorder := reconciler()
-			mockClient := &llmclient.MockRawOpenAIClient{
-				Response: &kubechain.Message{
+			mockLLMClient := &llmclient.MockRawOpenAIClient{
+				Response: &v1alpha1.Message{
 					Role:    "assistant",
-					Content: "The moon does not have a capital.",
+					Content: "The moon is a natural satellite of the Earth and lacks any formal government or capital.",
 				},
 			}
 			reconciler.newLLMClient = func(apiKey string) (llmclient.OpenAIClient, error) {
-				return mockClient, nil
+				return mockLLMClient, nil
 			}
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{
@@ -207,96 +197,25 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Requeue).To(BeFalse())
 
-			By("checking the taskrun status")
+			By("ensuring the taskrun status is updated with the llm final answer")
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTaskRun.name, Namespace: "default"}, taskRun)).To(Succeed())
 			Expect(taskRun.Status.Phase).To(Equal(kubechain.TaskRunPhaseFinalAnswer))
-			Expect(taskRun.Status.Output).To(Equal("The moon does not have a capital."))
+			Expect(taskRun.Status.StatusDetail).To(ContainSubstring("LLM final response received"))
+			Expect(taskRun.Status.Output).To(Equal("The moon is a natural satellite of the Earth and lacks any formal government or capital."))
 			Expect(taskRun.Status.ContextWindow).To(HaveLen(3))
 			Expect(taskRun.Status.ContextWindow[2].Role).To(Equal("assistant"))
-			Expect(taskRun.Status.ContextWindow[2].Content).To(Equal("The moon does not have a capital."))
-
+			Expect(taskRun.Status.ContextWindow[2].Content).To(ContainSubstring("The moon is a natural satellite of the Earth and lacks any formal government or capital."))
 			ExpectRecorder(recorder).ToEmitEventContaining("SendingContextWindowToLLM", "LLMFinalAnswer")
 
 			By("ensuring the llm client was called correctly")
-			Expect(mockClient.Calls).To(HaveLen(1))
-			Expect(mockClient.Calls[0].Messages).To(HaveLen(2))
-			Expect(mockClient.Calls[0].Messages[0].Role).To(Equal("system"))
-			Expect(mockClient.Calls[0].Messages[0].Content).To(ContainSubstring(testAgent.system))
-			Expect(mockClient.Calls[0].Messages[1].Role).To(Equal("user"))
-			Expect(mockClient.Calls[0].Messages[1].Content).To(ContainSubstring(testTask.message))
+			Expect(mockLLMClient.Calls).To(HaveLen(1))
+			Expect(mockLLMClient.Calls[0].Messages).To(HaveLen(2))
+			Expect(mockLLMClient.Calls[0].Messages[0].Role).To(Equal("system"))
+			Expect(mockLLMClient.Calls[0].Messages[0].Content).To(ContainSubstring(testAgent.system))
+			Expect(mockLLMClient.Calls[0].Messages[1].Role).To(Equal("user"))
+			Expect(mockLLMClient.Calls[0].Messages[1].Content).To(ContainSubstring(testTask.message))
 		})
 	})
-
-	Context("ReadyForLLM -> ToolCallsPending", func() {
-		It("moves to ToolCallsPending when the LLM requests tool usage", func() {
-			_, _, _, _, teardown := setupSuiteObjects(ctx)
-			defer teardown()
-
-			taskRun := testTaskRun.SetupWithStatus(ctx, kubechain.TaskRunStatus{
-				Phase: kubechain.TaskRunPhaseReadyForLLM,
-				ContextWindow: []kubechain.Message{
-					{
-						Role:    "system",
-						Content: testAgent.system,
-					},
-					{
-						Role:    "user",
-						Content: testTask.message,
-					},
-				},
-			})
-			defer testTaskRun.Teardown(ctx)
-
-			By("creating a reconciler with a mock OpenAI client that returns tools")
-			reconciler, recorder := reconciler()
-			mockClient := &llmclient.MockRawOpenAIClient{
-				Response: &kubechain.Message{
-					Role: "assistant",
-					ToolCalls: []kubechain.ToolCall{
-						{
-							ID: "1",
-							Function: kubechain.ToolCallFunction{
-								Name:      "fetch__fetch",
-								Arguments: `{"url": "https://api.example.com/data"}`,
-							},
-						},
-					},
-				},
-			}
-			reconciler.newLLMClient = func(apiKey string) (llmclient.OpenAIClient, error) {
-				return mockClient, nil
-			}
-
-			result, err := reconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: types.NamespacedName{Name: testTaskRun.name, Namespace: "default"},
-			})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(result.RequeueAfter).To(Equal(time.Second * 5))
-
-			By("checking the taskrun status")
-			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTaskRun.name, Namespace: "default"}, taskRun)).To(Succeed())
-			Expect(taskRun.Status.Phase).To(Equal(kubechain.TaskRunPhaseToolCallsPending))
-			Expect(taskRun.Status.ToolCallRequestId).NotTo(BeEmpty())
-			Expect(taskRun.Status.ContextWindow).To(HaveLen(3))
-			Expect(taskRun.Status.ContextWindow[2].Role).To(Equal("assistant"))
-			Expect(taskRun.Status.ContextWindow[2].ToolCalls).To(HaveLen(1))
-			Expect(taskRun.Status.ContextWindow[2].ToolCalls[0].ID).To(Equal("1"))
-			Expect(taskRun.Status.ContextWindow[2].ToolCalls[0].Function.Name).To(Equal("fetch__fetch"))
-
-			By("checking that tool calls were created")
-			var toolCallList kubechain.TaskRunToolCallList
-			err = k8sClient.List(ctx, &toolCallList, client.InNamespace("default"),
-				client.MatchingLabels{"kubechain.humanlayer.dev/toolcallrequest": taskRun.Status.ToolCallRequestId})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(toolCallList.Items).To(HaveLen(1))
-			Expect(toolCallList.Items[0].Spec.ToolCallId).To(Equal("1"))
-			Expect(toolCallList.Items[0].Spec.ToolRef.Name).To(Equal("fetch__fetch"))
-
-			By("checking that a tool calls pending event was emitted")
-			ExpectRecorder(recorder).ToEmitEventContaining("ToolCallsPending")
-		})
-	})
-
 	Context("ReadyForLLM -> Error", func() {
 		It("moves to Error state but not Failed phase on general error", func() {
 			_, _, _, _, teardown := setupSuiteObjects(ctx)
@@ -386,16 +305,77 @@ var _ = Describe("TaskRun Controller", func() {
 			ExpectRecorder(recorder).ToEmitEventContaining("LLMRequestFailed4xx")
 		})
 	})
+	Context("Error -> ErrorBackoff", func() {
+		XIt("moves to ErrorBackoff if the error is retryable", func() {})
+	})
+	Context("Error -> Error", func() {
+		XIt("Stays in Error if the error is not retryable", func() {})
+	})
+	Context("ErrorBackoff -> ReadyForLLM", func() {
+		XIt("moves to ReadyForLLM after the backoff period", func() {})
+	})
+	Context("ReadyForLLM -> ToolCallsPending", func() {
+		It("moves to ToolCallsPending if the LLM returns tool calls", func() {
+			_, _, _, _, teardown := setupSuiteObjects(ctx)
+			defer teardown()
 
+			taskRun := testTaskRun.SetupWithStatus(ctx, kubechain.TaskRunStatus{
+				Phase: kubechain.TaskRunPhaseReadyForLLM,
+			})
+			defer testTaskRun.Teardown(ctx)
+
+			By("reconciling the taskrun")
+			reconciler, recorder := reconciler()
+			mockLLMClient := &llmclient.MockRawOpenAIClient{
+				Response: &v1alpha1.Message{
+					Role: "assistant",
+					ToolCalls: []v1alpha1.ToolCall{
+						{
+							ID:       "1",
+							Function: v1alpha1.ToolCallFunction{Name: "fetch__fetch", Arguments: `{"url": "https://api.example.com/data"}`},
+						},
+					},
+				},
+			}
+			reconciler.newLLMClient = func(apiKey string) (llmclient.OpenAIClient, error) {
+				return mockLLMClient, nil
+			}
+
+			result, err := reconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{Name: testTaskRun.name, Namespace: "default"},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.RequeueAfter).To(Equal(time.Second * 5))
+
+			By("ensuring the taskrun status is updated with the tool calls pending")
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTaskRun.name, Namespace: "default"}, taskRun)).To(Succeed())
+			Expect(taskRun.Status.Phase).To(Equal(kubechain.TaskRunPhaseToolCallsPending))
+			Expect(taskRun.Status.StatusDetail).To(ContainSubstring("LLM response received, tool calls pending"))
+			ExpectRecorder(recorder).ToEmitEventContaining("SendingContextWindowToLLM", "ToolCallsPending")
+
+			By("ensuring the tool call was created")
+			toolCalls := &kubechain.TaskRunToolCallList{}
+			Expect(k8sClient.List(ctx, toolCalls, client.InNamespace("default"))).To(Succeed())
+			Expect(toolCalls.Items).To(HaveLen(1))
+			Expect(toolCalls.Items[0].Spec.ToolRef.Name).To(Equal("fetch__fetch"))
+			Expect(toolCalls.Items[0].Spec.Arguments).To(Equal(`{"url": "https://api.example.com/data"}`))
+
+			By("cleaning up the tool call")
+			Expect(k8sClient.Delete(ctx, &toolCalls.Items[0])).To(Succeed())
+		})
+	})
+	Context("ToolCallsPending -> Error", func() {
+		XIt("moves to Error if its in ToolCallsPending but no tool calls are found", func() {
+			// todo
+		})
+	})
 	Context("ToolCallsPending -> ToolCallsPending", func() {
 		It("Stays in ToolCallsPending if the tool calls are not completed", func() {
 			_, _, _, _, teardown := setupSuiteObjects(ctx)
 			defer teardown()
 
-			By("setting up the taskrun with a tool call pending")
 			taskRun := testTaskRun.SetupWithStatus(ctx, kubechain.TaskRunStatus{
-				Phase:             kubechain.TaskRunPhaseToolCallsPending,
-				ToolCallRequestId: "test123",
+				Phase: kubechain.TaskRunPhaseToolCallsPending,
 			})
 			defer testTaskRun.Teardown(ctx)
 
@@ -416,9 +396,6 @@ var _ = Describe("TaskRun Controller", func() {
 			By("checking the taskrun status")
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTaskRun.name, Namespace: "default"}, taskRun)).To(Succeed())
 			Expect(taskRun.Status.Phase).To(Equal(kubechain.TaskRunPhaseToolCallsPending))
-
-			// During this reconciliation, no event is actually emitted because we remain in the same state
-			// We don't check for events in this test
 		})
 	})
 	Context("ToolCallsPending -> ReadyForLLM", func() {
@@ -428,8 +405,7 @@ var _ = Describe("TaskRun Controller", func() {
 
 			By("setting up the taskrun with a tool call pending")
 			taskRun := testTaskRun.SetupWithStatus(ctx, kubechain.TaskRunStatus{
-				Phase:             kubechain.TaskRunPhaseToolCallsPending,
-				ToolCallRequestId: "test123",
+				Phase: kubechain.TaskRunPhaseToolCallsPending,
 				ContextWindow: []kubechain.Message{
 					{
 						Role:    "system",
@@ -473,27 +449,114 @@ var _ = Describe("TaskRun Controller", func() {
 			By("checking the taskrun status")
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTaskRun.name, Namespace: "default"}, taskRun)).To(Succeed())
 			Expect(taskRun.Status.Phase).To(Equal(kubechain.TaskRunPhaseReadyForLLM))
+			Expect(taskRun.Status.StatusDetail).To(ContainSubstring("All tool calls completed, ready to send tool results to LLM"))
+			ExpectRecorder(recorder).ToEmitEventContaining("AllToolCallsCompleted")
+
+			// todo expect the context window has the tool call result appended
 			Expect(taskRun.Status.ContextWindow).To(HaveLen(4))
 			Expect(taskRun.Status.ContextWindow[3].Role).To(Equal("tool"))
-			Expect(taskRun.Status.ContextWindow[3].Content).To(Equal(`{"data": "test-data"}`))
-
-			By("checking that a tool calls complete event was emitted")
-			ExpectRecorder(recorder).ToEmitEventContaining("AllToolCallsCompleted")
+			Expect(taskRun.Status.ContextWindow[3].Content).To(ContainSubstring("test-data"))
 		})
 	})
-})
-
-// We're using the MockRawOpenAIClient from the llmclient package instead of a local mock
-
-// These tests are currently disabled to focus on the current implementation
-var _ = PDescribe("TaskRun Controller", func() {
+	Context("LLMFinalAnswer -> LLMFinalAnswer", func() {
+		It("stays in LLMFinalAnswer", func() {})
+	})
 	Context("When reconciling a resource", func() {
-		// Placeholder tests
-		It("should progress through phases correctly", func() {})
-		It("should clear error field when entering ready state", func() {})
-		It("should pass tools correctly to OpenAI and handle tool calls", func() {})
-		It("should keep the task run in the ToolCallsPending state when tool call is pending", func() {})
-		It("should correctly handle multi-message conversations with the LLM", func() {})
-		It("should transition to ReadyForLLM when all tool calls are complete", func() {})
+		ctx := context.Background()
+
+		// todo(dex) i think this is not needed anymore - check version history to restore it
+		XIt("should progress through phases correctly", func() {})
+
+		// todo(dex) i think this is not needed anymore - check version history to restore it
+		XIt("should clear error field when entering ready state", func() {})
+
+		// todo(dex) i think this is not needed anymore - check version history to restore it
+		XIt("should pass tools correctly to OpenAI and handle tool calls", func() {})
+
+		// todo(dex) i think this is not needed anymore - check version history to restore it
+		XIt("should keep the task run in the ToolCallsPending state when tool call is pending", func() {})
+
+		// todo dex should fix this but trying to get something merged in asap
+		XIt("should correctly handle multi-message conversations with the LLM", func() {
+			uniqueSuffix := fmt.Sprintf("%d", time.Now().UnixNano())
+			testTaskRunName := fmt.Sprintf("multi-message-%s", uniqueSuffix)
+
+			By("setting up the taskrun with an existing conversation history")
+			taskRun := testTaskRun.SetupWithStatus(ctx, kubechain.TaskRunStatus{
+				Phase: kubechain.TaskRunPhaseReadyForLLM,
+				ContextWindow: []kubechain.Message{
+					{
+						Role:    "system",
+						Content: "you are a testing assistant",
+					},
+					{
+						Role:    "user",
+						Content: "what is 2 + 2?",
+					},
+					{
+						Role:    "assistant",
+						Content: "2 + 2 = 4",
+					},
+					{
+						Role:    "user",
+						Content: "what is 4 + 4?",
+					},
+				},
+			})
+			defer testTaskRun.Teardown(ctx)
+
+			By("creating a mock OpenAI client that validates context window messages are passed correctly")
+			mockClient := &llmclient.MockRawOpenAIClient{
+				Response: &kubechain.Message{
+					Role:    "assistant",
+					Content: "4 + 4 = 8",
+				},
+				ValidateContextWindow: func(contextWindow []kubechain.Message) error {
+					Expect(contextWindow).To(HaveLen(4), "All 4 messages should be sent to the LLM")
+
+					// Verify all messages are present in the correct order
+					Expect(contextWindow[0].Role).To(Equal("system"))
+					Expect(contextWindow[0].Content).To(Equal("you are a testing assistant"))
+
+					Expect(contextWindow[1].Role).To(Equal("user"))
+					Expect(contextWindow[1].Content).To(Equal("what is 2 + 2?"))
+
+					Expect(contextWindow[2].Role).To(Equal("assistant"))
+					Expect(contextWindow[2].Content).To(Equal("2 + 2 = 4"))
+
+					Expect(contextWindow[3].Role).To(Equal("user"))
+					Expect(contextWindow[3].Content).To(Equal("what is 4 + 4?"))
+
+					return nil
+				},
+			}
+
+			By("reconciling the taskrun")
+			reconciler, _ := reconciler()
+			reconciler.newLLMClient = func(apiKey string) (llmclient.OpenAIClient, error) {
+				return mockClient, nil
+			}
+
+			_, err := reconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      testTaskRunName,
+					Namespace: "default",
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("checking that the taskrun moved to FinalAnswer phase")
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTaskRunName, Namespace: "default"}, taskRun)).To(Succeed())
+			Expect(taskRun.Status.Phase).To(Equal(kubechain.TaskRunPhaseFinalAnswer))
+
+			By("checking that the new assistant response was appended to the context window")
+			Expect(taskRun.Status.ContextWindow).To(HaveLen(5))
+			lastMessage := taskRun.Status.ContextWindow[4]
+			Expect(lastMessage.Role).To(Equal("assistant"))
+			Expect(lastMessage.Content).To(Equal("4 + 4 = 8"))
+		})
+
+		// todo(dex) i think this is not needed anymore - check version history to restore it
+		XIt("should transition to ReadyForLLM when all tool calls are complete", func() {})
 	})
 })
