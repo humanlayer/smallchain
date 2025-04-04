@@ -347,7 +347,7 @@ var _ = Describe("TaskRun Controller", func() {
 		XIt("moves to ReadyForLLM after the backoff period", func() {})
 	})
 	Context("ReadyForLLM -> ToolCallsPending", func() {
-		FIt("moves to ToolCallsPending if the LLM returns tool calls", func() {
+		It("moves to ToolCallsPending if the LLM returns tool calls", func() {
 			_, _, _, teardown := setupSuiteObjects(ctx)
 			defer teardown()
 

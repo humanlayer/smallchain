@@ -307,7 +307,7 @@ func (r *TaskRunReconciler) endTaskRunSpan(ctx context.Context, taskRun *kubecha
 }
 
 // collectTools collects all tools from the agent's MCP servers
-func (r *TaskRunReconciler) collectTools(ctx context.Context, agent *kubechain.Agent) []llmclient.Tool {
+func (r *TaskRunReconciler) collectTools(agent *kubechain.Agent) []llmclient.Tool {
 	var tools []llmclient.Tool
 
 	// Get tools from MCP manager
@@ -535,7 +535,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	// Step 7: Collect tools from all sources
-	tools := r.collectTools(ctx, agent)
+	tools := r.collectTools(agent)
 
 	r.recorder.Event(&taskRun, corev1.EventTypeNormal, "SendingContextWindowToLLM", "Sending context window to LLM")
 
