@@ -9,10 +9,8 @@ import (
 	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -360,87 +358,53 @@ func (r *TaskRunReconciler) createLLMRequestSpan(ctx context.Context, taskRun *k
 }
 
 // processLLMResponse processes the LLM response and updates the TaskRun status
+// processLLMResponse handles the LLM's output and updates status accordingly
 func (r *TaskRunReconciler) processLLMResponse(ctx context.Context, output *kubechainv1alpha1.Message, taskRun *kubechainv1alpha1.TaskRun, statusUpdate *kubechainv1alpha1.TaskRun) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
-	// Append the LLM response to the context window
-	statusUpdate.Status.ContextWindow = append(statusUpdate.Status.ContextWindow, *output)
+	if output.Content != "" {
+		// final answer branch
+		statusUpdate.Status.Output = output.Content
+		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseFinalAnswer
+		statusUpdate.Status.Ready = true
+		statusUpdate.Status.ContextWindow = append(statusUpdate.Status.ContextWindow, kubechainv1alpha1.Message{
+			Role:    "assistant",
+			Content: output.Content,
+		})
+		statusUpdate.Status.Status = StatusReady
+		statusUpdate.Status.StatusDetail = "LLM final response received"
+		statusUpdate.Status.Error = ""
+		r.recorder.Event(taskRun, corev1.EventTypeNormal, "LLMFinalAnswer", "LLM response received successfully")
 
-	// Check if the response contains tool calls
-	if len(output.ToolCalls) > 0 {
+		// End the parent span since we've reached a terminal state
+		r.endTaskRunSpan(ctx, taskRun, codes.Ok, "TaskRun completed successfully with final answer")
+	} else {
 		// Generate a unique ID for this set of tool calls
-		toolCallRequestID := uuid.New().String()
-		statusUpdate.Status.ToolCallRequestID = toolCallRequestID
+		toolCallRequestId := uuid.New().String()[:7] // Using first 7 characters for brevity
+		logger.Info("Generated toolCallRequestId for tool calls", "id", toolCallRequestId)
 
-		// Create TaskRunToolCall objects for each tool call
-		for _, tc := range output.ToolCalls {
-			toolCall := &kubechainv1alpha1.TaskRunToolCall{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: kubechainv1alpha1.GroupVersion.String(),
-					Kind:       "TaskRunToolCall",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      fmt.Sprintf("%s-%s", taskRun.Name, tc.ID),
-					Namespace: taskRun.Namespace,
-					Labels: map[string]string{
-						"kubechain.humanlayer.dev/taskruntoolcall": taskRun.Name,
-						"kubechain.humanlayer.dev/toolcallrequest": toolCallRequestID,
-					},
-					OwnerReferences: []metav1.OwnerReference{
-						{
-							APIVersion: taskRun.APIVersion,
-							Kind:       taskRun.Kind,
-							Name:       taskRun.Name,
-							UID:        taskRun.UID,
-							Controller: ptr.To(true),
-						},
-					},
-				},
-				Spec: kubechainv1alpha1.TaskRunToolCallSpec{
-					TaskRunRef: kubechainv1alpha1.LocalObjectReference{
-						Name: taskRun.Name,
-					},
-					ToolRef: kubechainv1alpha1.LocalObjectReference{
-						Name: tc.Function.Name,
-					},
-					Arguments: tc.Function.Arguments,
-				},
-			}
-
-			if err := r.Create(ctx, toolCall); err != nil {
-				logger.Error(err, "Failed to create TaskRunToolCall")
-				return ctrl.Result{}, err
-			}
-		}
-
-		// Update status
+		// tool call branch: create TaskRunToolCall objects for each tool call returned by the LLM.
+		statusUpdate.Status.Output = ""
 		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseToolCallsPending
-		statusUpdate.Status.Status = StatusPending
+		statusUpdate.Status.ToolCallRequestID = toolCallRequestId
+		statusUpdate.Status.ContextWindow = append(statusUpdate.Status.ContextWindow, kubechainv1alpha1.Message{
+			Role:      "assistant",
+			ToolCalls: adapters.CastOpenAIToolCallsToKubechain(output.ToolCalls),
+		})
+		statusUpdate.Status.Ready = true
+		statusUpdate.Status.Status = StatusReady
 		statusUpdate.Status.StatusDetail = "LLM response received, tool calls pending"
-		statusUpdate.Status.Error = "" // Clear previous error
-		r.recorder.Event(taskRun, corev1.EventTypeNormal, "ToolCallsPending", "Tool calls created and pending execution")
+		statusUpdate.Status.Error = ""
+		r.recorder.Event(taskRun, corev1.EventTypeNormal, "ToolCallsPending", "LLM response received, tool calls pending")
 
+		// Update the parent's status before creating tool call objects.
 		if err := r.Status().Update(ctx, statusUpdate); err != nil {
-			logger.Error(err, "Failed to update TaskRun status")
+			logger.Error(err, "Unable to update TaskRun status")
 			return ctrl.Result{}, err
 		}
 
-		return ctrl.Result{RequeueAfter: time.Second * 5}, nil
+		return r.createToolCalls(ctx, taskRun, statusUpdate, output.ToolCalls)
 	}
-
-	// No tool calls, this is a final answer
-	statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseFinalAnswer
-	statusUpdate.Status.Status = StatusReady
-	statusUpdate.Status.StatusDetail = "LLM final response received"
-	statusUpdate.Status.Output = output.Content
-	statusUpdate.Status.Error = "" // Clear previous error
-	r.recorder.Event(taskRun, corev1.EventTypeNormal, "LLMFinalAnswer", "LLM final response received")
-
-	if err := r.Status().Update(ctx, statusUpdate); err != nil {
-		logger.Error(err, "Failed to update TaskRun status")
-		return ctrl.Result{}, err
-	}
-
 	return ctrl.Result{}, nil
 }
 
