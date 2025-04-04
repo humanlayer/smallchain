@@ -431,7 +431,7 @@ func (r *TaskRunReconciler) processLLMResponse(ctx context.Context, output *kube
 
 	if hasToolCalls {
 		// tool call branch: create TaskRunToolCall objects for each tool call returned by the LLM.
-		logger.Info("DEBUG: Taking tool calls branch because tool calls are present", "contentPresent", output.Content != "")
+		logger.Debug("Taking tool calls branch because tool calls are present", "contentPresent", output.Content != "")
 
 		// If content is also present, log a warning as this is unusual for some models
 		if output.Content != "" {
