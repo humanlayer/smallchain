@@ -139,7 +139,9 @@ var _ = Describe("TaskRun Controller", func() {
 				agentName:   testAgent.name,
 				userMessage: "test-user-message",
 			}
-			testTaskRun2.Setup(ctx)
+			taskRun := testTaskRun2.SetupWithStatus(ctx, kubechain.TaskRunStatus{
+				Phase: kubechain.TaskRunPhaseInitializing,
+			})
 			defer testTaskRun2.Teardown(ctx)
 
 			By("reconciling the taskrun")
@@ -152,9 +154,8 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Requeue).To(BeTrue())
 
-			var taskRun kubechain.TaskRun
 			By("ensuring the context window is set correctly")
-			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTaskRun2.name, Namespace: "default"}, &taskRun)).To(Succeed())
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTaskRun2.name, Namespace: "default"}, taskRun)).To(Succeed())
 			Expect(taskRun.Status.Phase).To(Equal(kubechain.TaskRunPhaseReadyForLLM))
 			Expect(taskRun.Status.ContextWindow).To(HaveLen(2))
 			Expect(taskRun.Status.ContextWindow[0].Role).To(Equal("system"))
