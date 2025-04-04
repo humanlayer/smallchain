@@ -2,6 +2,7 @@ package taskrun
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -238,13 +239,12 @@ var _ = Describe("TaskRun Controller", func() {
 
 			By("reconciling the taskrun with a mock LLM client that returns an error")
 			reconciler, recorder := reconciler()
-			mockLLMClient := &llmclient.MockRawOpenAIClient{
+			mockLLMClient := &llmclient.MockLLMClient{
 				Error: fmt.Errorf("connection timeout"),
 			}
-			reconciler.newLLMClient = func(apiKey string) (llmclient.OpenAIClient, error) {
+			reconciler.newLLMClient = func(ctx context.Context, llm kubechain.LLM, apiKey string) (llmclient.LLMClient, error) {
 				return mockLLMClient, nil
 			}
-
 			_, err := reconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: types.NamespacedName{Name: testTaskRun.name, Namespace: "default"},
 			})
@@ -280,14 +280,15 @@ var _ = Describe("TaskRun Controller", func() {
 
 			By("reconciling the taskrun with a mock LLM client that returns a 400 error")
 			reconciler, recorder := reconciler()
-			mockLLMClient := &llmclient.MockRawOpenAIClient{
+			mockLLMClient := &llmclient.MockLLMClient{
 				Error: &llmclient.LLMRequestError{
 					StatusCode: 400,
 					Message:    "invalid request: model not found",
 					Err:        fmt.Errorf("OpenAI API request failed"),
 				},
 			}
-			reconciler.newLLMClient = func(apiKey string) (llmclient.OpenAIClient, error) {
+
+			reconciler.newLLMClient = func(ctx context.Context, llm kubechain.LLM, apiKey string) (llmclient.LLMClient, error) {
 				return mockLLMClient, nil
 			}
 

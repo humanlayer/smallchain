@@ -39,6 +39,10 @@ func (m *MockLLMClient) SendRequest(ctx context.Context, messages []kubechainv1a
 		}
 	}
 
+	if m.Error != nil {
+		return m.Response, m.Error
+	}
+
 	if m.Response == nil {
 		return &kubechainv1alpha1.Message{
 			Role:    "assistant",
