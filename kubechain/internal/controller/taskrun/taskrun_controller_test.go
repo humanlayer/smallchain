@@ -254,7 +254,7 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTaskRun.name, Namespace: "default"}, taskRun)).To(Succeed())
 			Expect(taskRun.Status.Status).To(Equal(kubechain.TaskRunStatusStatusError))
 			// Phase shouldn't be Failed for general errors
-			Expect(taskRun.Status.Phase).ToNot(Equal(kubechain.TaskRunPhaseFailed))
+			Expect(taskRun.Status.Phase).To(Equal(kubechain.TaskRunPhaseReadyForLLM))
 			Expect(taskRun.Status.Error).To(Equal("connection timeout"))
 			ExpectRecorder(recorder).ToEmitEventContaining("LLMRequestFailed")
 		})
@@ -375,7 +375,8 @@ var _ = Describe("TaskRun Controller", func() {
 			defer teardown()
 
 			taskRun := testTaskRun.SetupWithStatus(ctx, kubechain.TaskRunStatus{
-				Phase: kubechain.TaskRunPhaseToolCallsPending,
+				Phase:             kubechain.TaskRunPhaseToolCallsPending,
+				ToolCallRequestID: "test123",
 			})
 			defer testTaskRun.Teardown(ctx)
 
@@ -405,7 +406,8 @@ var _ = Describe("TaskRun Controller", func() {
 
 			By("setting up the taskrun with a tool call pending")
 			taskRun := testTaskRun.SetupWithStatus(ctx, kubechain.TaskRunStatus{
-				Phase: kubechain.TaskRunPhaseToolCallsPending,
+				Phase:             kubechain.TaskRunPhaseToolCallsPending,
+				ToolCallRequestID: "test123",
 				ContextWindow: []kubechain.Message{
 					{
 						Role:    "system",
