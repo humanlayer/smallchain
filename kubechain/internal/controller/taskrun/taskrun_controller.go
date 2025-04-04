@@ -699,17 +699,20 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	// Step 1: Validate Task and Agent
+	logger.V(3).Info("Validating Task and Agent")
 	task, agent, result, err := r.validateTaskAndAgent(ctx, &taskRun, statusUpdate)
 	if err != nil || !result.IsZero() {
 		return result, err
 	}
 
 	// Step 2: Initialize Phase if necessary
+	logger.V(3).Info("Preparing for LLM")
 	if result, err := r.prepareForLLM(ctx, &taskRun, statusUpdate, task, agent); err != nil || !result.IsZero() {
 		return result, err
 	}
 
 	// Step 3: Handle tool calls phase
+	logger.V(3).Info("Handling tool calls phase")
 	if taskRun.Status.Phase == kubechainv1alpha1.TaskRunPhaseToolCallsPending {
 		return r.processToolCalls(ctx, &taskRun)
 	}
@@ -721,12 +724,14 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	// Step 5: Get API credentials (LLM is returned but not used)
+	logger.V(3).Info("Getting API credentials")
 	_, apiKey, err := r.getLLMAndCredentials(ctx, agent, &taskRun, statusUpdate)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
 	// Step 6: Create LLM client
+	logger.V(3).Info("Creating LLM client")
 	llmClient, err := r.newLLMClient(apiKey)
 	if err != nil {
 		logger.Error(err, "Failed to create OpenAI client")
@@ -758,6 +763,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		defer childSpan.End()
 	}
 
+	logger.V(3).Info("Sending LLM request")
 	// Step 8: Send the prompt to the LLM
 	output, err := llmClient.SendRequest(childCtx, taskRun.Status.ContextWindow, tools)
 	if err != nil {
@@ -798,6 +804,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		childSpan.SetStatus(codes.Ok, "LLM request succeeded")
 	}
 
+	logger.V(3).Info("Processing LLM response")
 	// Step 9: Process LLM response
 	var llmResult ctrl.Result
 	llmResult, err = r.processLLMResponse(ctx, output, &taskRun, statusUpdate)
