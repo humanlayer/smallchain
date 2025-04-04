@@ -27,7 +27,6 @@ import (
 	"github.com/humanlayer/smallchain/kubechain/internal/controller/contactchannel"
 	"github.com/humanlayer/smallchain/kubechain/internal/controller/llm"
 	"github.com/humanlayer/smallchain/kubechain/internal/controller/mcpserver"
-	"github.com/humanlayer/smallchain/kubechain/internal/controller/task"
 	"github.com/humanlayer/smallchain/kubechain/internal/controller/taskrun"
 	"github.com/humanlayer/smallchain/kubechain/internal/controller/taskruntoolcall"
 	"github.com/humanlayer/smallchain/kubechain/internal/controller/tool"
@@ -253,14 +252,6 @@ func main() {
 		MCPManager: mcpManagerInstance,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Agent")
-		os.Exit(1)
-	}
-
-	if err = (&task.TaskReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "Task")
 		os.Exit(1)
 	}
 

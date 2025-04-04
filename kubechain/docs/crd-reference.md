@@ -128,26 +128,6 @@ The Tool CRD represents a capability that can be used by an agent.
 | `status` | string | Current status: "Ready", "Error", or "Pending" |
 | `statusDetail` | string | Detailed status message |
 
-## Task
-
-The Task CRD represents a request to an agent.
-
-### Spec Fields
-
-| Field | Type | Description | Required |
-|-------|------|-------------|----------|
-| `agentRef` | NameRef | Reference to an agent resource | Yes |
-| `message` | string | Task prompt or message | Yes |
-
-### Status Fields
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `ready` | boolean | Whether the task is complete |
-| `status` | string | Current status: "Ready", "Error", or "Pending" |
-| `statusDetail` | string | Detailed status message |
-| `taskRunRef` | NameRef | Reference to the created TaskRun |
-
 ## TaskRun
 
 The TaskRun CRD represents an executing task instance.
@@ -156,7 +136,9 @@ The TaskRun CRD represents an executing task instance.
 
 | Field | Type | Description | Required |
 |-------|------|-------------|----------|
-| `taskRef` | NameRef | Reference to the parent task | Yes |
+| `agentRef` | LocalObjectReference | Reference to the agent to execute the task | Yes |
+| `userMessage` | string | Message to send to the agent | Yes |
+| `taskRunToolCallRef` | LocalObjectReference | Reference to a parent TaskRunToolCall when created for tool call delegation | No |
 
 ### Status Fields
 
