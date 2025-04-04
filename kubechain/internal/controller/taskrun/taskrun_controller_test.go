@@ -127,8 +127,42 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(taskRun.Status.ContextWindow[1].Content).To(ContainSubstring(testTask.message))
 			ExpectRecorder(recorder).ToEmitEventContaining("ValidationSucceeded")
 		})
-		XIt("moves to ReadyForLLM if there is a userMessage + agentRef and no taskRef", func() {
-			// todo
+		It("moves to ReadyForLLM if there is a userMessage + agentRef and no taskRef", func() {
+			testAgent.SetupWithStatus(ctx, kubechain.AgentStatus{
+				Status: "Ready",
+				Ready:  true,
+			})
+			defer testAgent.Teardown(ctx)
+
+			testTaskRun2 := &TestTaskRun{
+				name:        "test-taskrun-2",
+				agentName:   testAgent.name,
+				userMessage: "test-user-message",
+			}
+			taskRun := testTaskRun2.SetupWithStatus(ctx, kubechain.TaskRunStatus{
+				Phase: kubechain.TaskRunPhaseInitializing,
+			})
+			defer testTaskRun2.Teardown(ctx)
+
+			By("reconciling the taskrun")
+			reconciler, recorder := reconciler()
+
+			result, err := reconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{Name: testTaskRun2.name, Namespace: "default"},
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeTrue())
+
+			By("ensuring the context window is set correctly")
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTaskRun2.name, Namespace: "default"}, taskRun)).To(Succeed())
+			Expect(taskRun.Status.Phase).To(Equal(kubechain.TaskRunPhaseReadyForLLM))
+			Expect(taskRun.Status.ContextWindow).To(HaveLen(2))
+			Expect(taskRun.Status.ContextWindow[0].Role).To(Equal("system"))
+			Expect(taskRun.Status.ContextWindow[0].Content).To(ContainSubstring(testAgent.system))
+			Expect(taskRun.Status.ContextWindow[1].Role).To(Equal("user"))
+			Expect(taskRun.Status.ContextWindow[1].Content).To(ContainSubstring("test-user-message"))
+			ExpectRecorder(recorder).ToEmitEventContaining("ValidationSucceeded")
 		})
 	})
 	Context("Pending -> ReadyForLLM", func() {
