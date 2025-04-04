@@ -79,6 +79,9 @@ type Tool struct {
 	// Type indicates the type of tool. Currently only "function" is supported.
 	Type     string       `json:"type"`
 	Function ToolFunction `json:"function"`
+	// KubechainToolType represents the Kubechain-specific type of tool (Standard, MCP, HumanContact)
+	// This field is not sent to the LLM API but is used internally for tool identification
+	KubechainToolType v1alpha1.ToolType `json:"-"`
 }
 
 func FromKubechainTool(tool v1alpha1.Tool) *Tool {
@@ -89,6 +92,7 @@ func FromKubechainTool(tool v1alpha1.Tool) *Tool {
 			Name:        tool.Spec.Name,
 			Description: tool.Spec.Description,
 		},
+		KubechainToolType: v1alpha1.ToolTypeStandard, // Standard tool by default
 	}
 
 	// Parse the parameters if they exist
@@ -140,6 +144,7 @@ func FromContactChannel(channel v1alpha1.ContactChannel) *Tool {
 			Description: description,
 			Parameters:  params,
 		},
+		KubechainToolType: v1alpha1.ToolTypeHumanContact, // Set as HumanContact type
 	}
 }
 
