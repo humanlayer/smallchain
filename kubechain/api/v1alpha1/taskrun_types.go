@@ -6,21 +6,18 @@ import (
 
 // TaskRunSpec defines the desired state of TaskRun
 type TaskRunSpec struct {
-	// TaskRef references the task to run
-	// +optional
-	TaskRef *LocalObjectReference `json:"taskRef,omitempty"`
-
 	// TaskRunToolCallRef is used when the TaskRun is created for a tool call delegation.
 	// +optional
 	TaskRunToolCallRef *LocalObjectReference `json:"taskRunToolCallRef,omitempty"`
 
-	// AgentRef overrides the task's agent for this TaskRun.
-	// +optional
-	AgentRef *LocalObjectReference `json:"agentRef,omitempty"`
+	// AgentRef references the agent that will execute this TaskRun.
+	// +kubebuilder:validation:Required
+	AgentRef LocalObjectReference `json:"agentRef"`
 
-	// UserMessage overrides the task's message for this TaskRun.
-	// +optional
-	UserMessage string `json:"userMessage,omitempty"`
+	// UserMessage is the message to send to the agent.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	UserMessage string `json:"userMessage"`
 }
 
 // Message represents a single message in the conversation
@@ -170,7 +167,6 @@ const (
 // +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.status"
 // +kubebuilder:printcolumn:name="Detail",type="string",JSONPath=".status.statusDetail",priority=1
 // +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase"
-// +kubebuilder:printcolumn:name="Task",type="string",JSONPath=".spec.taskRef.name"
 // +kubebuilder:printcolumn:name="Preview",type="string",JSONPath=".status.userMsgPreview"
 // +kubebuilder:printcolumn:name="Output",type="string",JSONPath=".status.output"
 // +kubebuilder:printcolumn:name="Error",type="string",JSONPath=".status.error",priority=1

@@ -5,6 +5,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.opentelemetry.io/otel/trace"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -103,8 +104,7 @@ func (t *TestAgent) Setup(ctx context.Context) *kubechain.Agent {
 	By("creating the agent")
 	agent := &kubechain.Agent{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: t.name,
-
+			Name:      t.name,
 			Namespace: "default",
 		},
 		Spec: kubechain.AgentSpec{
@@ -142,50 +142,8 @@ var testAgent = &TestAgent{
 	mcpServers: []kubechain.LocalObjectReference{},
 }
 
-type TestTask struct {
-	name      string
-	agentName string
-	message   string
-	task      *kubechain.Task
-}
-
-func (t *TestTask) Setup(ctx context.Context) *kubechain.Task {
-	By("creating the task")
-	task := &kubechain.Task{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      t.name,
-			Namespace: "default",
-		},
-		Spec: kubechain.TaskSpec{
-			AgentRef: kubechain.LocalObjectReference{
-				Name: t.agentName,
-			},
-			Message: t.message,
-		},
-	}
-	err := k8sClient.Create(ctx, task)
-	Expect(err).NotTo(HaveOccurred())
-	Expect(k8sClient.Get(ctx, types.NamespacedName{Name: t.name, Namespace: "default"}, task)).To(Succeed())
-	t.task = task
-	return task
-}
-
-func (t *TestTask) SetupWithStatus(ctx context.Context, status kubechain.TaskStatus) *kubechain.Task {
-	task := t.Setup(ctx)
-	task.Status = status
-	Expect(k8sClient.Status().Update(ctx, task)).To(Succeed())
-	t.task = task
-	return task
-}
-
-func (t *TestTask) Teardown(ctx context.Context) {
-	By("deleting the task")
-	Expect(k8sClient.Delete(ctx, t.task)).To(Succeed())
-}
-
 type TestTaskRun struct {
 	name        string
-	taskName    string
 	agentName   string
 	userMessage string
 	taskRun     *kubechain.TaskRun
@@ -200,13 +158,8 @@ func (t *TestTaskRun) Setup(ctx context.Context) *kubechain.TaskRun {
 		},
 		Spec: kubechain.TaskRunSpec{},
 	}
-	if t.taskName != "" {
-		taskRun.Spec.TaskRef = &kubechain.LocalObjectReference{
-			Name: t.taskName,
-		}
-	}
 	if t.agentName != "" {
-		taskRun.Spec.AgentRef = &kubechain.LocalObjectReference{
+		taskRun.Spec.AgentRef = kubechain.LocalObjectReference{
 			Name: t.agentName,
 		}
 	}
@@ -236,15 +189,10 @@ func (t *TestTaskRun) Teardown(ctx context.Context) {
 	Expect(k8sClient.Delete(ctx, t.taskRun)).To(Succeed())
 }
 
-var testTask = &TestTask{
-	name:      "test-task",
-	agentName: "test-agent",
-	message:   "what is the capital of the moon?",
-}
-
 var testTaskRun = &TestTaskRun{
-	name:     "test-taskrun",
-	taskName: testTask.name,
+	name:        "test-taskrun",
+	agentName:   "test-agent",
+	userMessage: "what is the capital of the moon?",
 }
 
 type TestTaskRunToolCall struct {
@@ -298,7 +246,7 @@ var testTaskRunToolCall = &TestTaskRunToolCall{
 }
 
 // nolint:golint,unparam
-func setupSuiteObjects(ctx context.Context) (secret *corev1.Secret, llm *kubechain.LLM, agent *kubechain.Agent, task *kubechain.Task, teardown func()) {
+func setupSuiteObjects(ctx context.Context) (secret *corev1.Secret, llm *kubechain.LLM, agent *kubechain.Agent, taskRun *kubechain.TaskRun, teardown func()) {
 	secret = testSecret.Setup(ctx)
 	llm = testLLM.SetupWithStatus(ctx, kubechain.LLMStatus{
 		Status: "Ready",
@@ -308,7 +256,7 @@ func setupSuiteObjects(ctx context.Context) (secret *corev1.Secret, llm *kubecha
 		Status: "Ready",
 		Ready:  true,
 	})
-	task = testTask.SetupWithStatus(ctx, kubechain.TaskStatus{
+	taskRun = testTaskRun.SetupWithStatus(ctx, kubechain.TaskRunStatus{
 		Status: "Ready",
 		Ready:  true,
 	})
@@ -316,9 +264,9 @@ func setupSuiteObjects(ctx context.Context) (secret *corev1.Secret, llm *kubecha
 		testSecret.Teardown(ctx)
 		testLLM.Teardown(ctx)
 		testAgent.Teardown(ctx)
-		testTask.Teardown(ctx)
+		testTaskRun.Teardown(ctx)
 	}
-	return secret, llm, agent, task, teardown
+	return secret, llm, agent, taskRun, teardown
 }
 
 func reconciler() (*TaskRunReconciler, *record.FakeRecorder) {
@@ -328,6 +276,7 @@ func reconciler() (*TaskRunReconciler, *record.FakeRecorder) {
 		Client:   k8sClient,
 		Scheme:   k8sClient.Scheme(),
 		recorder: recorder,
+		Tracer:   trace.NewNoopTracerProvider().Tracer("test-tracer"),
 	}
 	return reconciler, recorder
 }

@@ -21,8 +21,8 @@ var _ = Describe("TaskRun Controller", func() {
 	Context("'' -> Initializing", func() {
 		ctx := context.Background()
 		It("moves to Initializing and sets a span context", func() {
-			testTask.Setup(ctx)
-			defer testTask.Teardown(ctx)
+			testAgent.Setup(ctx)
+			defer testAgent.Teardown(ctx)
 
 			taskRun := testTaskRun.Setup(ctx)
 			defer testTaskRun.Teardown(ctx)
@@ -46,34 +46,55 @@ var _ = Describe("TaskRun Controller", func() {
 		})
 	})
 	Context("Initializing -> Error", func() {
-		It("moves to error if the task is not found", func() {
+		It("moves to error if the agent is not found", func() {
 			taskRun := testTaskRun.SetupWithStatus(ctx, kubechain.TaskRunStatus{
 				Phase: kubechain.TaskRunPhaseInitializing,
 			})
 			defer testTaskRun.Teardown(ctx)
 
 			By("reconciling the taskrun")
-			reconciler, _ := reconciler()
+			reconciler, recorder := reconciler()
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: types.NamespacedName{Name: testTaskRun.name, Namespace: "default"},
 			})
-			// todo dont error if not found, don't requeue
-			Expect(err).To(HaveOccurred())
-			Expect(result.Requeue).To(BeFalse())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.RequeueAfter).To(Equal(time.Second * 5))
 
 			By("checking the taskrun status")
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTaskRun.name, Namespace: "default"}, taskRun)).To(Succeed())
-			Expect(taskRun.Status.Phase).To(Equal(kubechain.TaskRunPhaseFailed))
-			Expect(taskRun.Status.Error).To(Equal("Task \"test-task\" not found"))
+			Expect(taskRun.Status.Phase).To(Equal(kubechain.TaskRunPhasePending))
+			Expect(taskRun.Status.StatusDetail).To(ContainSubstring("Waiting for Agent to exist"))
+			ExpectRecorder(recorder).ToEmitEventContaining("Waiting")
 		})
 	})
 	Context("Initializing -> Pending", func() {
-		It("moves to pending if upstream task is not ready", func() {
-			_ = testTask.SetupWithStatus(ctx, kubechain.TaskStatus{
-				Status: kubechain.TaskStatusPending,
+		It("moves to pending if upstream agent does not exist", func() {
+			taskRun := testTaskRun.SetupWithStatus(ctx, kubechain.TaskRunStatus{
+				Phase: kubechain.TaskRunPhaseInitializing,
 			})
-			defer testTask.Teardown(ctx)
+			defer testTaskRun.Teardown(ctx)
+
+			By("reconciling the taskrun")
+			reconciler, recorder := reconciler()
+
+			result, err := reconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{Name: testTaskRun.name, Namespace: "default"},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.RequeueAfter).To(Equal(time.Second * 5))
+
+			By("checking the taskrun status")
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTaskRun.name, Namespace: "default"}, taskRun)).To(Succeed())
+			Expect(taskRun.Status.Phase).To(Equal(kubechain.TaskRunPhasePending))
+			Expect(taskRun.Status.StatusDetail).To(ContainSubstring("Waiting for Agent to exist"))
+			ExpectRecorder(recorder).ToEmitEventContaining("Waiting")
+		})
+		It("moves to pending if upstream agent is not ready", func() {
+			_ = testAgent.SetupWithStatus(ctx, kubechain.AgentStatus{
+				Ready: false,
+			})
+			defer testAgent.Teardown(ctx)
 
 			taskRun := testTaskRun.SetupWithStatus(ctx, kubechain.TaskRunStatus{
 				Phase: kubechain.TaskRunPhaseInitializing,
@@ -92,42 +113,12 @@ var _ = Describe("TaskRun Controller", func() {
 			By("checking the taskrun status")
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTaskRun.name, Namespace: "default"}, taskRun)).To(Succeed())
 			Expect(taskRun.Status.Phase).To(Equal(kubechain.TaskRunPhasePending))
-			Expect(taskRun.Status.StatusDetail).To(ContainSubstring("Waiting for task \"test-task\" to become ready"))
-			ExpectRecorder(recorder).ToEmitEventContaining("TaskNotReady")
+			Expect(taskRun.Status.StatusDetail).To(ContainSubstring("Waiting for agent \"test-agent\" to become ready"))
+			ExpectRecorder(recorder).ToEmitEventContaining("Waiting for agent")
 		})
 	})
 	Context("Initializing -> ReadyForLLM", func() {
-		It("moves to ReadyForLLM if the task is ready", func() {
-			_, _, _, _, teardown := setupSuiteObjects(ctx)
-			defer teardown()
-
-			taskRun := testTaskRun.SetupWithStatus(ctx, kubechain.TaskRunStatus{
-				Phase: kubechain.TaskRunPhaseInitializing,
-			})
-			defer testTaskRun.Teardown(ctx)
-
-			By("reconciling the taskrun")
-			reconciler, recorder := reconciler()
-
-			result, err := reconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: types.NamespacedName{Name: testTaskRun.name, Namespace: "default"},
-			})
-
-			Expect(err).NotTo(HaveOccurred())
-			Expect(result.Requeue).To(BeTrue())
-
-			By("ensuring the context window is set correctly")
-			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTaskRun.name, Namespace: "default"}, taskRun)).To(Succeed())
-			Expect(taskRun.Status.Phase).To(Equal(kubechain.TaskRunPhaseReadyForLLM))
-			Expect(taskRun.Status.StatusDetail).To(ContainSubstring("Ready to send to LLM"))
-			Expect(taskRun.Status.ContextWindow).To(HaveLen(2))
-			Expect(taskRun.Status.ContextWindow[0].Role).To(Equal("system"))
-			Expect(taskRun.Status.ContextWindow[0].Content).To(ContainSubstring(testAgent.system))
-			Expect(taskRun.Status.ContextWindow[1].Role).To(Equal("user"))
-			Expect(taskRun.Status.ContextWindow[1].Content).To(ContainSubstring(testTask.message))
-			ExpectRecorder(recorder).ToEmitEventContaining("ValidationSucceeded")
-		})
-		It("moves to ReadyForLLM if there is a userMessage + agentRef and no taskRef", func() {
+		It("moves to ReadyForLLM if there is a userMessage + agentRef", func() {
 			testAgent.SetupWithStatus(ctx, kubechain.AgentStatus{
 				Status: "Ready",
 				Ready:  true,
@@ -192,7 +183,7 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(taskRun.Status.ContextWindow[0].Role).To(Equal("system"))
 			Expect(taskRun.Status.ContextWindow[0].Content).To(ContainSubstring(testAgent.system))
 			Expect(taskRun.Status.ContextWindow[1].Role).To(Equal("user"))
-			Expect(taskRun.Status.ContextWindow[1].Content).To(ContainSubstring(testTask.message))
+			Expect(taskRun.Status.ContextWindow[1].Content).To(ContainSubstring(testTaskRun.userMessage))
 			ExpectRecorder(recorder).ToEmitEventContaining("ValidationSucceeded")
 		})
 	})
@@ -210,7 +201,7 @@ var _ = Describe("TaskRun Controller", func() {
 					},
 					{
 						Role:    "user",
-						Content: testTask.message,
+						Content: testTaskRun.userMessage,
 					},
 				},
 			})
@@ -250,7 +241,7 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(mockLLMClient.Calls[0].Messages[0].Role).To(Equal("system"))
 			Expect(mockLLMClient.Calls[0].Messages[0].Content).To(ContainSubstring(testAgent.system))
 			Expect(mockLLMClient.Calls[0].Messages[1].Role).To(Equal("user"))
-			Expect(mockLLMClient.Calls[0].Messages[1].Content).To(ContainSubstring(testTask.message))
+			Expect(mockLLMClient.Calls[0].Messages[1].Content).To(ContainSubstring(testTaskRun.userMessage))
 		})
 	})
 	Context("ReadyForLLM -> Error", func() {
@@ -267,7 +258,7 @@ var _ = Describe("TaskRun Controller", func() {
 					},
 					{
 						Role:    "user",
-						Content: testTask.message,
+						Content: testTaskRun.userMessage,
 					},
 				},
 			})
@@ -309,7 +300,7 @@ var _ = Describe("TaskRun Controller", func() {
 					},
 					{
 						Role:    "user",
-						Content: testTask.message,
+						Content: testTaskRun.userMessage,
 					},
 				},
 			})
@@ -353,8 +344,16 @@ var _ = Describe("TaskRun Controller", func() {
 	})
 	Context("ReadyForLLM -> ToolCallsPending", func() {
 		It("moves to ToolCallsPending if the LLM returns tool calls", func() {
-			_, _, _, _, teardown := setupSuiteObjects(ctx)
-			defer teardown()
+			testLLM.SetupWithStatus(ctx, kubechain.LLMStatus{
+				Status: "Ready",
+				Ready:  true,
+			})
+			defer testLLM.Teardown(ctx)
+			testAgent.SetupWithStatus(ctx, kubechain.AgentStatus{
+				Status: "Ready",
+				Ready:  true,
+			})
+			defer testAgent.Teardown(ctx)
 
 			taskRun := testTaskRun.SetupWithStatus(ctx, kubechain.TaskRunStatus{
 				Phase: kubechain.TaskRunPhaseReadyForLLM,
@@ -408,9 +407,6 @@ var _ = Describe("TaskRun Controller", func() {
 	})
 	Context("ToolCallsPending -> ToolCallsPending", func() {
 		It("Stays in ToolCallsPending if the tool calls are not completed", func() {
-			_, _, _, _, teardown := setupSuiteObjects(ctx)
-			defer teardown()
-
 			taskRun := testTaskRun.SetupWithStatus(ctx, kubechain.TaskRunStatus{
 				Phase:             kubechain.TaskRunPhaseToolCallsPending,
 				ToolCallRequestID: "test123",
@@ -452,7 +448,7 @@ var _ = Describe("TaskRun Controller", func() {
 					},
 					{
 						Role:    "user",
-						Content: testTask.message,
+						Content: testTaskRun.userMessage,
 					},
 					{
 						Role: "assistant",
@@ -594,8 +590,5 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(lastMessage.Role).To(Equal("assistant"))
 			Expect(lastMessage.Content).To(Equal("4 + 4 = 8"))
 		})
-
-		// todo(dex) i think this is not needed anymore - check version history to restore it
-		XIt("should transition to ReadyForLLM when all tool calls are complete", func() {})
 	})
 })
