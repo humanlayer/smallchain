@@ -31,7 +31,7 @@ KubeChain is a cloud-native orchestrator for AI Agents built on Kubernetes. It s
   - [Setting Up a Local Cluster](#setting-up-a-local-cluster)
   - [Deploying KubeChain](#deploying-kubechain)
   - [Creating Your First Agent](#creating-your-first-agent)
-  - [Running Your First Task](#running-your-first-task)
+  - [Running Your First TaskRun](#running-your-first-taskrun)
   - [Inspecting the TaskRun more closely](#inspecting-the-taskrun-more-closely)
   - [Adding Tools with MCP](#adding-tools-with-mcp)
   - [Cleaning Up](#cleaning-up)
@@ -47,8 +47,7 @@ KubeChain is a cloud-native orchestrator for AI Agents built on Kubernetes. It s
 - **LLM**: Provider + API Keys + Parameters
 - **Agent**: LLM + System Prompt + Tools
 - **Tool**: MCP server or another Agent
-- **Task**: Agent + User Message
-- **TaskRun**: Task + Current context window
+- **TaskRun**: Agent + User Message + Current context window
 
 ## Getting Started
 
@@ -308,22 +307,20 @@ Events:
   Normal  ValidationSucceeded  64m (x2 over 64m)  agent-controller  All dependencies validated successfully
 ```
 
-</details>
+</details>### Running Your First TaskRun
+Create a TaskRun to interact with your agent:
 
-### Running Your First Task
-
-1. **Create a Task resource**
 
 ```bash
 cat <<EOF | kubectl apply -f -
 apiVersion: kubechain.humanlayer.dev/v1alpha1
-kind: Task
+kind: TaskRun
 metadata:
-  name: hello-world-task
+  name: hello-world-1
 spec:
   agentRef:
     name: my-assistant
-  message: "What is the capital of the moon?"
+  userMessage: "What is the capital of the moon?"
 EOF
 ```
 
@@ -349,15 +346,15 @@ graph RL
       SystemPrompt
     end
 
-    subgraph Task
+    subgraph TaskRun
       AgentRef
-      Message
+      UserMessage
     end
 ```
-Check the created Task:
+Check the created TaskRun:
 
 ```bash
-kubectl get task
+kubectl get taskrun
 ```
 
    Output:
@@ -371,18 +368,18 @@ hello-world-task   true    Ready    my-assistant   What is the capital of the mo
 <summary>Using `-o wide` and `describe`</summary>
 
 ```bash
-kubectl get task -o wide
+kubectl get taskrun -o wide
 ```
 
 Output:
 
 ```
-NAME               READY   STATUS   DETAIL             AGENT          MESSAGE                            OUTPUT
-hello-world-task   true    Ready    Task Run Created   my-assistant   What is the capital of the moon?
+NAME             READY   STATUS   DETAIL             AGENT          PREVIEW                            OUTPUT
+hello-world-1    true    Ready    Task Run Created   my-assistant   What is the capital of the moon?
 ```
 
 ```bash
-kubectl describe task
+kubectl describe taskrun
 ```
 
 Output:
