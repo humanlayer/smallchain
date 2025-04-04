@@ -5,10 +5,8 @@ import (
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -81,52 +79,9 @@ func (r *TaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{}, err // requeue
 	}
 
-	// Check if we need to create a TaskRun
-	taskRunList := &kubechainv1alpha1.TaskRunList{}
-	if err := r.List(ctx, taskRunList, client.InNamespace(task.Namespace), client.MatchingLabels{
-		"kubechain.humanlayer.dev/task": task.Name,
-	}); err != nil {
-		logger.Error(err, "Failed to list TaskRuns")
-		return ctrl.Result{}, err
-	}
-
-	if len(taskRunList.Items) == 0 {
-		// Create a new TaskRun
-		taskRun := &kubechainv1alpha1.TaskRun{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      task.Name + "-1",
-				Namespace: task.Namespace,
-				Labels: map[string]string{
-					"kubechain.humanlayer.dev/task": task.Name,
-				},
-				OwnerReferences: []metav1.OwnerReference{
-					{
-						APIVersion: kubechainv1alpha1.GroupVersion.String(),
-						Kind:       "Task",
-						Name:       task.Name,
-						UID:        task.UID,
-						Controller: ptr.To(true),
-					},
-				},
-			},
-			Spec: kubechainv1alpha1.TaskRunSpec{
-				TaskRef: &kubechainv1alpha1.LocalObjectReference{
-					Name: task.Name,
-				},
-			},
-		}
-
-		if err := r.Create(ctx, taskRun); err != nil {
-			logger.Error(err, "Failed to create TaskRun")
-			return ctrl.Result{}, err
-		}
-		logger.Info("Created TaskRun", "name", taskRun.Name)
-		r.recorder.Event(&task, corev1.EventTypeNormal, "TaskRunCreated", fmt.Sprintf("Created TaskRun %s", taskRun.Name))
-	}
-
 	statusUpdate.Status.Ready = true
 	statusUpdate.Status.Status = kubechainv1alpha1.TaskStatusReady
-	statusUpdate.Status.StatusDetail = "Task Run Created"
+	statusUpdate.Status.StatusDetail = "Task validation successful"
 	r.recorder.Event(&task, corev1.EventTypeNormal, "ValidationSucceeded", "Task validation successful")
 
 	// Update status
