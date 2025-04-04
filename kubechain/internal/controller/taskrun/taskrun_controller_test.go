@@ -112,6 +112,38 @@ var _ = Describe("TaskRun Controller", func() {
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: types.NamespacedName{Name: testTaskRun.name, Namespace: "default"},
 			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeTrue())
+
+			By("ensuring the context window is set correctly")
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTaskRun.name, Namespace: "default"}, taskRun)).To(Succeed())
+			Expect(taskRun.Status.Phase).To(Equal(kubechain.TaskRunPhaseReadyForLLM))
+			Expect(taskRun.Status.StatusDetail).To(ContainSubstring("Ready to send to LLM"))
+			Expect(taskRun.Status.ContextWindow).To(HaveLen(2))
+			Expect(taskRun.Status.ContextWindow[0].Role).To(Equal("system"))
+			Expect(taskRun.Status.ContextWindow[0].Content).To(ContainSubstring(testAgent.system))
+			Expect(taskRun.Status.ContextWindow[1].Role).To(Equal("user"))
+			Expect(taskRun.Status.ContextWindow[1].Content).To(ContainSubstring(testTask.message))
+			ExpectRecorder(recorder).ToEmitEventContaining("ValidationSucceeded")
+		})
+	})
+	Context("Pending -> ReadyForLLM", func() {
+		It("moves to ReadyForLLM if upstream dependencies are ready", func() {
+			_, _, _, _, teardown := setupSuiteObjects(ctx)
+			defer teardown()
+
+			taskRun := testTaskRun.SetupWithStatus(ctx, kubechain.TaskRunStatus{
+				Phase: kubechain.TaskRunPhasePending,
+			})
+			defer testTaskRun.Teardown(ctx)
+
+			By("reconciling the taskrun")
+			reconciler, recorder := reconciler()
+
+			result, err := reconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{Name: testTaskRun.name, Namespace: "default"},
+			})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Requeue).To(BeTrue())
 
