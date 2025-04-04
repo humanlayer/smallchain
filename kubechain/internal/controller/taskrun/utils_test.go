@@ -248,6 +248,7 @@ func (t *TestTaskRunToolCall) Setup(ctx context.Context) *kubechain.TaskRunToolC
 			Namespace: "default",
 			Labels: map[string]string{
 				"kubechain.humanlayer.dev/taskruntoolcall": testTaskRun.name,
+				"kubechain.humanlayer.dev/toolcallrequest": "test123",
 			},
 		},
 		Spec: kubechain.TaskRunToolCallSpec{

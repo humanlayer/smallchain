@@ -3,9 +3,11 @@ package taskrun
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -194,11 +196,12 @@ func (r *TaskRunReconciler) prepareForLLM(ctx context.Context, taskRun *kubechai
 func (r *TaskRunReconciler) processToolCalls(ctx context.Context, taskRun *kubechainv1alpha1.TaskRun) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
-	// List all tool calls for this TaskRun
+	// List all tool calls for this ToolCallRequestID
 	toolCallList := &kubechainv1alpha1.TaskRunToolCallList{}
-	logger.Info("Listing tool calls", "taskrun", taskRun.Name)
+	logger.Info("Listing tool calls", "taskrun", taskRun.Name, "requestId", taskRun.Status.ToolCallRequestID)
+
 	if err := r.List(ctx, toolCallList, client.InNamespace(taskRun.Namespace),
-		client.MatchingLabels{"kubechain.humanlayer.dev/taskruntoolcall": taskRun.Name}); err != nil {
+		client.MatchingLabels{"kubechain.humanlayer.dev/toolcallrequest": taskRun.Status.ToolCallRequestID}); err != nil {
 		logger.Error(err, "Failed to list tool calls")
 		return ctrl.Result{}, err
 	}
@@ -440,8 +443,13 @@ func (r *TaskRunReconciler) processLLMResponse(ctx context.Context, output *kube
 				"toolCalls", fmt.Sprintf("%v", output.ToolCalls))
 		}
 
+		// Generate a unique ID for this set of tool calls
+		toolCallRequestId := uuid.New().String()[:7] // Using first 7 characters for brevity
+		logger.Info("Generated toolCallRequestId for tool calls", "id", toolCallRequestId)
+
 		statusUpdate.Status.Output = ""
 		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseToolCallsPending
+		statusUpdate.Status.ToolCallRequestID = toolCallRequestId
 		statusUpdate.Status.ContextWindow = append(statusUpdate.Status.ContextWindow, kubechainv1alpha1.Message{
 			Role:      "assistant",
 			ToolCalls: adapters.CastOpenAIToolCallsToKubechain(output.ToolCalls),
@@ -495,15 +503,22 @@ func (r *TaskRunReconciler) processLLMResponse(ctx context.Context, output *kube
 func (r *TaskRunReconciler) createToolCalls(ctx context.Context, taskRun *kubechainv1alpha1.TaskRun, statusUpdate *kubechainv1alpha1.TaskRun, toolCalls []kubechainv1alpha1.ToolCall) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
-	// For each tool call, create a new TaskRunToolCall.
+	if statusUpdate.Status.ToolCallRequestID == "" {
+		err := fmt.Errorf("no ToolCallRequestID found in statusUpdate, cannot create tool calls")
+		logger.Error(err, "Missing ToolCallRequestID")
+		return ctrl.Result{}, err
+	}
+
+	// For each tool call, create a new TaskRunToolCall with a unique name using the ToolCallRequestID
 	for i, tc := range toolCalls {
-		newName := fmt.Sprintf("%s-tc-%02d", statusUpdate.Name, i+1)
+		newName := fmt.Sprintf("%s-%s-tc-%02d", statusUpdate.Name, statusUpdate.Status.ToolCallRequestID, i+1)
 		newTRTC := &kubechainv1alpha1.TaskRunToolCall{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      newName,
 				Namespace: statusUpdate.Namespace,
 				Labels: map[string]string{
 					"kubechain.humanlayer.dev/taskruntoolcall": statusUpdate.Name,
+					"kubechain.humanlayer.dev/toolcallrequest": statusUpdate.Status.ToolCallRequestID,
 				},
 				OwnerReferences: []metav1.OwnerReference{
 					{
@@ -530,7 +545,7 @@ func (r *TaskRunReconciler) createToolCalls(ctx context.Context, taskRun *kubech
 			logger.Error(err, "Failed to create TaskRunToolCall", "name", newName)
 			return ctrl.Result{}, err
 		}
-		logger.Info("Created TaskRunToolCall", "name", newName)
+		logger.Info("Created TaskRunToolCall", "name", newName, "requestId", statusUpdate.Status.ToolCallRequestID)
 		r.recorder.Event(taskRun, corev1.EventTypeNormal, "ToolCallCreated", "Created TaskRunToolCall "+newName)
 	}
 	return ctrl.Result{RequeueAfter: time.Second * 5}, nil
@@ -726,7 +741,19 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		statusUpdate.Status.Status = StatusError
 		statusUpdate.Status.StatusDetail = fmt.Sprintf("LLM request failed: %v", err)
 		statusUpdate.Status.Error = err.Error()
-		r.recorder.Event(&taskRun, corev1.EventTypeWarning, "LLMRequestFailed", err.Error())
+
+		// Check for LLMRequestError with 4xx status code
+		var llmErr *llmclient.LLMRequestError
+		if errors.As(err, &llmErr) && llmErr.StatusCode >= 400 && llmErr.StatusCode < 500 {
+			logger.Info("LLM request failed with 4xx status code, marking as failed",
+				"statusCode", llmErr.StatusCode,
+				"message", llmErr.Message)
+			statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseFailed
+			r.recorder.Event(&taskRun, corev1.EventTypeWarning, "LLMRequestFailed4xx",
+				fmt.Sprintf("LLM request failed with status %d: %s", llmErr.StatusCode, llmErr.Message))
+		} else {
+			r.recorder.Event(&taskRun, corev1.EventTypeWarning, "LLMRequestFailed", err.Error())
+		}
 
 		// Record error in span
 		if childSpan != nil {
@@ -747,8 +774,25 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	// Step 9: Process LLM response
-	if result, err := r.processLLMResponse(ctx, output, &taskRun, statusUpdate); err != nil || !result.IsZero() {
-		return result, err
+	var llmResult ctrl.Result
+	llmResult, err = r.processLLMResponse(ctx, output, &taskRun, statusUpdate)
+	if err != nil {
+		logger.Error(err, "Failed to process LLM response")
+		statusUpdate.Status.Status = StatusError
+		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseFailed
+		statusUpdate.Status.StatusDetail = fmt.Sprintf("Failed to process LLM response: %v", err)
+		statusUpdate.Status.Error = err.Error()
+		r.recorder.Event(&taskRun, corev1.EventTypeWarning, "LLMResponseProcessingFailed", err.Error())
+
+		if updateErr := r.Status().Update(ctx, statusUpdate); updateErr != nil {
+			logger.Error(updateErr, "Failed to update TaskRun status after LLM response processing error")
+			return ctrl.Result{}, updateErr
+		}
+		return ctrl.Result{}, nil // Don't return the error to avoid requeuing
+	}
+
+	if !llmResult.IsZero() {
+		return llmResult, nil
 	}
 
 	// Step 10: Update final status

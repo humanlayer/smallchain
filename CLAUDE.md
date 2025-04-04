@@ -351,6 +351,7 @@ Examples of state transition Context blocks:
 - Use descriptive By() statements to explain test steps
 - Ensure each test verifies both the state and any side effects
 - Assert on specific fields that should change during the transition
+- Use positive assertions (prefer `Expect(x).To(Equal(y))` over `Expect(x).NotTo(Equal(z))`) for clarity and readability
 - Test event recording when events are part of the controller behavior
 - Verify controller return values (Requeue, RequeueAfter)
 - For tool calls or API interactions, use mock clients with verification

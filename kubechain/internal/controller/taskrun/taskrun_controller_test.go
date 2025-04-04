@@ -217,7 +217,93 @@ var _ = Describe("TaskRun Controller", func() {
 		})
 	})
 	Context("ReadyForLLM -> Error", func() {
-		XIt("moves to Error if the LLM returns an error", func() {})
+		It("moves to Error state but not Failed phase on general error", func() {
+			_, _, _, _, teardown := setupSuiteObjects(ctx)
+			defer teardown()
+
+			taskRun := testTaskRun.SetupWithStatus(ctx, kubechain.TaskRunStatus{
+				Phase: kubechain.TaskRunPhaseReadyForLLM,
+				ContextWindow: []kubechain.Message{
+					{
+						Role:    "system",
+						Content: testAgent.system,
+					},
+					{
+						Role:    "user",
+						Content: testTask.message,
+					},
+				},
+			})
+			defer testTaskRun.Teardown(ctx)
+
+			By("reconciling the taskrun with a mock LLM client that returns an error")
+			reconciler, recorder := reconciler()
+			mockLLMClient := &llmclient.MockRawOpenAIClient{
+				Error: fmt.Errorf("connection timeout"),
+			}
+			reconciler.newLLMClient = func(apiKey string) (llmclient.OpenAIClient, error) {
+				return mockLLMClient, nil
+			}
+
+			_, err := reconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{Name: testTaskRun.name, Namespace: "default"},
+			})
+			Expect(err).To(HaveOccurred())
+
+			By("checking the taskrun status")
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTaskRun.name, Namespace: "default"}, taskRun)).To(Succeed())
+			Expect(taskRun.Status.Status).To(Equal(kubechain.TaskRunStatusStatusError))
+			// Phase shouldn't be Failed for general errors
+			Expect(taskRun.Status.Phase).To(Equal(kubechain.TaskRunPhaseReadyForLLM))
+			Expect(taskRun.Status.Error).To(Equal("connection timeout"))
+			ExpectRecorder(recorder).ToEmitEventContaining("LLMRequestFailed")
+		})
+
+		It("moves to Error state AND Failed phase on 4xx error", func() {
+			_, _, _, _, teardown := setupSuiteObjects(ctx)
+			defer teardown()
+
+			taskRun := testTaskRun.SetupWithStatus(ctx, kubechain.TaskRunStatus{
+				Phase: kubechain.TaskRunPhaseReadyForLLM,
+				ContextWindow: []kubechain.Message{
+					{
+						Role:    "system",
+						Content: testAgent.system,
+					},
+					{
+						Role:    "user",
+						Content: testTask.message,
+					},
+				},
+			})
+			defer testTaskRun.Teardown(ctx)
+
+			By("reconciling the taskrun with a mock LLM client that returns a 400 error")
+			reconciler, recorder := reconciler()
+			mockLLMClient := &llmclient.MockRawOpenAIClient{
+				Error: &llmclient.LLMRequestError{
+					StatusCode: 400,
+					Message:    "invalid request: model not found",
+					Err:        fmt.Errorf("OpenAI API request failed"),
+				},
+			}
+			reconciler.newLLMClient = func(apiKey string) (llmclient.OpenAIClient, error) {
+				return mockLLMClient, nil
+			}
+
+			_, err := reconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{Name: testTaskRun.name, Namespace: "default"},
+			})
+			Expect(err).To(HaveOccurred())
+
+			By("checking the taskrun status")
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTaskRun.name, Namespace: "default"}, taskRun)).To(Succeed())
+			Expect(taskRun.Status.Status).To(Equal(kubechain.TaskRunStatusStatusError))
+			// Phase should be Failed for 4xx errors
+			Expect(taskRun.Status.Phase).To(Equal(kubechain.TaskRunPhaseFailed))
+			Expect(taskRun.Status.Error).To(ContainSubstring("LLM request failed with status 400"))
+			ExpectRecorder(recorder).ToEmitEventContaining("LLMRequestFailed4xx")
+		})
 	})
 	Context("Error -> ErrorBackoff", func() {
 		XIt("moves to ErrorBackoff if the error is retryable", func() {})
@@ -289,7 +375,8 @@ var _ = Describe("TaskRun Controller", func() {
 			defer teardown()
 
 			taskRun := testTaskRun.SetupWithStatus(ctx, kubechain.TaskRunStatus{
-				Phase: kubechain.TaskRunPhaseToolCallsPending,
+				Phase:             kubechain.TaskRunPhaseToolCallsPending,
+				ToolCallRequestID: "test123",
 			})
 			defer testTaskRun.Teardown(ctx)
 
@@ -319,7 +406,8 @@ var _ = Describe("TaskRun Controller", func() {
 
 			By("setting up the taskrun with a tool call pending")
 			taskRun := testTaskRun.SetupWithStatus(ctx, kubechain.TaskRunStatus{
-				Phase: kubechain.TaskRunPhaseToolCallsPending,
+				Phase:             kubechain.TaskRunPhaseToolCallsPending,
+				ToolCallRequestID: "test123",
 				ContextWindow: []kubechain.Message{
 					{
 						Role:    "system",
