@@ -54,6 +54,10 @@ type TaskRunReconciler struct {
 
 // getTask fetches the parent Task for this TaskRun
 func (r *TaskRunReconciler) getTask(ctx context.Context, taskRun *kubechainv1alpha1.TaskRun) (*kubechainv1alpha1.Task, error) {
+	if taskRun.Spec.TaskRef == nil {
+		return nil, fmt.Errorf("TaskRef is required but was not provided")
+	}
+
 	task := &kubechainv1alpha1.Task{}
 	err := r.Get(ctx, client.ObjectKey{
 		Namespace: taskRun.Namespace,

@@ -197,7 +197,7 @@ func (t *TestTaskRun) Setup(ctx context.Context) *kubechain.TaskRun {
 			Namespace: "default",
 		},
 		Spec: kubechain.TaskRunSpec{
-			TaskRef: kubechain.LocalObjectReference{
+			TaskRef: &kubechain.LocalObjectReference{
 				Name: t.taskName,
 			},
 		},

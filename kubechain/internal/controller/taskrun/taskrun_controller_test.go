@@ -127,6 +127,9 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(taskRun.Status.ContextWindow[1].Content).To(ContainSubstring(testTask.message))
 			ExpectRecorder(recorder).ToEmitEventContaining("ValidationSucceeded")
 		})
+		XIt("moves to ReadyForLLM if there is a userMessage + agentRef and no taskRef", func() {
+			// todo
+		})
 	})
 	Context("Pending -> ReadyForLLM", func() {
 		It("moves to ReadyForLLM if upstream dependencies are ready", func() {
