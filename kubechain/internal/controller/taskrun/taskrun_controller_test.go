@@ -2,7 +2,6 @@ package taskrun
 
 import (
 	"context"
-	// "fmt" - Commented out as it's currently unused
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
