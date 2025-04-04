@@ -84,7 +84,8 @@ var _ = Describe("Agent Controller", func() {
 						},
 					},
 					Email: &kubechainv1alpha1.EmailChannelConfig{
-						Address: "test@example.com",
+						Address:          "test@example.com",
+						ContextAboutUser: "A helpful test user who provides quick responses",
 					},
 				},
 			}
@@ -285,6 +286,80 @@ var _ = Describe("Agent Controller", func() {
 
 			By("checking that a failure event was created")
 			utils.ExpectRecorder(eventRecorder).ToEmitEventContaining("ValidationFailed")
+		})
+
+		It("should fail validation when HumanContactChannel is missing required context", func() {
+			By("creating a contact channel without context")
+			contactChannelWithoutContext := &kubechainv1alpha1.ContactChannel{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "contactchannel-without-context",
+					Namespace: "default",
+				},
+				Spec: kubechainv1alpha1.ContactChannelSpec{
+					Type: kubechainv1alpha1.ContactChannelTypeEmail,
+					APIKeyFrom: kubechainv1alpha1.APIKeySource{
+						SecretKeyRef: kubechainv1alpha1.SecretKeyRef{
+							Name: "test-secret",
+							Key:  "api-key",
+						},
+					},
+					Email: &kubechainv1alpha1.EmailChannelConfig{
+						Address: "nocontext@example.com",
+						// Intentionally omitting ContextAboutUser
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, contactChannelWithoutContext)).To(Succeed())
+
+			// Mark ContactChannel as ready
+			contactChannelWithoutContext.Status.Ready = true
+			contactChannelWithoutContext.Status.Status = "Ready"
+			contactChannelWithoutContext.Status.StatusDetail = "Ready for testing"
+			Expect(k8sClient.Status().Update(ctx, contactChannelWithoutContext)).To(Succeed())
+
+			By("creating the test agent referring to the contact channel without context")
+			testAgent := &utils.TestScopedAgent{
+				Name:                 resourceName,
+				SystemPrompt:         "Test agent",
+				Tools:                []string{toolName},
+				LLM:                  llmName,
+				HumanContactChannels: []string{"contactchannel-without-context"},
+			}
+			testAgent.Setup(k8sClient)
+			defer testAgent.Teardown()
+
+			By("reconciling the agent")
+			eventRecorder := record.NewFakeRecorder(10)
+			reconciler := &AgentReconciler{
+				Client:   k8sClient,
+				Scheme:   k8sClient.Scheme(),
+				recorder: eventRecorder,
+			}
+
+			_, err := reconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedName,
+			})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("must have ContextAboutUser set"))
+
+			By("checking the agent status")
+			updatedAgent := &kubechainv1alpha1.Agent{}
+			err = k8sClient.Get(ctx, typeNamespacedName, updatedAgent)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedAgent.Status.Ready).To(BeFalse())
+			Expect(updatedAgent.Status.Status).To(Equal("Error"))
+			Expect(updatedAgent.Status.StatusDetail).To(ContainSubstring("must have ContextAboutUser set"))
+
+			By("checking that a failure event was created")
+			utils.ExpectRecorder(eventRecorder).ToEmitEventContaining("ValidationFailed")
+
+			// Cleanup
+			By("Cleanup the test ContactChannel without context")
+			contactChannel := &kubechainv1alpha1.ContactChannel{}
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: "contactchannel-without-context", Namespace: "default"}, contactChannel)
+			if err == nil {
+				Expect(k8sClient.Delete(ctx, contactChannel)).To(Succeed())
+			}
 		})
 	})
 })

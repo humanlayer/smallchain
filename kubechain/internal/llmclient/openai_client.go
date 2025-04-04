@@ -103,6 +103,46 @@ func FromKubechainTool(tool v1alpha1.Tool) *Tool {
 	return clientTool
 }
 
+// FromContactChannel creates a Tool from a ContactChannel resource
+func FromContactChannel(channel v1alpha1.ContactChannel) *Tool {
+	// Create base parameters structure for human contact tools
+	params := ToolFunctionParameters{
+		Type: "object",
+		Properties: map[string]ToolFunctionParameter{
+			"message": {Type: "string"},
+		},
+		Required: []string{"message"},
+	}
+
+	var description string
+	var name string
+
+	// Customize based on channel type
+	switch channel.Spec.Type {
+	case v1alpha1.ContactChannelTypeEmail:
+		name = fmt.Sprintf("human_contact_email_%s", channel.Name)
+		description = channel.Spec.Email.ContextAboutUser
+
+	case v1alpha1.ContactChannelTypeSlack:
+		name = fmt.Sprintf("human_contact_slack_%s", channel.Name)
+		description = channel.Spec.Slack.ContextAboutChannelOrUser
+
+	default:
+		name = fmt.Sprintf("human_contact_%s", channel.Name)
+		description = fmt.Sprintf("Contact a human via %s channel", channel.Spec.Type)
+	}
+
+	// Create the Tool
+	return &Tool{
+		Type: "function",
+		Function: ToolFunction{
+			Name:        name,
+			Description: description,
+			Parameters:  params,
+		},
+	}
+}
+
 func FromKubechainMessages(messages []v1alpha1.Message) []OpenAIMessage {
 	openaiMessages := make([]OpenAIMessage, len(messages))
 	for i, message := range messages {

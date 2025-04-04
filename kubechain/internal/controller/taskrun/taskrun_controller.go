@@ -365,7 +365,7 @@ func (r *TaskRunReconciler) getLLMAndCredentials(ctx context.Context, agent *kub
 	return llm, apiKey, nil
 }
 
-// collectTools gathers tools from all sources (Tool CRDs and MCP servers)
+// collectTools gathers tools from all sources (Tool CRDs, MCP servers, and Human Contact Channels)
 func (r *TaskRunReconciler) collectTools(ctx context.Context, agent *kubechainv1alpha1.Agent) []llmclient.Tool {
 	logger := log.FromContext(ctx)
 	var tools []llmclient.Tool
@@ -411,6 +411,25 @@ func (r *TaskRunReconciler) collectTools(ctx context.Context, agent *kubechainv1
 			tools = append(tools, mcpClientTools...)
 
 			logger.Info("Added MCP tools", "server", mcpServer.Name, "toolCount", len(mcpTools))
+		}
+	}
+
+	// Finally, add tools from Human Contact Channels
+	if len(agent.Status.ValidHumanContactChannels) > 0 {
+		logger.Info("Adding human contact channel tools to LLM request", "channelCount", len(agent.Status.ValidHumanContactChannels))
+
+		for _, validChannel := range agent.Status.ValidHumanContactChannels {
+			// Get the ContactChannel resource
+			channel := &kubechainv1alpha1.ContactChannel{}
+			if err := r.Get(ctx, client.ObjectKey{Namespace: agent.Namespace, Name: validChannel.Name}, channel); err != nil {
+				logger.Error(err, "Failed to get ContactChannel", "name", validChannel.Name)
+				continue
+			}
+
+			// Convert to LLM client format
+			clientTool := llmclient.FromContactChannel(*channel)
+			tools = append(tools, *clientTool)
+			logger.Info("Added human contact channel tool", "name", channel.Name, "type", channel.Spec.Type)
 		}
 	}
 

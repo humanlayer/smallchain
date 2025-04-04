@@ -123,6 +123,7 @@ func (r *AgentReconciler) validateMCPServers(ctx context.Context, agent *kubecha
 }
 
 // validateHumanContactChannels checks if all referenced contact channels exist and are ready
+// and have the required context information for the LLM
 func (r *AgentReconciler) validateHumanContactChannels(ctx context.Context, agent *kubechainv1alpha1.Agent) ([]kubechainv1alpha1.ResolvedContactChannel, error) {
 	validChannels := make([]kubechainv1alpha1.ResolvedContactChannel, 0, len(agent.Spec.HumanContactChannels))
 
@@ -138,6 +139,26 @@ func (r *AgentReconciler) validateHumanContactChannels(ctx context.Context, agen
 
 		if !channel.Status.Ready {
 			return validChannels, fmt.Errorf("ContactChannel %q is not ready", channelRef.Name)
+		}
+
+		// Check that the context about the user/channel is provided based on the channel type
+		switch channel.Spec.Type {
+		case kubechainv1alpha1.ContactChannelTypeEmail:
+			if channel.Spec.Email == nil {
+				return validChannels, fmt.Errorf("ContactChannel %q is missing Email configuration", channelRef.Name)
+			}
+			if channel.Spec.Email.ContextAboutUser == "" {
+				return validChannels, fmt.Errorf("ContactChannel %q must have ContextAboutUser set", channelRef.Name)
+			}
+		case kubechainv1alpha1.ContactChannelTypeSlack:
+			if channel.Spec.Slack == nil {
+				return validChannels, fmt.Errorf("ContactChannel %q is missing Slack configuration", channelRef.Name)
+			}
+			if channel.Spec.Slack.ContextAboutChannelOrUser == "" {
+				return validChannels, fmt.Errorf("ContactChannel %q must have ContextAboutChannelOrUser set", channelRef.Name)
+			}
+		default:
+			return validChannels, fmt.Errorf("ContactChannel %q has unsupported type %q", channelRef.Name, channel.Spec.Type)
 		}
 
 		validChannels = append(validChannels, kubechainv1alpha1.ResolvedContactChannel{
