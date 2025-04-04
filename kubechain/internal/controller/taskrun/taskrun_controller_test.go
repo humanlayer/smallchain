@@ -7,11 +7,11 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.opentelemetry.io/otel/trace/noop"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	"github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
 	kubechain "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
 	"github.com/humanlayer/smallchain/kubechain/internal/llmclient"
 	. "github.com/humanlayer/smallchain/kubechain/test/utils"
@@ -21,14 +21,15 @@ var _ = Describe("TaskRun Controller", func() {
 	Context("'' -> Initializing", func() {
 		ctx := context.Background()
 		It("moves to Initializing and sets a span context", func() {
-			testAgent.Setup(ctx)
-			defer testAgent.Teardown(ctx)
+			_, _, _, teardown := setupSuiteObjects(ctx)
+			defer teardown()
 
 			taskRun := testTaskRun.Setup(ctx)
 			defer testTaskRun.Teardown(ctx)
 
 			By("reconciling the taskrun")
 			reconciler, _ := reconciler()
+			reconciler.Tracer = noop.NewTracerProvider().Tracer("test")
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: types.NamespacedName{Name: testTaskRun.name, Namespace: "default"},
@@ -158,8 +159,11 @@ var _ = Describe("TaskRun Controller", func() {
 	})
 	Context("Pending -> ReadyForLLM", func() {
 		It("moves to ReadyForLLM if upstream dependencies are ready", func() {
-			_, _, _, _, teardown := setupSuiteObjects(ctx)
-			defer teardown()
+			testAgent.SetupWithStatus(ctx, kubechain.AgentStatus{
+				Status: "Ready",
+				Ready:  true,
+			})
+			defer testAgent.Teardown(ctx)
 
 			taskRun := testTaskRun.SetupWithStatus(ctx, kubechain.TaskRunStatus{
 				Phase: kubechain.TaskRunPhasePending,
@@ -189,7 +193,7 @@ var _ = Describe("TaskRun Controller", func() {
 	})
 	Context("ReadyForLLM -> LLMFinalAnswer", func() {
 		It("moves to LLMFinalAnswer after getting a response from the LLM", func() {
-			_, _, _, _, teardown := setupSuiteObjects(ctx)
+			_, _, _, teardown := setupSuiteObjects(ctx)
 			defer teardown()
 
 			taskRun := testTaskRun.SetupWithStatus(ctx, kubechain.TaskRunStatus{
@@ -210,7 +214,7 @@ var _ = Describe("TaskRun Controller", func() {
 			By("reconciling the taskrun")
 			reconciler, recorder := reconciler()
 			mockLLMClient := &llmclient.MockRawOpenAIClient{
-				Response: &v1alpha1.Message{
+				Response: &kubechain.Message{
 					Role:    "assistant",
 					Content: "The moon is a natural satellite of the Earth and lacks any formal government or capital.",
 				},
@@ -246,7 +250,7 @@ var _ = Describe("TaskRun Controller", func() {
 	})
 	Context("ReadyForLLM -> Error", func() {
 		It("moves to Error state but not Failed phase on general error", func() {
-			_, _, _, _, teardown := setupSuiteObjects(ctx)
+			_, _, _, teardown := setupSuiteObjects(ctx)
 			defer teardown()
 
 			taskRun := testTaskRun.SetupWithStatus(ctx, kubechain.TaskRunStatus{
@@ -288,7 +292,7 @@ var _ = Describe("TaskRun Controller", func() {
 		})
 
 		It("moves to Error state AND Failed phase on 4xx error", func() {
-			_, _, _, _, teardown := setupSuiteObjects(ctx)
+			_, _, _, teardown := setupSuiteObjects(ctx)
 			defer teardown()
 
 			taskRun := testTaskRun.SetupWithStatus(ctx, kubechain.TaskRunStatus{
@@ -343,17 +347,9 @@ var _ = Describe("TaskRun Controller", func() {
 		XIt("moves to ReadyForLLM after the backoff period", func() {})
 	})
 	Context("ReadyForLLM -> ToolCallsPending", func() {
-		It("moves to ToolCallsPending if the LLM returns tool calls", func() {
-			testLLM.SetupWithStatus(ctx, kubechain.LLMStatus{
-				Status: "Ready",
-				Ready:  true,
-			})
-			defer testLLM.Teardown(ctx)
-			testAgent.SetupWithStatus(ctx, kubechain.AgentStatus{
-				Status: "Ready",
-				Ready:  true,
-			})
-			defer testAgent.Teardown(ctx)
+		FIt("moves to ToolCallsPending if the LLM returns tool calls", func() {
+			_, _, _, teardown := setupSuiteObjects(ctx)
+			defer teardown()
 
 			taskRun := testTaskRun.SetupWithStatus(ctx, kubechain.TaskRunStatus{
 				Phase: kubechain.TaskRunPhaseReadyForLLM,
@@ -363,12 +359,12 @@ var _ = Describe("TaskRun Controller", func() {
 			By("reconciling the taskrun")
 			reconciler, recorder := reconciler()
 			mockLLMClient := &llmclient.MockRawOpenAIClient{
-				Response: &v1alpha1.Message{
+				Response: &kubechain.Message{
 					Role: "assistant",
-					ToolCalls: []v1alpha1.ToolCall{
+					ToolCalls: []kubechain.ToolCall{
 						{
 							ID:       "1",
-							Function: v1alpha1.ToolCallFunction{Name: "fetch__fetch", Arguments: `{"url": "https://api.example.com/data"}`},
+							Function: kubechain.ToolCallFunction{Name: "fetch__fetch", Arguments: `{"url": "https://api.example.com/data"}`},
 						},
 					},
 				},
@@ -407,6 +403,9 @@ var _ = Describe("TaskRun Controller", func() {
 	})
 	Context("ToolCallsPending -> ToolCallsPending", func() {
 		It("Stays in ToolCallsPending if the tool calls are not completed", func() {
+			_, _, _, teardown := setupSuiteObjects(ctx)
+			defer teardown()
+
 			taskRun := testTaskRun.SetupWithStatus(ctx, kubechain.TaskRunStatus{
 				Phase:             kubechain.TaskRunPhaseToolCallsPending,
 				ToolCallRequestID: "test123",
@@ -434,7 +433,7 @@ var _ = Describe("TaskRun Controller", func() {
 	})
 	Context("ToolCallsPending -> ReadyForLLM", func() {
 		It("moves to ReadyForLLM if all tool calls are completed", func() {
-			_, _, _, _, teardown := setupSuiteObjects(ctx)
+			_, _, _, teardown := setupSuiteObjects(ctx)
 			defer teardown()
 
 			By("setting up the taskrun with a tool call pending")

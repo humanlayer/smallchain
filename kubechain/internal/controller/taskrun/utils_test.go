@@ -5,13 +5,13 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.opentelemetry.io/otel/trace"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 
 	kubechain "github.com/humanlayer/smallchain/kubechain/api/v1alpha1"
+	"github.com/humanlayer/smallchain/kubechain/internal/mcpmanager"
 )
 
 // todo this file should probably live in a shared package, but for now...
@@ -104,7 +104,8 @@ func (t *TestAgent) Setup(ctx context.Context) *kubechain.Agent {
 	By("creating the agent")
 	agent := &kubechain.Agent{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      t.name,
+			Name: t.name,
+
 			Namespace: "default",
 		},
 		Spec: kubechain.AgentSpec{
@@ -246,7 +247,7 @@ var testTaskRunToolCall = &TestTaskRunToolCall{
 }
 
 // nolint:golint,unparam
-func setupSuiteObjects(ctx context.Context) (secret *corev1.Secret, llm *kubechain.LLM, agent *kubechain.Agent, taskRun *kubechain.TaskRun, teardown func()) {
+func setupSuiteObjects(ctx context.Context) (secret *corev1.Secret, llm *kubechain.LLM, agent *kubechain.Agent, teardown func()) {
 	secret = testSecret.Setup(ctx)
 	llm = testLLM.SetupWithStatus(ctx, kubechain.LLMStatus{
 		Status: "Ready",
@@ -256,27 +257,22 @@ func setupSuiteObjects(ctx context.Context) (secret *corev1.Secret, llm *kubecha
 		Status: "Ready",
 		Ready:  true,
 	})
-	taskRun = testTaskRun.SetupWithStatus(ctx, kubechain.TaskRunStatus{
-		Status: "Ready",
-		Ready:  true,
-	})
 	teardown = func() {
 		testSecret.Teardown(ctx)
 		testLLM.Teardown(ctx)
 		testAgent.Teardown(ctx)
-		testTaskRun.Teardown(ctx)
 	}
-	return secret, llm, agent, taskRun, teardown
+	return secret, llm, agent, teardown
 }
 
 func reconciler() (*TaskRunReconciler, *record.FakeRecorder) {
 	By("creating the reconciler")
 	recorder := record.NewFakeRecorder(10)
 	reconciler := &TaskRunReconciler{
-		Client:   k8sClient,
-		Scheme:   k8sClient.Scheme(),
-		recorder: recorder,
-		Tracer:   trace.NewNoopTracerProvider().Tracer("test-tracer"),
+		Client:     k8sClient,
+		Scheme:     k8sClient.Scheme(),
+		recorder:   recorder,
+		MCPManager: &mcpmanager.MCPServerManager{},
 	}
 	return reconciler, recorder
 }

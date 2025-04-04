@@ -375,6 +375,10 @@ func (r *TaskRunReconciler) processLLMResponse(ctx context.Context, output *kube
 		// Create TaskRunToolCall objects for each tool call
 		for _, tc := range output.ToolCalls {
 			toolCall := &kubechainv1alpha1.TaskRunToolCall{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: kubechainv1alpha1.GroupVersion.String(),
+					Kind:       "TaskRunToolCall",
+				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      fmt.Sprintf("%s-%s", taskRun.Name, tc.ID),
 					Namespace: taskRun.Namespace,
