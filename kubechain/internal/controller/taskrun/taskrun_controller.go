@@ -365,7 +365,7 @@ func (r *TaskRunReconciler) getLLMAndCredentials(ctx context.Context, agent *kub
 	return llm, apiKey, nil
 }
 
-// collectTools gathers tools from all sources (Tool CRDs and MCP servers)
+// collectTools gathers tools from all sources (Tool CRDs, MCP servers, and Human Contact Channels)
 func (r *TaskRunReconciler) collectTools(ctx context.Context, agent *kubechainv1alpha1.Agent) []llmclient.Tool {
 	logger := log.FromContext(ctx)
 	var tools []llmclient.Tool
@@ -411,6 +411,25 @@ func (r *TaskRunReconciler) collectTools(ctx context.Context, agent *kubechainv1
 			tools = append(tools, mcpClientTools...)
 
 			logger.Info("Added MCP tools", "server", mcpServer.Name, "toolCount", len(mcpTools))
+		}
+	}
+
+	// Finally, add tools from Human Contact Channels
+	if len(agent.Status.ValidHumanContactChannels) > 0 {
+		logger.Info("Adding human contact channel tools to LLM request", "channelCount", len(agent.Status.ValidHumanContactChannels))
+
+		for _, validChannel := range agent.Status.ValidHumanContactChannels {
+			// Get the ContactChannel resource
+			channel := &kubechainv1alpha1.ContactChannel{}
+			if err := r.Get(ctx, client.ObjectKey{Namespace: agent.Namespace, Name: validChannel.Name}, channel); err != nil {
+				logger.Error(err, "Failed to get ContactChannel", "name", validChannel.Name)
+				continue
+			}
+
+			// Convert to LLM client format
+			clientTool := llmclient.FromContactChannel(*channel)
+			tools = append(tools, *clientTool)
+			logger.Info("Added human contact channel tool", "name", channel.Name, "type", channel.Spec.Type)
 		}
 	}
 
@@ -473,7 +492,7 @@ func (r *TaskRunReconciler) endTaskRunSpan(ctx context.Context, taskRun *kubecha
 }
 
 // processLLMResponse handles the LLM's output and updates status accordingly
-func (r *TaskRunReconciler) processLLMResponse(ctx context.Context, output *kubechainv1alpha1.Message, taskRun *kubechainv1alpha1.TaskRun, statusUpdate *kubechainv1alpha1.TaskRun) (ctrl.Result, error) {
+func (r *TaskRunReconciler) processLLMResponse(ctx context.Context, output *kubechainv1alpha1.Message, taskRun *kubechainv1alpha1.TaskRun, statusUpdate *kubechainv1alpha1.TaskRun, tools []llmclient.Tool) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
 	if output.Content != "" {
@@ -517,13 +536,13 @@ func (r *TaskRunReconciler) processLLMResponse(ctx context.Context, output *kube
 			return ctrl.Result{}, err
 		}
 
-		return r.createToolCalls(ctx, taskRun, statusUpdate, output.ToolCalls)
+		return r.createToolCalls(ctx, taskRun, statusUpdate, output.ToolCalls, tools)
 	}
 	return ctrl.Result{}, nil
 }
 
 // createToolCalls creates TaskRunToolCall objects for each tool call
-func (r *TaskRunReconciler) createToolCalls(ctx context.Context, taskRun *kubechainv1alpha1.TaskRun, statusUpdate *kubechainv1alpha1.TaskRun, toolCalls []kubechainv1alpha1.ToolCall) (ctrl.Result, error) {
+func (r *TaskRunReconciler) createToolCalls(ctx context.Context, taskRun *kubechainv1alpha1.TaskRun, statusUpdate *kubechainv1alpha1.TaskRun, toolCalls []kubechainv1alpha1.ToolCall, tools []llmclient.Tool) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
 	if statusUpdate.Status.ToolCallRequestID == "" {
@@ -532,9 +551,22 @@ func (r *TaskRunReconciler) createToolCalls(ctx context.Context, taskRun *kubech
 		return ctrl.Result{}, err
 	}
 
+	// Create a map of tool name to tool type for quick lookup
+	toolTypeMap := make(map[string]kubechainv1alpha1.ToolType)
+	for _, tool := range tools {
+		toolTypeMap[tool.Function.Name] = tool.KubechainToolType
+	}
+
 	// For each tool call, create a new TaskRunToolCall with a unique name using the ToolCallRequestID
 	for i, tc := range toolCalls {
 		newName := fmt.Sprintf("%s-%s-tc-%02d", statusUpdate.Name, statusUpdate.Status.ToolCallRequestID, i+1)
+
+		// Determine tool type from our map, default to Standard if not found
+		toolType := kubechainv1alpha1.ToolTypeStandard
+		if tt, exists := toolTypeMap[tc.Function.Name]; exists {
+			toolType = tt
+		}
+
 		newTRTC := &kubechainv1alpha1.TaskRunToolCall{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      newName,
@@ -561,6 +593,7 @@ func (r *TaskRunReconciler) createToolCalls(ctx context.Context, taskRun *kubech
 				ToolRef: kubechainv1alpha1.LocalObjectReference{
 					Name: tc.Function.Name,
 				},
+				ToolType:  toolType, // Include the tool type
 				Arguments: tc.Function.Arguments,
 			},
 		}
@@ -568,7 +601,7 @@ func (r *TaskRunReconciler) createToolCalls(ctx context.Context, taskRun *kubech
 			logger.Error(err, "Failed to create TaskRunToolCall", "name", newName)
 			return ctrl.Result{}, err
 		}
-		logger.Info("Created TaskRunToolCall", "name", newName, "requestId", statusUpdate.Status.ToolCallRequestID)
+		logger.Info("Created TaskRunToolCall", "name", newName, "requestId", statusUpdate.Status.ToolCallRequestID, "toolType", toolType)
 		r.recorder.Event(taskRun, corev1.EventTypeNormal, "ToolCallCreated", "Created TaskRunToolCall "+newName)
 	}
 	return ctrl.Result{RequeueAfter: time.Second * 5}, nil
@@ -807,7 +840,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	logger.V(3).Info("Processing LLM response")
 	// Step 9: Process LLM response
 	var llmResult ctrl.Result
-	llmResult, err = r.processLLMResponse(ctx, output, &taskRun, statusUpdate)
+	llmResult, err = r.processLLMResponse(ctx, output, &taskRun, statusUpdate, tools)
 	if err != nil {
 		logger.Error(err, "Failed to process LLM response")
 		statusUpdate.Status.Status = StatusError

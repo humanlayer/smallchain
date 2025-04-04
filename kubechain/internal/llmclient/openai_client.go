@@ -79,6 +79,9 @@ type Tool struct {
 	// Type indicates the type of tool. Currently only "function" is supported.
 	Type     string       `json:"type"`
 	Function ToolFunction `json:"function"`
+	// KubechainToolType represents the Kubechain-specific type of tool (Standard, MCP, HumanContact)
+	// This field is not sent to the LLM API but is used internally for tool identification
+	KubechainToolType v1alpha1.ToolType `json:"-"`
 }
 
 func FromKubechainTool(tool v1alpha1.Tool) *Tool {
@@ -89,6 +92,7 @@ func FromKubechainTool(tool v1alpha1.Tool) *Tool {
 			Name:        tool.Spec.Name,
 			Description: tool.Spec.Description,
 		},
+		KubechainToolType: v1alpha1.ToolTypeStandard, // Standard tool by default
 	}
 
 	// Parse the parameters if they exist
@@ -101,6 +105,47 @@ func FromKubechainTool(tool v1alpha1.Tool) *Tool {
 	}
 
 	return clientTool
+}
+
+// FromContactChannel creates a Tool from a ContactChannel resource
+func FromContactChannel(channel v1alpha1.ContactChannel) *Tool {
+	// Create base parameters structure for human contact tools
+	params := ToolFunctionParameters{
+		Type: "object",
+		Properties: map[string]ToolFunctionParameter{
+			"message": {Type: "string"},
+		},
+		Required: []string{"message"},
+	}
+
+	var description string
+	var name string
+
+	// Customize based on channel type
+	switch channel.Spec.Type {
+	case v1alpha1.ContactChannelTypeEmail:
+		name = fmt.Sprintf("human_contact_email_%s", channel.Name)
+		description = channel.Spec.Email.ContextAboutUser
+
+	case v1alpha1.ContactChannelTypeSlack:
+		name = fmt.Sprintf("human_contact_slack_%s", channel.Name)
+		description = channel.Spec.Slack.ContextAboutChannelOrUser
+
+	default:
+		name = fmt.Sprintf("human_contact_%s", channel.Name)
+		description = fmt.Sprintf("Contact a human via %s channel", channel.Spec.Type)
+	}
+
+	// Create the Tool
+	return &Tool{
+		Type: "function",
+		Function: ToolFunction{
+			Name:        name,
+			Description: description,
+			Parameters:  params,
+		},
+		KubechainToolType: v1alpha1.ToolTypeHumanContact, // Set as HumanContact type
+	}
 }
 
 func FromKubechainMessages(messages []v1alpha1.Message) []OpenAIMessage {

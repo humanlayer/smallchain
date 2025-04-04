@@ -41,8 +41,9 @@ func ConvertMCPToolsToLLMClientTools(mcpTools []kubechainv1alpha1.MCPTool, serve
 
 		// Create the tool with the function definition
 		clientTools = append(clientTools, llmclient.Tool{
-			Type:     "function",
-			Function: toolFunction,
+			Type:              "function",
+			Function:          toolFunction,
+			KubechainToolType: kubechainv1alpha1.ToolTypeMCP, // Set as MCP type
 		})
 	}
 
