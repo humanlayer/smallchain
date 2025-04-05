@@ -2,6 +2,7 @@ package taskrun
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -47,7 +48,7 @@ type TaskRunReconciler struct {
 	client.Client
 	Scheme       *runtime.Scheme
 	recorder     record.EventRecorder
-	newLLMClient func(apiKey string) (llmclient.OpenAIClient, error)
+	newLLMClient func(ctx context.Context, llm kubechainv1alpha1.LLM, apiKey string) (llmclient.LLMClient, error)
 	MCPManager   *mcpmanager.MCPServerManager
 	Tracer       trace.Tracer
 }
@@ -476,28 +477,29 @@ func (r *TaskRunReconciler) endTaskRunSpan(ctx context.Context, taskRun *kubecha
 func (r *TaskRunReconciler) processLLMResponse(ctx context.Context, output *kubechainv1alpha1.Message, taskRun *kubechainv1alpha1.TaskRun, statusUpdate *kubechainv1alpha1.TaskRun) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
-	if output.Content != "" {
-		// final answer branch
-		statusUpdate.Status.Output = output.Content
-		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseFinalAnswer
-		statusUpdate.Status.Ready = true
-		statusUpdate.Status.ContextWindow = append(statusUpdate.Status.ContextWindow, kubechainv1alpha1.Message{
-			Role:    "assistant",
-			Content: output.Content,
-		})
-		statusUpdate.Status.Status = StatusReady
-		statusUpdate.Status.StatusDetail = "LLM final response received"
-		statusUpdate.Status.Error = ""
-		r.recorder.Event(taskRun, corev1.EventTypeNormal, "LLMFinalAnswer", "LLM response received successfully")
+	// Log complete output message for debugging
+	outputBytes, _ := json.Marshal(output)
+	logger.Info("DEBUG: Processing LLM response", "outputMessage", string(outputBytes))
 
-		// End the parent span since we've reached a terminal state
-		r.endTaskRunSpan(ctx, taskRun, codes.Ok, "TaskRun completed successfully with final answer")
-	} else {
+	// Check if we have any tool calls
+	hasToolCalls := len(output.ToolCalls) > 0
+	logger.Info("DEBUG: LLM response stats", "hasContent", output.Content != "", "hasToolCalls", hasToolCalls, "toolCallCount", len(output.ToolCalls))
+
+	if hasToolCalls {
+		// tool call branch: create TaskRunToolCall objects for each tool call returned by the LLM.
+		logger.Info("DEBUG: Taking tool calls branch because tool calls are present", "contentPresent", output.Content != "")
+
+		// If content is also present, log a warning as this is unusual for some models
+		if output.Content != "" {
+			logger.Info("DEBUG: UNUSUAL: LLM returned both content and tool calls",
+				"content", output.Content,
+				"toolCalls", fmt.Sprintf("%v", output.ToolCalls))
+		}
+
 		// Generate a unique ID for this set of tool calls
 		toolCallRequestId := uuid.New().String()[:7] // Using first 7 characters for brevity
 		logger.Info("Generated toolCallRequestId for tool calls", "id", toolCallRequestId)
 
-		// tool call branch: create TaskRunToolCall objects for each tool call returned by the LLM.
 		statusUpdate.Status.Output = ""
 		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseToolCallsPending
 		statusUpdate.Status.ToolCallRequestID = toolCallRequestId
@@ -518,6 +520,34 @@ func (r *TaskRunReconciler) processLLMResponse(ctx context.Context, output *kube
 		}
 
 		return r.createToolCalls(ctx, taskRun, statusUpdate, output.ToolCalls)
+	} else if output.Content != "" {
+		// final answer branch
+		logger.Info("DEBUG: Taking final answer branch because there are no tool calls and content is present")
+		statusUpdate.Status.Output = output.Content
+		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseFinalAnswer
+		statusUpdate.Status.Ready = true
+		statusUpdate.Status.ContextWindow = append(statusUpdate.Status.ContextWindow, kubechainv1alpha1.Message{
+			Role:    "assistant",
+			Content: output.Content,
+		})
+		statusUpdate.Status.Status = StatusReady
+		statusUpdate.Status.StatusDetail = "LLM final response received"
+		statusUpdate.Status.Error = ""
+		r.recorder.Event(taskRun, corev1.EventTypeNormal, "LLMFinalAnswer", "LLM response received successfully")
+
+		// End the parent span since we've reached a terminal state
+		r.endTaskRunSpan(ctx, taskRun, codes.Ok, "TaskRun completed successfully with final answer")
+	} else {
+		// Empty response - this is an error condition
+		logger.Error(fmt.Errorf("empty response from LLM"), "LLM returned neither content nor tool calls")
+		statusUpdate.Status.Ready = false
+		statusUpdate.Status.Status = StatusError
+		statusUpdate.Status.StatusDetail = "LLM returned an empty response with no tool calls"
+		statusUpdate.Status.Error = "Empty response from LLM"
+		r.recorder.Event(taskRun, corev1.EventTypeWarning, "EmptyLLMResponse", "LLM returned neither content nor tool calls")
+
+		// End the parent span since we've reached a terminal error state
+		r.endTaskRunSpan(ctx, taskRun, codes.Error, "LLM returned an empty response")
 	}
 	return ctrl.Result{}, nil
 }
@@ -723,28 +753,27 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, nil
 	}
 
-	// Step 5: Get API credentials (LLM is returned but not used)
+	// Step 5: Get LLM and API credentials
 	logger.V(3).Info("Getting API credentials")
-	_, apiKey, err := r.getLLMAndCredentials(ctx, agent, &taskRun, statusUpdate)
+	llm, apiKey, err := r.getLLMAndCredentials(ctx, agent, &taskRun, statusUpdate)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
 	// Step 6: Create LLM client
 	logger.V(3).Info("Creating LLM client")
-	llmClient, err := r.newLLMClient(apiKey)
+	llmClient, err := r.newLLMClient(ctx, llm, apiKey)
 	if err != nil {
-		logger.Error(err, "Failed to create OpenAI client")
+		logger.Error(err, "Failed to create LLM client")
 		statusUpdate.Status.Ready = false
 		statusUpdate.Status.Status = StatusError
 		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseFailed
-		statusUpdate.Status.StatusDetail = "Failed to create OpenAI client: " + err.Error()
+		statusUpdate.Status.StatusDetail = "Failed to create LLM client: " + err.Error()
 		statusUpdate.Status.Error = err.Error()
-		r.recorder.Event(&taskRun, corev1.EventTypeWarning, "OpenAIClientCreationFailed", err.Error())
+		r.recorder.Event(&taskRun, corev1.EventTypeWarning, "LLMClientCreationFailed", err.Error())
 
 		// End span since we've failed with a terminal error
-		r.endTaskRunSpan(ctx, &taskRun, codes.Error, "Failed to create OpenAI client: "+err.Error())
-
+		r.endTaskRunSpan(ctx, &taskRun, codes.Error, "Failed to create LLM client: "+err.Error())
 		if updateErr := r.Status().Update(ctx, statusUpdate); updateErr != nil {
 			logger.Error(updateErr, "Failed to update TaskRun status")
 			return ctrl.Result{}, updateErr
@@ -844,7 +873,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 func (r *TaskRunReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.recorder = mgr.GetEventRecorderFor("taskrun-controller")
 	if r.newLLMClient == nil {
-		r.newLLMClient = llmclient.NewRawOpenAIClient
+		r.newLLMClient = llmclient.NewLLMClient
 	}
 
 	// Initialize MCPManager if not already set

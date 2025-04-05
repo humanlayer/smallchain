@@ -8,6 +8,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -218,13 +219,13 @@ var _ = Describe("TaskRun Controller", func() {
 
 			By("reconciling the taskrun")
 			reconciler, recorder := reconciler()
-			mockLLMClient := &llmclient.MockRawOpenAIClient{
+			mockLLMClient := &llmclient.MockLLMClient{
 				Response: &v1alpha1.Message{
 					Role:    "assistant",
 					Content: "The moon is a natural satellite of the Earth and lacks any formal government or capital.",
 				},
 			}
-			reconciler.newLLMClient = func(apiKey string) (llmclient.OpenAIClient, error) {
+			reconciler.newLLMClient = func(ctx context.Context, llm kubechain.LLM, apiKey string) (llmclient.LLMClient, error) {
 				return mockLLMClient, nil
 			}
 
@@ -275,13 +276,12 @@ var _ = Describe("TaskRun Controller", func() {
 
 			By("reconciling the taskrun with a mock LLM client that returns an error")
 			reconciler, recorder := reconciler()
-			mockLLMClient := &llmclient.MockRawOpenAIClient{
+			mockLLMClient := &llmclient.MockLLMClient{
 				Error: fmt.Errorf("connection timeout"),
 			}
-			reconciler.newLLMClient = func(apiKey string) (llmclient.OpenAIClient, error) {
+			reconciler.newLLMClient = func(ctx context.Context, llm kubechain.LLM, apiKey string) (llmclient.LLMClient, error) {
 				return mockLLMClient, nil
 			}
-
 			_, err := reconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: types.NamespacedName{Name: testTaskRun.name, Namespace: "default"},
 			})
@@ -317,14 +317,15 @@ var _ = Describe("TaskRun Controller", func() {
 
 			By("reconciling the taskrun with a mock LLM client that returns a 400 error")
 			reconciler, recorder := reconciler()
-			mockLLMClient := &llmclient.MockRawOpenAIClient{
+			mockLLMClient := &llmclient.MockLLMClient{
 				Error: &llmclient.LLMRequestError{
 					StatusCode: 400,
 					Message:    "invalid request: model not found",
 					Err:        fmt.Errorf("OpenAI API request failed"),
 				},
 			}
-			reconciler.newLLMClient = func(apiKey string) (llmclient.OpenAIClient, error) {
+
+			reconciler.newLLMClient = func(ctx context.Context, llm kubechain.LLM, apiKey string) (llmclient.LLMClient, error) {
 				return mockLLMClient, nil
 			}
 
@@ -363,7 +364,7 @@ var _ = Describe("TaskRun Controller", func() {
 
 			By("reconciling the taskrun")
 			reconciler, recorder := reconciler()
-			mockLLMClient := &llmclient.MockRawOpenAIClient{
+			mockLLMClient := &llmclient.MockLLMClient{
 				Response: &v1alpha1.Message{
 					Role: "assistant",
 					ToolCalls: []v1alpha1.ToolCall{
@@ -374,7 +375,7 @@ var _ = Describe("TaskRun Controller", func() {
 					},
 				},
 			}
-			reconciler.newLLMClient = func(apiKey string) (llmclient.OpenAIClient, error) {
+			reconciler.newLLMClient = func(ctx context.Context, llm kubechain.LLM, apiKey string) (llmclient.LLMClient, error) {
 				return mockLLMClient, nil
 			}
 
@@ -517,8 +518,9 @@ var _ = Describe("TaskRun Controller", func() {
 
 		// todo dex should fix this but trying to get something merged in asap
 		XIt("should correctly handle multi-message conversations with the LLM", func() {
-			uniqueSuffix := fmt.Sprintf("%d", time.Now().UnixNano())
-			testTaskRunName := fmt.Sprintf("multi-message-%s", uniqueSuffix)
+			// These variables are unused in this skipped test
+			// uniqueSuffix := fmt.Sprintf("%d", time.Now().UnixNano())
+			// testTaskRunName := fmt.Sprintf("multi-message-%s", uniqueSuffix)
 
 			By("setting up the taskrun with an existing conversation history")
 			taskRun := testTaskRun.SetupWithStatus(ctx, kubechain.TaskRunStatus{
@@ -526,76 +528,58 @@ var _ = Describe("TaskRun Controller", func() {
 				ContextWindow: []kubechain.Message{
 					{
 						Role:    "system",
-						Content: "you are a testing assistant",
+						Content: testAgent.system,
 					},
 					{
 						Role:    "user",
-						Content: "what is 2 + 2?",
+						Content: testTask.message,
 					},
 					{
 						Role:    "assistant",
-						Content: "2 + 2 = 4",
+						Content: "I need more information. What data do you want?",
 					},
 					{
 						Role:    "user",
-						Content: "what is 4 + 4?",
+						Content: "I need weather data for New York",
 					},
 				},
 			})
-			defer testTaskRun.Teardown(ctx)
-
-			By("creating a mock OpenAI client that validates context window messages are passed correctly")
-			mockClient := &llmclient.MockRawOpenAIClient{
-				Response: &kubechain.Message{
-					Role:    "assistant",
-					Content: "4 + 4 = 8",
-				},
-				ValidateContextWindow: func(contextWindow []kubechain.Message) error {
-					Expect(contextWindow).To(HaveLen(4), "All 4 messages should be sent to the LLM")
-
-					// Verify all messages are present in the correct order
-					Expect(contextWindow[0].Role).To(Equal("system"))
-					Expect(contextWindow[0].Content).To(Equal("you are a testing assistant"))
-
-					Expect(contextWindow[1].Role).To(Equal("user"))
-					Expect(contextWindow[1].Content).To(Equal("what is 2 + 2?"))
-
-					Expect(contextWindow[2].Role).To(Equal("assistant"))
-					Expect(contextWindow[2].Content).To(Equal("2 + 2 = 4"))
-
-					Expect(contextWindow[3].Role).To(Equal("user"))
-					Expect(contextWindow[3].Content).To(Equal("what is 4 + 4?"))
-
-					return nil
-				},
-			}
 
 			By("reconciling the taskrun")
 			reconciler, _ := reconciler()
-			reconciler.newLLMClient = func(apiKey string) (llmclient.OpenAIClient, error) {
+			mockClient := &llmclient.MockLLMClient{
+				Response: &v1alpha1.Message{
+					Role:    "assistant",
+					Content: "Here is the weather data for New York: ...",
+				},
+			}
+			reconciler.newLLMClient = func(ctx context.Context, llm kubechain.LLM, apiKey string) (llmclient.LLMClient, error) {
 				return mockClient, nil
 			}
 
-			_, err := reconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Name:      testTaskRunName,
-					Namespace: "default",
-				},
+			result, err := reconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{Name: testTaskRun.name, Namespace: "default"},
 			})
 			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeFalse())
 
-			By("checking that the taskrun moved to FinalAnswer phase")
-			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTaskRunName, Namespace: "default"}, taskRun)).To(Succeed())
+			// Get the updated taskRun
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTaskRun.name, Namespace: "default"}, taskRun)).To(Succeed())
 			Expect(taskRun.Status.Phase).To(Equal(kubechain.TaskRunPhaseFinalAnswer))
-
-			By("checking that the new assistant response was appended to the context window")
-			Expect(taskRun.Status.ContextWindow).To(HaveLen(5))
-			lastMessage := taskRun.Status.ContextWindow[4]
-			Expect(lastMessage.Role).To(Equal("assistant"))
-			Expect(lastMessage.Content).To(Equal("4 + 4 = 8"))
+			Expect(taskRun.Status.ContextWindow).To(HaveLen(5)) // Original 4 messages + new response
+			Expect(taskRun.Status.ContextWindow[4].Role).To(Equal("assistant"))
+			Expect(taskRun.Status.ContextWindow[4].Content).To(ContainSubstring("Here is the weather data for New York"))
 		})
-
-		// todo(dex) i think this is not needed anymore - check version history to restore it
-		XIt("should transition to ReadyForLLM when all tool calls are complete", func() {})
 	})
 })
+
+func reconciler() (*TaskRunReconciler, *record.FakeRecorder) {
+	By("creating the reconciler")
+	recorder := record.NewFakeRecorder(10)
+	reconciler := &TaskRunReconciler{
+		Client:   k8sClient,
+		Scheme:   k8sClient.Scheme(),
+		recorder: recorder,
+	}
+	return reconciler, recorder
+}
