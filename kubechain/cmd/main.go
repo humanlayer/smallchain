@@ -27,6 +27,7 @@ import (
 	"github.com/humanlayer/smallchain/kubechain/internal/controller/contactchannel"
 	"github.com/humanlayer/smallchain/kubechain/internal/controller/llm"
 	"github.com/humanlayer/smallchain/kubechain/internal/controller/mcpserver"
+	"github.com/humanlayer/smallchain/kubechain/internal/controller/task"
 	"github.com/humanlayer/smallchain/kubechain/internal/controller/taskruntoolcall"
 	"github.com/humanlayer/smallchain/kubechain/internal/controller/tool"
 	"github.com/humanlayer/smallchain/kubechain/internal/mcpmanager"

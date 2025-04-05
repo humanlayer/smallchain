@@ -1,4 +1,4 @@
-package taskrun
+package task
 
 import (
 	"context"
