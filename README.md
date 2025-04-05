@@ -767,13 +767,13 @@ Let's make a new task that uses the fetch tool. In this case, we'll use https://
 ```bash
 cat <<EOF | kubectl apply -f -
 apiVersion: kubechain.humanlayer.dev/v1alpha1
-kind: Task
+kind: TaskRun
 metadata:
   name: fetch-task
 spec:
   agentRef:
     name: my-assistant
-  message: "what is the data at https://swapi.dev/api/people/1? "
+  userMessage: "what is the data at https://swapi.dev/api/people/1? "
 EOF
 ```
 

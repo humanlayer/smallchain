@@ -18,9 +18,9 @@ type TaskRunToolCallSpec struct {
 	// ToolCallId is the unique identifier for this tool call
 	ToolCallId string `json:"toolCallId"`
 
-	// TaskRunRef references the parent TaskRun
+	// TaskRef references the parent Task
 	// +kubebuilder:validation:Required
-	TaskRunRef LocalObjectReference `json:"taskRunRef"`
+	TaskRef LocalObjectReference `json:"taskRef"`
 
 	// ToolRef references the tool to execute
 	// +kubebuilder:validation:Required
