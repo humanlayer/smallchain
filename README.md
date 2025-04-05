@@ -651,18 +651,19 @@ EOF
 You should see some events in the output of
 
 ```
-kubectl get events --field-selector "involvedObject.kind=Task```
+kubectl get events --field-selector "involvedObject.kind=Task" --sort-by='.lastTimestamp'
+```
 
 ```
-0s          Normal   ValidationSucceeded         taskrun/fetch-task-1                                 Task validated successfully
-0s          Normal   SendingContextWindowToLLM   taskrun/fetch-task-1                                 Sending context window to LLM
-0s          Normal   ToolCallsPending            taskrun/fetch-task-1                                 LLM response received, tool calls pending
-0s          Normal   ToolCallCreated             taskrun/fetch-task-1                                 Created TaskRunToolCall fetch-task-1-toolcall-01
-0s          Normal   ExecutionSucceeded          taskruntoolcall/fetch-task-1-toolcall-01             MCP tool "fetch__fetch" executed successfully
-0s          Normal   AllToolCallsCompleted       taskrun/fetch-task-1                                 All tool calls completed, ready to send tool results to LLM
-0s          Normal   SendingContextWindowToLLM   taskrun/fetch-task-1                                 Sending context window to LLM
-0s          Normal   LLMFinalAnswer              taskrun/fetch-task-1                                 LLM response received successfully
+91s         Normal    ValidationSucceeded         task/fetch-task   Task validation succeeded
+82s         Normal    ToolCallsPending            task/fetch-task   LLM response received, tool calls pending
+82s         Normal    ToolCallCreated             task/fetch-task   Created TaskRunToolCall fetch-task-2fe18aa-tc-01
+77s         Normal    AllToolCallsCompleted       task/fetch-task   All tool calls completed
+62s         Normal    SendingContextWindowToLLM   task/fetch-task   Sending context window to LLM
+57s         Normal    LLMFinalAnswer              task/fetch-task   LLM response received successfully
 ```
+
+You can also explore the TaskRunToolCall events
 
 
 ```
@@ -696,10 +697,10 @@ kubectl get taskrun fetch-task-1 -o jsonpath='{.status.output}'
 > - **Edited**: 2014-12-20T21:17:56.891000Z
 > - **URL**: [https://swapi.dev/api/people/1/](https://swapi.dev/api/people/1/)
 
-and you can describe the taskrun to see the full context window and tool-calling turns
+and you can describe the task to see the full context window and tool-calling turns
 
 ```
-kubectl describe taskrun fetch-task-1
+kubectl describe task fetch-task
 ```
 
 A simplified view of the taskrun:
@@ -745,26 +746,8 @@ flowchart TD
 Your describe should return:
 
 ```
-Name:         fetch-task-1
-Namespace:    default
-Labels:       kubechain.humanlayer.dev/task=fetch-task
-Annotations:  <none>
-API Version:  kubechain.humanlayer.dev/v1alpha1
-Kind:         Task
-Metadata:
-  Creation Timestamp:  2025-03-25T22:32:30Z
-  Generation:          1
-  Owner References:
-    API Version:     kubechain.humanlayer.dev/v1alpha1
-    Controller:      true
-    Kind:            Task
-    Name:            fetch-task
-    UID:             b461354c-f4c7-4cd3-93ec-7546c892d10e
-  Resource Version:  1731
-  UID:               e57a39a2-4c6f-42db-80f0-d48f9bd1d5b4
-Spec:
-  Task Ref:
-    Name:  fetch-task
+# ...snip...
+
 Status:
   Context Window:
     Content:  You are a helpful assistant. Your job is to help the user with their tasks.
@@ -812,38 +795,9 @@ Contents of https://swapi.dev/api/people/1:
 - **Edited**: 2014-12-20T21:17:56.891000Z
 - **URL**: [https://swapi.dev/api/people/1/](https://swapi.dev/api/people/1/)
     Role:  assistant
-  Output:  The URL [https://swapi.dev/api/people/1](https://swapi.dev/api/people/1) contains the following data about a Star Wars character:
 
-- **Name**: Luke Skywalker
-- **Height**: 172 cm
-- **Mass**: 77 kg
-- **Hair Color**: Blond
-- **Skin Color**: Fair
-- **Eye Color**: Blue
-- **Birth Year**: 19BBY
-- **Gender**: Male
-- **Homeworld**: [Link to Homeworld](https://swapi.dev/api/planets/1/)
-- **Films**: Appeared in several films, linked as:
-  - [Film 1](https://swapi.dev/api/films/1/)
-  - [Film 2](https://swapi.dev/api/films/2/)
-  - [Film 3](https://swapi.dev/api/films/3/)
-  - [Film 6](https://swapi.dev/api/films/6/)
-- **Species**: None listed
-- **Vehicles**:
-  - [Vehicle 14](https://swapi.dev/api/vehicles/14/)
-  - [Vehicle 30](https://swapi.dev/api/vehicles/30/)
-- **Starships**:
-  - [Starship 12](https://swapi.dev/api/starships/12/)
-  - [Starship 22](https://swapi.dev/api/starships/22/)
-- **Created**: 2014-12-09T13:50:51.644000Z
-- **Edited**: 2014-12-20T21:17:56.891000Z
-- **URL**: [https://swapi.dev/api/people/1/](https://swapi.dev/api/people/1/)
-  Phase:  FinalAnswer
-  Ready:  true
-  Span Context:
-    Span ID:      6f20c4536fa90bdc
-    Trace ID:     aab3bbe4e9ea84218ee0a848b5958dcb
-  Status:         Ready
+# ...snip...
+
   Status Detail:  LLM final response received
 Events:
   Type    Reason                     Age                  From                Message
