@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -120,20 +119,6 @@ func (r *TaskRunToolCallReconciler) updateTaskRunToolCall(ctx context.Context, w
 	}
 
 	return nil
-}
-
-// Helper function to convert various value types to float64
-func convertToFloat(val interface{}) (float64, error) {
-	switch v := val.(type) {
-	case float64:
-		return v, nil
-	case int:
-		return float64(v), nil
-	case string:
-		return strconv.ParseFloat(v, 64)
-	default:
-		return 0, fmt.Errorf("cannot convert %T to float64", val)
-	}
 }
 
 // checkIfMCPTool checks if a tool name follows the MCPServer tool pattern (serverName__toolName)
@@ -334,104 +319,6 @@ func (r *TaskRunToolCallReconciler) processDelegateToAgent(ctx context.Context, 
 		return ctrl.Result{}, err
 	}
 	return ctrl.Result{}, err
-}
-
-// processBuiltinFunction handles built-in function execution
-func (r *TaskRunToolCallReconciler) processBuiltinFunction(ctx context.Context, trtc *kubechainv1alpha1.TaskRunToolCall, tool *kubechainv1alpha1.Tool, args map[string]interface{}) (ctrl.Result, error) {
-	logger := log.FromContext(ctx)
-
-	logger.Info("Tool call arguments", "toolName", tool.Name, "arguments", args)
-
-	var res float64
-	// Determine which function to execute based on the builtin name
-	switch tool.Spec.Execute.Builtin.Name {
-	case "add":
-		a, err1 := convertToFloat(args["a"])
-		b, err2 := convertToFloat(args["b"])
-		if err1 != nil {
-			logger.Error(err1, "Failed to parse first argument")
-			return ctrl.Result{}, err1
-		}
-		if err2 != nil {
-			logger.Error(err2, "Failed to parse second argument")
-			return ctrl.Result{}, err2
-		}
-		res = a + b
-	case "subtract":
-		a, err1 := convertToFloat(args["a"])
-		b, err2 := convertToFloat(args["b"])
-		if err1 != nil {
-			logger.Error(err1, "Failed to parse first argument")
-			return ctrl.Result{}, err1
-		}
-		if err2 != nil {
-			logger.Error(err2, "Failed to parse second argument")
-			return ctrl.Result{}, err2
-		}
-		res = a - b
-	case "multiply":
-		a, err1 := convertToFloat(args["a"])
-		b, err2 := convertToFloat(args["b"])
-		if err1 != nil {
-			logger.Error(err1, "Failed to parse first argument")
-			return ctrl.Result{}, err1
-		}
-		if err2 != nil {
-			logger.Error(err2, "Failed to parse second argument")
-			return ctrl.Result{}, err2
-		}
-		res = a * b
-	case "divide":
-		a, err1 := convertToFloat(args["a"])
-		b, err2 := convertToFloat(args["b"])
-		if err1 != nil {
-			logger.Error(err1, "Failed to parse first argument")
-			return ctrl.Result{}, err1
-		}
-		if err2 != nil {
-			logger.Error(err2, "Failed to parse second argument")
-			return ctrl.Result{}, err2
-		}
-		if b == 0 {
-			err := fmt.Errorf("division by zero")
-			logger.Error(err, "Division by zero")
-			trtc.Status.Status = kubechainv1alpha1.TaskRunToolCallStatusTypeError
-			trtc.Status.StatusDetail = "Division by zero"
-			trtc.Status.Error = err.Error()
-			r.recorder.Event(trtc, corev1.EventTypeWarning, "ExecutionFailed", err.Error())
-			if err := r.Status().Update(ctx, trtc); err != nil {
-				logger.Error(err, "Failed to update status")
-				return ctrl.Result{}, err
-			}
-			return ctrl.Result{}, err
-		}
-		res = a / b
-	default:
-		err := fmt.Errorf("unsupported builtin function %q", tool.Spec.Execute.Builtin.Name)
-		logger.Error(err, "Unsupported builtin")
-		trtc.Status.Status = kubechainv1alpha1.TaskRunToolCallStatusTypeError
-		trtc.Status.StatusDetail = err.Error()
-		trtc.Status.Error = err.Error()
-		r.recorder.Event(trtc, corev1.EventTypeWarning, "ExecutionFailed", err.Error())
-		if err := r.Status().Update(ctx, trtc); err != nil {
-			logger.Error(err, "Failed to update status")
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{}, err
-	}
-
-	// Update TaskRunToolCall status with the function result
-	trtc.Status.Result = fmt.Sprintf("%v", res)
-	trtc.Status.Phase = kubechainv1alpha1.TaskRunToolCallPhaseSucceeded
-	trtc.Status.Status = kubechainv1alpha1.TaskRunToolCallStatusTypeSucceeded
-	trtc.Status.StatusDetail = DetailToolExecutedSuccess
-	if err := r.Status().Update(ctx, trtc); err != nil {
-		logger.Error(err, "Failed to update TaskRunToolCall status after execution")
-		return ctrl.Result{}, err
-	}
-	logger.Info("Direct execution completed", "result", res)
-	r.recorder.Event(trtc, corev1.EventTypeNormal, "ExecutionSucceeded", fmt.Sprintf("Tool %q executed successfully", tool.Name))
-	return ctrl.Result{}, nil
 }
 
 // handleUnsupportedToolType handles the fallback for unrecognized tool types
