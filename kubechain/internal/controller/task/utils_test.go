@@ -186,7 +186,7 @@ func (t *TestTask) SetupWithStatus(ctx context.Context, status kubechain.TaskSta
 }
 
 func (t *TestTask) Teardown(ctx context.Context) {
-	By("deleting the taskrun")
+	By("deleting the task")
 	Expect(k8sClient.Delete(ctx, t.task)).To(Succeed())
 }
 
@@ -202,7 +202,7 @@ type TestTaskRunToolCall struct {
 }
 
 func (t *TestTaskRunToolCall) Setup(ctx context.Context) *kubechain.TaskRunToolCall {
-	By("creating the taskrun toolcall")
+	By("creating the taskruntoolcall")
 	taskRunToolCall := &kubechain.TaskRunToolCall{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      t.name,
@@ -238,7 +238,7 @@ func (t *TestTaskRunToolCall) SetupWithStatus(ctx context.Context, status kubech
 }
 
 func (t *TestTaskRunToolCall) Teardown(ctx context.Context) {
-	By("deleting the taskrun toolcall")
+	By("deleting the taskruntoolcall")
 	Expect(k8sClient.Delete(ctx, t.taskRunToolCall)).To(Succeed())
 }
 

@@ -959,13 +959,13 @@ Events:
   Normal  HumanLayerRequestSent  2m41s  taskruntoolcall-controller  HumanLayer request sent
 ```
 
-Note as well, at this point our `taskrun` has not completed. If we run `kubectl get taskrun approved-fetch-task-1` no `OUTPUT` has yet been returned.
+Note as well, at this point our `task` has not completed. If we run `kubectl get task approved-fetch-task` no `OUTPUT` has yet been returned.
 
-Go ahead and approve the email you should have received via HumanLayer requesting approval to run our `fetch` tool. After a few seconds, running `kubectl get taskruntoolcall approved-fetch-task-1-tc-01` should show our tool has been called. Additionally, if we run `kubectl describe taskrun approved-fetch-task-1`, we should see the following (truncated a bit for brevity):
+Go ahead and approve the email you should have received via HumanLayer requesting approval to run our `fetch` tool. After a few seconds, running `kubectl get taskruntoolcall approved-fetch-task-1-tc-01` should show our tool has been called. Additionally, if we run `kubectl describe task approved-fetch-task`, we should see the following (truncated a bit for brevity):
 
 ```
-$ kubectl describe taskrun approved-fetch-task-1
-Name:         approved-fetch-task-1
+$ kubectl describe task approved-fetch-task
+Name:         approved-fetch-task
 Kind:         Task
 Metadata:
   Creation Timestamp:  2025-04-01T16:16:13Z
@@ -1010,12 +1010,12 @@ Droid with gentle heart.
 Events:
   Type    Reason                     Age               From                Message
   ----    ------                     ----              ----                -------
-  Normal  ValidationSucceeded        48s               taskrun-controller  Task validated successfully
-  Normal  ToolCallsPending           47s               taskrun-controller  LLM response received, tool calls pending
-  Normal  ToolCallCreated            47s               taskrun-controller  Created TaskRunToolCall approved-fetch-task-1-tc-01
-  Normal  SendingContextWindowToLLM  7s (x2 over 48s)  taskrun-controller  Sending context window to LLM
-  Normal  AllToolCallsCompleted      7s                taskrun-controller  All tool calls completed, ready to send tool results to LLM
-  Normal  LLMFinalAnswer             6s                taskrun-controller  LLM response received successfully
+  Normal  ValidationSucceeded        48s               task-controller  Task validated successfully
+  Normal  ToolCallsPending           47s               task-controller  LLM response received, tool calls pending
+  Normal  ToolCallCreated            47s               task-controller  Created TaskRunToolCall approved-fetch-task-1-tc-01
+  Normal  SendingContextWindowToLLM  7s (x2 over 48s)  task-controller  Sending context window to LLM
+  Normal  AllToolCallsCompleted      7s                task-controller  All tool calls completed, ready to send tool results to LLM
+  Normal  LLMFinalAnswer             6s                task-controller  LLM response received successfully
 ```
 
 ### Using other Language Models
@@ -1066,7 +1066,6 @@ Remove our agent, task and related resources:
 
 ```
 kubectl delete taskruntoolcall --all
-kubectl delete taskrun --all
 kubectl delete task --all
 kubectl delete agent --all
 kubectl delete mcpserver --all
@@ -1095,7 +1094,7 @@ kind delete cluster
 
 ## Key Features
 
-- **Kubernetes-Native Architecture**: KubeChain is built as a Kubernetes operator, using Custom Resource Definitions (CRDs) to define and manage LLMs, Agents, Tools, Tasks, and TaskRuns.
+- **Kubernetes-Native Architecture**: KubeChain is built as a Kubernetes operator, using Custom Resource Definitions (CRDs) to define and manage LLMs, Agents, Tools, and Tasks.
 
 - **Durable Agent Execution**: KubeChain implements something like async/await at the infrastructure layer, checkpointing a conversation chain whenever a tool call or agent delegation occurs, with the ability to resume from that checkpoint when the operation completes.
 

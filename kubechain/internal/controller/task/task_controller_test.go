@@ -17,7 +17,7 @@ import (
 	. "github.com/humanlayer/smallchain/kubechain/test/utils"
 )
 
-var _ = Describe("TaskRun Controller", func() {
+var _ = Describe("Task Controller", func() {
 	Context("'' -> Initializing", func() {
 		ctx := context.Background()
 		It("moves to Initializing and sets a span context", func() {
@@ -27,7 +27,7 @@ var _ = Describe("TaskRun Controller", func() {
 			task := testTask.Setup(ctx)
 			defer testTask.Teardown(ctx)
 
-			By("reconciling the taskrun")
+			By("reconciling the task")
 			reconciler, _ := reconciler()
 			reconciler.Tracer = noop.NewTracerProvider().Tracer("test")
 
@@ -53,7 +53,7 @@ var _ = Describe("TaskRun Controller", func() {
 			})
 			defer testTask.Teardown(ctx)
 
-			By("reconciling the taskrun")
+			By("reconciling the task")
 			reconciler, recorder := reconciler()
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{
@@ -62,7 +62,7 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.RequeueAfter).To(Equal(time.Second * 5))
 
-			By("checking the taskrun status")
+			By("checking the task status")
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTask.name, Namespace: "default"}, task)).To(Succeed())
 			Expect(task.Status.Phase).To(Equal(kubechain.TaskPhasePending))
 			Expect(task.Status.StatusDetail).To(ContainSubstring("Waiting for Agent to exist"))
@@ -76,7 +76,7 @@ var _ = Describe("TaskRun Controller", func() {
 			})
 			defer testTask.Teardown(ctx)
 
-			By("reconciling the taskrun")
+			By("reconciling the task")
 			reconciler, recorder := reconciler()
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{
@@ -85,7 +85,7 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.RequeueAfter).To(Equal(time.Second * 5))
 
-			By("checking the taskrun status")
+			By("checking the task status")
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTask.name, Namespace: "default"}, task)).To(Succeed())
 			Expect(task.Status.Phase).To(Equal(kubechain.TaskPhasePending))
 			Expect(task.Status.StatusDetail).To(ContainSubstring("Waiting for Agent to exist"))
@@ -102,7 +102,7 @@ var _ = Describe("TaskRun Controller", func() {
 			})
 			defer testTask.Teardown(ctx)
 
-			By("reconciling the taskrun")
+			By("reconciling the task")
 			reconciler, recorder := reconciler()
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{
@@ -111,7 +111,7 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.RequeueAfter).To(Equal(time.Second * 5))
 
-			By("checking the taskrun status")
+			By("checking the task status")
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTask.name, Namespace: "default"}, task)).To(Succeed())
 			Expect(task.Status.Phase).To(Equal(kubechain.TaskPhasePending))
 			Expect(task.Status.StatusDetail).To(ContainSubstring("Waiting for agent \"test-agent\" to become ready"))
@@ -136,7 +136,7 @@ var _ = Describe("TaskRun Controller", func() {
 			})
 			defer testTask2.Teardown(ctx)
 
-			By("reconciling the taskrun")
+			By("reconciling the task")
 			reconciler, recorder := reconciler()
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{
@@ -170,7 +170,7 @@ var _ = Describe("TaskRun Controller", func() {
 			})
 			defer testTask.Teardown(ctx)
 
-			By("reconciling the taskrun")
+			By("reconciling the task")
 			reconciler, recorder := reconciler()
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{
@@ -211,7 +211,7 @@ var _ = Describe("TaskRun Controller", func() {
 			})
 			defer testTask.Teardown(ctx)
 
-			By("reconciling the taskrun")
+			By("reconciling the task")
 			reconciler, recorder := reconciler()
 			mockLLMClient := &llmclient.MockRawOpenAIClient{
 				Response: &kubechain.Message{
@@ -229,7 +229,7 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Requeue).To(BeFalse())
 
-			By("ensuring the taskrun status is updated with the llm final answer")
+			By("ensuring the task status is updated with the llm final answer")
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTask.name, Namespace: "default"}, task)).To(Succeed())
 			Expect(task.Status.Phase).To(Equal(kubechain.TaskPhaseFinalAnswer))
 			Expect(task.Status.StatusDetail).To(ContainSubstring("LLM final response received"))
@@ -268,7 +268,7 @@ var _ = Describe("TaskRun Controller", func() {
 			})
 			defer testTask.Teardown(ctx)
 
-			By("reconciling the taskrun with a mock LLM client that returns an error")
+			By("reconciling the task with a mock LLM client that returns an error")
 			reconciler, recorder := reconciler()
 			mockLLMClient := &llmclient.MockRawOpenAIClient{
 				Error: fmt.Errorf("connection timeout"),
@@ -282,7 +282,7 @@ var _ = Describe("TaskRun Controller", func() {
 			})
 			Expect(err).To(HaveOccurred())
 
-			By("checking the taskrun status")
+			By("checking the task status")
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTask.name, Namespace: "default"}, task)).To(Succeed())
 			Expect(task.Status.Status).To(Equal(kubechain.TaskStatusTypeError))
 			// Phase shouldn't be Failed for general errors
@@ -310,7 +310,7 @@ var _ = Describe("TaskRun Controller", func() {
 			})
 			defer testTask.Teardown(ctx)
 
-			By("reconciling the taskrun with a mock LLM client that returns a 400 error")
+			By("reconciling the task with a mock LLM client that returns a 400 error")
 			reconciler, recorder := reconciler()
 			mockLLMClient := &llmclient.MockRawOpenAIClient{
 				Error: &llmclient.LLMRequestError{
@@ -328,7 +328,7 @@ var _ = Describe("TaskRun Controller", func() {
 			})
 			Expect(err).To(HaveOccurred())
 
-			By("checking the taskrun status")
+			By("checking the task status")
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTask.name, Namespace: "default"}, task)).To(Succeed())
 			Expect(task.Status.Status).To(Equal(kubechain.TaskStatusTypeError))
 			// Phase should be Failed for 4xx errors
@@ -356,7 +356,7 @@ var _ = Describe("TaskRun Controller", func() {
 			})
 			defer testTask.Teardown(ctx)
 
-			By("reconciling the taskrun")
+			By("reconciling the task")
 			reconciler, recorder := reconciler()
 			mockLLMClient := &llmclient.MockRawOpenAIClient{
 				Response: &kubechain.Message{
@@ -379,7 +379,7 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.RequeueAfter).To(Equal(time.Second * 5))
 
-			By("ensuring the taskrun status is updated with the tool calls pending")
+			By("ensuring the task status is updated with the tool calls pending")
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTask.name, Namespace: "default"}, task)).To(Succeed())
 			Expect(task.Status.Phase).To(Equal(kubechain.TaskPhaseToolCallsPending))
 			Expect(task.Status.StatusDetail).To(ContainSubstring("LLM response received, tool calls pending"))
@@ -417,7 +417,7 @@ var _ = Describe("TaskRun Controller", func() {
 			})
 			defer testTaskRunToolCall.Teardown(ctx)
 
-			By("reconciling the taskrun")
+			By("reconciling the task")
 			reconciler, _ := reconciler()
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{
@@ -426,7 +426,7 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.RequeueAfter).To(Equal(time.Second * 5))
 
-			By("checking the taskrun status")
+			By("checking the task status")
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTask.name, Namespace: "default"}, task)).To(Succeed())
 			Expect(task.Status.Phase).To(Equal(kubechain.TaskPhaseToolCallsPending))
 		})
@@ -436,7 +436,7 @@ var _ = Describe("TaskRun Controller", func() {
 			_, _, _, teardown := setupSuiteObjects(ctx)
 			defer teardown()
 
-			By("setting up the taskrun with a tool call pending")
+			By("setting up the task with a tool call pending")
 			task := testTask.SetupWithStatus(ctx, kubechain.TaskStatus{
 				Phase:             kubechain.TaskPhaseToolCallsPending,
 				ToolCallRequestID: "test123",
@@ -471,7 +471,7 @@ var _ = Describe("TaskRun Controller", func() {
 			})
 			defer testTaskRunToolCall.Teardown(ctx)
 
-			By("reconciling the taskrun")
+			By("reconciling the task")
 			reconciler, recorder := reconciler()
 
 			result, err := reconciler.Reconcile(ctx, reconcile.Request{
@@ -480,7 +480,7 @@ var _ = Describe("TaskRun Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Requeue).To(BeTrue())
 
-			By("checking the taskrun status")
+			By("checking the task status")
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTask.name, Namespace: "default"}, task)).To(Succeed())
 			Expect(task.Status.Phase).To(Equal(kubechain.TaskPhaseReadyForLLM))
 			Expect(task.Status.StatusDetail).To(ContainSubstring("All tool calls completed, ready to send tool results to LLM"))
@@ -515,7 +515,7 @@ var _ = Describe("TaskRun Controller", func() {
 			uniqueSuffix := fmt.Sprintf("%d", time.Now().UnixNano())
 			testTaskName := fmt.Sprintf("multi-message-%s", uniqueSuffix)
 
-			By("setting up the taskrun with an existing conversation history")
+			By("setting up the task with an existing conversation history")
 			task := testTask.SetupWithStatus(ctx, kubechain.TaskStatus{
 				Phase: kubechain.TaskPhaseReadyForLLM,
 				ContextWindow: []kubechain.Message{
@@ -565,7 +565,7 @@ var _ = Describe("TaskRun Controller", func() {
 				},
 			}
 
-			By("reconciling the taskrun")
+			By("reconciling the task")
 			reconciler, _ := reconciler()
 			reconciler.newLLMClient = func(apiKey string) (llmclient.OpenAIClient, error) {
 				return mockClient, nil
@@ -579,7 +579,7 @@ var _ = Describe("TaskRun Controller", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			By("checking that the taskrun moved to FinalAnswer phase")
+			By("checking that the task moved to FinalAnswer phase")
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testTaskName, Namespace: "default"}, task)).To(Succeed())
 			Expect(task.Status.Phase).To(Equal(kubechain.TaskPhaseFinalAnswer))
 
