@@ -126,7 +126,7 @@ var _ = Describe("TaskRun Controller", func() {
 			})
 			defer testAgent.Teardown(ctx)
 
-			testTaskRun2 := &TestTaskRun{
+			testTaskRun2 := &TestTask{
 				name:        "test-taskrun-2",
 				agentName:   testAgent.name,
 				userMessage: "test-user-message",
@@ -351,10 +351,10 @@ var _ = Describe("TaskRun Controller", func() {
 			_, _, _, teardown := setupSuiteObjects(ctx)
 			defer teardown()
 
-			taskRun := testTaskRun.SetupWithStatus(ctx, kubechain.TaskRunStatus{
-				Phase: kubechain.TaskRunPhaseReadyForLLM,
+			task := testTask.SetupWithStatus(ctx, kubechain.TaskStatus{
+				Phase: kubechain.TaskPhaseReadyForLLM,
 			})
-			defer testTaskRun.Teardown(ctx)
+			defer testTask.Teardown(ctx)
 
 			By("reconciling the taskrun")
 			reconciler, recorder := reconciler()

@@ -421,7 +421,7 @@ func (r *TaskReconciler) createToolCalls(ctx context.Context, task *kubechain.Ta
 				Name:      newName,
 				Namespace: statusUpdate.Namespace,
 				Labels: map[string]string{
-					"kubechain.humanlayer.dev/taskruntoolcall": statusUpdate.Name,
+					"kubechain.humanlayer.dev/task":            statusUpdate.Name,
 					"kubechain.humanlayer.dev/toolcallrequest": statusUpdate.Status.ToolCallRequestID,
 				},
 				OwnerReferences: []metav1.OwnerReference{

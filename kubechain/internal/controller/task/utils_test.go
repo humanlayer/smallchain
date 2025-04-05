@@ -143,55 +143,55 @@ var testAgent = &TestAgent{
 	mcpServers: []kubechain.LocalObjectReference{},
 }
 
-type TestTaskRun struct {
+type TestTask struct {
 	name        string
 	agentName   string
 	userMessage string
-	taskRun     *kubechain.TaskRun
+	task        *kubechain.Task
 }
 
-func (t *TestTaskRun) Setup(ctx context.Context) *kubechain.TaskRun {
-	By("creating the taskrun")
-	taskRun := &kubechain.TaskRun{
+func (t *TestTask) Setup(ctx context.Context) *kubechain.Task {
+	By("creating the task")
+	task := &kubechain.Task{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      t.name,
 			Namespace: "default",
 		},
-		Spec: kubechain.TaskRunSpec{},
+		Spec: kubechain.TaskSpec{},
 	}
 	if t.agentName != "" {
-		taskRun.Spec.AgentRef = kubechain.LocalObjectReference{
+		task.Spec.AgentRef = kubechain.LocalObjectReference{
 			Name: t.agentName,
 		}
 	}
 	if t.userMessage != "" {
-		taskRun.Spec.UserMessage = t.userMessage
+		task.Spec.UserMessage = t.userMessage
 	}
 
-	err := k8sClient.Create(ctx, taskRun)
+	err := k8sClient.Create(ctx, task)
 	Expect(err).NotTo(HaveOccurred())
 
-	Expect(k8sClient.Get(ctx, types.NamespacedName{Name: t.name, Namespace: "default"}, taskRun)).To(Succeed())
-	t.taskRun = taskRun
-	return taskRun
+	Expect(k8sClient.Get(ctx, types.NamespacedName{Name: t.name, Namespace: "default"}, task)).To(Succeed())
+	t.task = task
+	return task
 }
 
-func (t *TestTaskRun) SetupWithStatus(ctx context.Context, status kubechain.TaskRunStatus) *kubechain.TaskRun {
-	taskRun := t.Setup(ctx)
-	taskRun.Status = status
-	Expect(k8sClient.Status().Update(ctx, taskRun)).To(Succeed())
-	Expect(k8sClient.Get(ctx, types.NamespacedName{Name: t.name, Namespace: "default"}, taskRun)).To(Succeed())
-	t.taskRun = taskRun
-	return taskRun
+func (t *TestTask) SetupWithStatus(ctx context.Context, status kubechain.TaskStatus) *kubechain.Task {
+	task := t.Setup(ctx)
+	task.Status = status
+	Expect(k8sClient.Status().Update(ctx, task)).To(Succeed())
+	Expect(k8sClient.Get(ctx, types.NamespacedName{Name: t.name, Namespace: "default"}, task)).To(Succeed())
+	t.task = task
+	return task
 }
 
-func (t *TestTaskRun) Teardown(ctx context.Context) {
+func (t *TestTask) Teardown(ctx context.Context) {
 	By("deleting the taskrun")
-	Expect(k8sClient.Delete(ctx, t.taskRun)).To(Succeed())
+	Expect(k8sClient.Delete(ctx, t.task)).To(Succeed())
 }
 
-var testTaskRun = &TestTaskRun{
-	name:        "test-taskrun",
+var testTask = &TestTask{
+	name:        "test-task",
 	agentName:   "test-agent",
 	userMessage: "what is the capital of the moon?",
 }
@@ -208,13 +208,13 @@ func (t *TestTaskRunToolCall) Setup(ctx context.Context) *kubechain.TaskRunToolC
 			Name:      t.name,
 			Namespace: "default",
 			Labels: map[string]string{
-				"kubechain.humanlayer.dev/taskruntoolcall": testTaskRun.name,
+				"kubechain.humanlayer.dev/task":            testTask.name,
 				"kubechain.humanlayer.dev/toolcallrequest": "test123",
 			},
 		},
 		Spec: kubechain.TaskRunToolCallSpec{
-			TaskRunRef: kubechain.LocalObjectReference{
-				Name: testTaskRun.name,
+			TaskRef: kubechain.LocalObjectReference{
+				Name: testTask.name,
 			},
 			ToolRef: kubechain.LocalObjectReference{
 				Name: "test-tool",
