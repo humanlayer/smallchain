@@ -27,8 +27,9 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// +kubebuilder:rbac:groups=kubechain.humanlayer.dev,resources=taskruns,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=kubechain.humanlayer.dev,resources=taskruns/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=kubechain.humanlayer.dev,resources=tasks,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=kubechain.humanlayer.dev,resources=tasks/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=kubechain.humanlayer.dev,resources=taskruntoolcalls,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=kubechain.humanlayer.dev,resources=agents,verbs=get;list;watch
 // +kubebuilder:rbac:groups=kubechain.humanlayer.dev,resources=llms,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
@@ -176,6 +177,7 @@ func (r *TaskReconciler) processToolCalls(ctx context.Context, task *kubechain.T
 	// List all tool calls for this Task
 	toolCalls := &kubechain.TaskRunToolCallList{}
 	if err := r.List(ctx, toolCalls, client.InNamespace(task.Namespace), client.MatchingLabels{
+		"kubechain.humanlayer.dev/task":            task.Name,
 		"kubechain.humanlayer.dev/toolcallrequest": task.Status.ToolCallRequestID,
 	}); err != nil {
 		logger.Error(err, "Failed to list tool calls")
@@ -198,8 +200,9 @@ func (r *TaskReconciler) processToolCalls(ctx context.Context, task *kubechain.T
 	// All tool calls are completed, append results to context window
 	for _, tc := range toolCalls.Items {
 		task.Status.ContextWindow = append(task.Status.ContextWindow, kubechain.Message{
-			Role:    "tool",
-			Content: tc.Status.Result,
+			Role:       "tool",
+			Content:    tc.Status.Result,
+			ToolCallId: tc.Spec.ToolCallId,
 		})
 	}
 
@@ -455,7 +458,7 @@ func (r *TaskReconciler) createToolCalls(ctx context.Context, task *kubechain.Ta
 	return ctrl.Result{RequeueAfter: time.Second * 5}, nil
 }
 
-// Reconcile validates the taskrun's agent reference and sends the prompt to the LLM.
+// Reconcile validates the task's agent reference and sends the prompt to the LLM.
 func (r *TaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
@@ -615,7 +618,7 @@ func (r *TaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{}, err
 	}
 
-	logger.Info("Successfully reconciled taskrun",
+	logger.Info("Successfully reconciled task",
 		"name", task.Name,
 		"ready", statusUpdate.Status.Ready,
 		"phase", statusUpdate.Status.Phase)
@@ -624,7 +627,7 @@ func (r *TaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *TaskReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	r.recorder = mgr.GetEventRecorderFor("taskrun-controller")
+	r.recorder = mgr.GetEventRecorderFor("task-controller")
 	if r.newLLMClient == nil {
 		r.newLLMClient = llmclient.NewRawOpenAIClient
 	}

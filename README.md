@@ -31,8 +31,8 @@ KubeChain is a cloud-native orchestrator for AI Agents built on Kubernetes. It s
   - [Setting Up a Local Cluster](#setting-up-a-local-cluster)
   - [Deploying KubeChain](#deploying-kubechain)
   - [Creating Your First Agent](#creating-your-first-agent)
-  - [Running Your First TaskRun](#running-your-first-taskrun)
-  - [Inspecting the TaskRun more closely](#inspecting-the-taskrun-more-closely)
+  - [Running Your First Task](#running-your-first-task)
+  - [Inspecting the Task more closely](#inspecting-the-task-more-closely)
   - [Adding Tools with MCP](#adding-tools-with-mcp)
   - [Cleaning Up](#cleaning-up)
 - [Design Principles](#design-principles)
@@ -46,8 +46,10 @@ KubeChain is a cloud-native orchestrator for AI Agents built on Kubernetes. It s
 
 - **LLM**: Provider + API Keys + Parameters
 - **Agent**: LLM + System Prompt + Tools
-- **Tool**: MCP server or another Agent
-- **TaskRun**: Agent + User Message + Current context window
+- **Tools**: MCP Servers, Humans, Other Agents
+- **Task**: Agent + User Message + Current context window
+<!-- todo rename to ToolCall -->
+- **TaskRunToolCall**: A single tool call that occurred during a Task
 
 ## Getting Started
 
@@ -314,7 +316,7 @@ Create a TaskRun to interact with your agent:
 ```bash
 cat <<EOF | kubectl apply -f -
 apiVersion: kubechain.humanlayer.dev/v1alpha1
-kind: TaskRun
+kind: Task
 metadata:
   name: hello-world-1
 spec:
@@ -346,74 +348,59 @@ graph RL
       SystemPrompt
     end
 
-    subgraph TaskRun
+    subgraph Task
       AgentRef
       UserMessage
     end
 ```
-Check the created TaskRun:
+Check the created Task:
 
 ```bash
-kubectl get taskrun
+kubectl get task
 ```
 
    Output:
 
 ```
-NAME               READY   STATUS   AGENT          MESSAGE
-hello-world-task   true    Ready    my-assistant   What is the capital of the moon?
+NAME            READY   STATUS   PHASE         PREVIEW   OUTPUT
+hello-world-1   true    Ready    FinalAnswer             The Moon does not have a capital, as it is not a governed entity like a country. It is a natural satellite of Earth. However, if you are referring to human activity on the Moon, there is no permanent settlement or colony established there as of now. Most activities on the Moon have been in the form of missions or landings conducted by various space agencies.
 ```
 
-<details>
-<summary>Using `-o wide` and `describe`</summary>
+You can describe the task to see the full context window
 
 ```bash
-kubectl get taskrun -o wide
+kubectl describe task
 ```
 
 Output:
 
 ```
-NAME             READY   STATUS   DETAIL             AGENT          PREVIEW                            OUTPUT
-hello-world-1    true    Ready    Task Run Created   my-assistant   What is the capital of the moon?
-```
-
-```bash
-kubectl describe taskrun
-```
-
-Output:
-
-```
-ame:         hello-world-task
-Namespace:    default
-Labels:       <none>
-Annotations:  <none>
-API Version:  kubechain.humanlayer.dev/v1alpha1
-Kind:         Task
-Metadata:
-  Creation Timestamp:  2025-03-21T22:14:09Z
-  Generation:          1
-  Resource Version:    1683590
-  UID:                 8d0c7d4a-88db-4005-b212-a2c3a6956af3
-Spec:
-  Agent Ref:
-    Name:   my-assistant
-  Message:  What is the capital of the moon?
+# ...snip...
 Status:
-  Ready:          true
-  Status:         Ready
-  Status Detail:  Task Run Created
+  Context Window:
+    Content:  You are a helpful assistant. Your job is to help the user with their tasks.
+
+    Role:     system
+    Content:  What is the capital of the moon?
+    Role:     user
+    Content:  The Moon does not have a capital, as it is not a governed entity like a country. It is a natural satellite of Earth. However, if you are referring to human activity on the Moon, there is no permanent settlement or colony established there as of now. Most activities on the Moon have been in the form of missions or landings conducted by various space agencies.
+    Role:     assistant
+
+# ...snip...
+
+  Status Detail:  LLM final response received
 Events:
-  Type    Reason               Age                From             Message
-  ----    ------               ----               ----             -------
-  Normal  Initializing         56m                task-controller  Starting validation
-  Normal  TaskRunCreated       56m                task-controller  Created TaskRun hello-world-task-1
+  Type    Reason                     Age   From             Message
+  ----    ------                     ----  ----             -------
+  Normal  ValidationSucceeded        65s   task-controller  Task validation succeeded
+  Normal  SendingContextWindowToLLM  65s   task-controller  Sending context window to LLM
+  Normal  LLMFinalAnswer             64s   task-controller  LLM response received successfully
+
 ```
 
 </details>
 
-By default, creating a task will create an initial TaskRun to execute the task. A TaskRun is a single execution of a task by an agent, tracking the context window and final output.
+The Task object stores and manages the context window of a agent conversation loop.
 
 ```mermaid
 graph RL
@@ -424,7 +411,6 @@ graph RL
     LLMRef --> LLM
     Credentials --> Secret
     AgentRef --> Agent
-    TaskRef --> Task
 
 
     subgraph LLM
@@ -441,10 +427,6 @@ graph RL
     subgraph Task
       AgentRef
       Message
-    end
-
-    subgraph TaskRun
-      TaskRef
       subgraph ContextWindow
         direction LR
         SystemMessage
@@ -452,19 +434,6 @@ graph RL
       end
     end
 
-```
-
-For now, our task run should complete quickly and return a FinalAnswer.
-
-```bash
-kubectl get taskrun
-```
-
-Output:
-
-```
-NAME                 READY   STATUS   PHASE         TASK               PREVIEW   OUTPUT
-hello-world-task-1   true    Ready    FinalAnswer   hello-world-task             The Moon does not have a capital. It is a natural satellite of Earth and lacks any governmental structure or human habitation that would necessitate a capital city.
 ```
 
 To get just the output, run
@@ -478,129 +447,34 @@ and you'll see
 
 > The Moon does not have a capital. It is a natural satellite of Earth and lacks any governmental structure or human habitation that would necessitate a capital city.
 
-More broadly, the taskrun is a component of the LLM / Agent / Task relationship.
-
-```mermaid
-flowchart RL
-    Agent
-    LLM
-    Secret
-
-    LLMRef --> LLM
-    Credentials --> Secret
-    AgentRef --> Agent
-    TaskRef --> Task
-
-
-    subgraph LLM
-      Provider
-      Credentials
-      ModelParameters
-    end
-
-    subgraph Agent
-      LLMRef
-      SystemPrompt
-    end
-
-    subgraph Task
-      AgentRef
-      Message
-    end
-
-    subgraph TaskRun
-      TaskRef
-      subgraph ContextWindow
-        direction LR
-        SystemMessage
-        UserMessage
-        AssistantMessage
-      end
-    end
-
-    ContextWindow <--> Provider <--> OpenAI
-
-```
-
-### Inspecting the TaskRun more closely
-
-We saw above how you can get the status of a taskrun with `kubectl get taskrun`.
-
-For more detailed information, like to see the full context window, you can use:
+you can also describe the task to see the full context window in a slightly more readable format (but without the events)
 
 ```bash
-kubectl describe taskrun
-```
-
-```
-Name:         hello-world-task-1
-Namespace:    default
-Labels:       kubechain.humanlayer.dev/task=hello-world-task
-Annotations:  <none>
-API Version:  kubechain.humanlayer.dev/v1alpha1
-Kind:         TaskRun
-Metadata:
-  Creation Timestamp:  2025-03-21T22:14:09Z
-  Generation:          1
-  Owner References:
-    API Version:     kubechain.humanlayer.dev/v1alpha1
-    Controller:      true
-    Kind:            Task
-    Name:            hello-world-task
-    UID:             8d0c7d4a-88db-4005-b212-a2c3a6956af3
-  Resource Version:  1683602
-  UID:               53b1b69a-fb49-431b-857a-1cafe017a544
-Spec:
-  Task Ref:
-    Name:  hello-world-task
-Status:
-  Context Window:
-    Content:  You are a helpful assistant. Your job is to help the user with their tasks.
-
-    Role:         system
-    Content:      What is the capital of the moon?
-    Role:         user
-    Content:      The Moon does not have a capital. It is a natural satellite of Earth
-        and lacks any governmental structure or human habitation that would necessitate
-        a capital city.
-    Role:         assistant
-  Output:         The Moon does not have a capital. It is a natural satellite of Earth and
-      lacks any governmental structure or human habitation that would necessitate
-      a capital city.
-  Phase:          FinalAnswer
-  Ready:          true
-  Status:         Ready
-  Status Detail:  LLM final response received
-Events:
-  Type    Reason               Age   From                Message
-  ----    ------               ----  ----                -------
-  Normal  Waiting              17m   taskrun-controller  Waiting for task "hello-world-task" to become ready
-  Normal  ValidationSucceeded  17m   taskrun-controller  Task validated successfully
-  Normal  LLMFinalAnswer       17m   taskrun-controller  LLM response received successfully
-```
-
-or
-
-```bash
-kubectl get taskrun -o yaml
+kubectl get task -o yaml
 ```
 
 <details>
 <summary>Output (truncated for brevity)</summary>
+
 ```
 apiVersion: v1
 items:
 - apiVersion: kubechain.humanlayer.dev/v1alpha1
-  kind: TaskRun
+  kind: Task
   metadata:
-    labels:
-      kubechain.humanlayer.dev/task: hello-world-task
-    name: hello-world-task-1
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"kubechain.humanlayer.dev/v1alpha1","kind":"Task","metadata":{"annotations":{},"name":"hello-world-1","namespace":"default"},"spec":{"agentRef":{"name":"my-assistant"},"userMessage":"What is the capital of the moon?"}}
+    creationTimestamp: "2025-04-05T01:04:15Z"
+    generation: 1
+    name: hello-world-1
     namespace: default
-    # ...snip...
+    resourceVersion: "3190"
+    uid: 673a780e-1234-4a7d-9ace-68f49d7f2061
   spec:
-    taskRef:
-      name: hello-world-task
+    agentRef:
+      name: my-assistant
+    userMessage: What is the capital of the moon?
   status:
     contextWindow:
     - content: |
@@ -608,18 +482,28 @@ items:
       role: system
     - content: What is the capital of the moon?
       role: user
-    - content: The Moon does not have a capital. It is a natural satellite of Earth
-        and lacks any governmental structure or human habitation that would necessitate
-        a capital city.
+    - content: The Moon does not have a capital, as it is not a governed entity like
+        a country. It is a natural satellite of Earth. However, if you are referring
+        to human activity on the Moon, there is no permanent settlement or colony
+        established there as of now. Most activities on the Moon have been in the
+        form of missions or landings conducted by various space agencies.
       role: assistant
-    output: The Moon does not have a capital. It is a natural satellite of Earth and
-      lacks any governmental structure or human habitation that would necessitate
-      a capital city.
+    output: The Moon does not have a capital, as it is not a governed entity like
+      a country. It is a natural satellite of Earth. However, if you are referring
+      to human activity on the Moon, there is no permanent settlement or colony established
+      there as of now. Most activities on the Moon have been in the form of missions
+      or landings conducted by various space agencies.
     phase: FinalAnswer
     ready: true
+    spanContext:
+      spanID: 648ca5bf05d0ec05
+      traceID: d3fb4171016bcab77d63b02e52e006cd
     status: Ready
     statusDetail: LLM final response received
-# ...snip...
+kind: List
+metadata:
+  resourceVersion: ""
+
 ```
 </details>
 
@@ -654,23 +538,10 @@ kubectl describe mcpserver
 ```
 Output:
 
+
 ```
-Name:         fetch
-Namespace:    default
-Labels:       <none>
-Annotations:  <none>
-API Version:  kubechain.humanlayer.dev/v1alpha1
-Kind:         MCPServer
-Metadata:
-  Creation Timestamp:  2025-03-24T14:37:02Z
-  Generation:          1
-  Resource Version:    855
-  UID:                 ccca723e-70cf-4f76-a21b-9fdc823a0034
-Spec:
-  Args:
-    mcp-server-fetch
-  Command:    uvx
-  Transport:  stdio
+# ...snip...
+
 Status:
   Connected:      true
   Status:         Ready
@@ -767,7 +638,7 @@ Let's make a new task that uses the fetch tool. In this case, we'll use https://
 ```bash
 cat <<EOF | kubectl apply -f -
 apiVersion: kubechain.humanlayer.dev/v1alpha1
-kind: TaskRun
+kind: Task
 metadata:
   name: fetch-task
 spec:
@@ -780,8 +651,7 @@ EOF
 You should see some events in the output of
 
 ```
-kubectl get events --watch
-```
+kubectl get events --field-selector "involvedObject.kind=Task```
 
 ```
 0s          Normal   ValidationSucceeded         taskrun/fetch-task-1                                 Task validated successfully
@@ -844,7 +714,7 @@ flowchart TD
     subgraph MCPServer
       fetch
     end
-    subgraph TaskRun
+    subgraph Task
       subgraph ContextWindow
         direction LR
         SystemMessage
@@ -880,7 +750,7 @@ Namespace:    default
 Labels:       kubechain.humanlayer.dev/task=fetch-task
 Annotations:  <none>
 API Version:  kubechain.humanlayer.dev/v1alpha1
-Kind:         TaskRun
+Kind:         Task
 Metadata:
   Creation Timestamp:  2025-03-25T22:32:30Z
   Generation:          1
@@ -1110,7 +980,7 @@ Metadata:
   Owner References:
     API Version:     kubechain.humanlayer.dev/v1alpha1
     Controller:      true
-    Kind:            TaskRun
+    Kind:            Task
     Name:            approved-fetch-task-1
     UID:             52893dec-c5a5-424d-983f-13a89215b084
   Resource Version:  91939
@@ -1142,7 +1012,7 @@ Go ahead and approve the email you should have received via HumanLayer requestin
 ```
 $ kubectl describe taskrun approved-fetch-task-1
 Name:         approved-fetch-task-1
-Kind:         TaskRun
+Kind:         Task
 Metadata:
   Creation Timestamp:  2025-04-01T16:16:13Z
   UID:               58c9d760-a160-4386-9d8d-ae9da0286125
