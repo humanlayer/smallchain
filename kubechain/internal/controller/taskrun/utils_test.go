@@ -184,9 +184,11 @@ func (t *TestTask) Teardown(ctx context.Context) {
 }
 
 type TestTaskRun struct {
-	name     string
-	taskName string
-	taskRun  *kubechain.TaskRun
+	name        string
+	taskName    string
+	agentName   string
+	userMessage string
+	taskRun     *kubechain.TaskRun
 }
 
 func (t *TestTaskRun) Setup(ctx context.Context) *kubechain.TaskRun {
@@ -196,12 +198,22 @@ func (t *TestTaskRun) Setup(ctx context.Context) *kubechain.TaskRun {
 			Name:      t.name,
 			Namespace: "default",
 		},
-		Spec: kubechain.TaskRunSpec{
-			TaskRef: kubechain.LocalObjectReference{
-				Name: t.taskName,
-			},
-		},
+		Spec: kubechain.TaskRunSpec{},
 	}
+	if t.taskName != "" {
+		taskRun.Spec.TaskRef = &kubechain.LocalObjectReference{
+			Name: t.taskName,
+		}
+	}
+	if t.agentName != "" {
+		taskRun.Spec.AgentRef = &kubechain.LocalObjectReference{
+			Name: t.agentName,
+		}
+	}
+	if t.userMessage != "" {
+		taskRun.Spec.UserMessage = t.userMessage
+	}
+
 	err := k8sClient.Create(ctx, taskRun)
 	Expect(err).NotTo(HaveOccurred())
 

@@ -55,6 +55,16 @@ type TaskRunReconciler struct {
 
 // getTask fetches the parent Task for this TaskRun
 func (r *TaskRunReconciler) getTask(ctx context.Context, taskRun *kubechainv1alpha1.TaskRun) (*kubechainv1alpha1.Task, error) {
+	// If we have agentRef and userMessage, we don't need a task
+	if taskRun.Spec.AgentRef != nil && taskRun.Spec.UserMessage != "" {
+		return nil, nil
+	}
+
+	// If TaskRef is nil, we can't fetch the task
+	if taskRun.Spec.TaskRef == nil {
+		return nil, fmt.Errorf("taskRef is required when agentRef and userMessage are not provided")
+	}
+
 	task := &kubechainv1alpha1.Task{}
 	err := r.Get(ctx, client.ObjectKey{
 		Namespace: taskRun.Namespace,
@@ -75,7 +85,7 @@ func (r *TaskRunReconciler) getTask(ctx context.Context, taskRun *kubechainv1alp
 func (r *TaskRunReconciler) validateTaskAndAgent(ctx context.Context, taskRun *kubechainv1alpha1.TaskRun, statusUpdate *kubechainv1alpha1.TaskRun) (*kubechainv1alpha1.Task, *kubechainv1alpha1.Agent, ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
-	// Get parent Task
+	// Get parent Task if needed
 	task, err := r.getTask(ctx, taskRun)
 	if err != nil {
 		r.recorder.Event(taskRun, corev1.EventTypeWarning, "TaskValidationFailed", err.Error())
@@ -103,9 +113,6 @@ func (r *TaskRunReconciler) validateTaskAndAgent(ctx context.Context, taskRun *k
 			logger.Error(updateErr, "Failed to update TaskRun status")
 			return nil, nil, ctrl.Result{}, fmt.Errorf("failed to update taskrun status: %v", err)
 		}
-		// todo dont error if not found, don't requeue
-		// (can use client.IgnoreNotFound(err), but today
-		// the parent method needs err != nil to break control flow properly)
 		return nil, nil, ctrl.Result{}, err
 	}
 
@@ -125,9 +132,30 @@ func (r *TaskRunReconciler) validateTaskAndAgent(ctx context.Context, taskRun *k
 		return nil, nil, ctrl.Result{RequeueAfter: time.Second * 5}, nil
 	}
 
-	// Get the Agent referenced by the Task
+	// Get the Agent - use TaskRun's AgentRef if provided, otherwise use Task's AgentRef
+	var agentRef kubechainv1alpha1.LocalObjectReference
+	if taskRun.Spec.AgentRef != nil {
+		agentRef = *taskRun.Spec.AgentRef
+	} else if task != nil {
+		agentRef = task.Spec.AgentRef
+	} else {
+		err := fmt.Errorf("no agent reference found")
+		logger.Error(err, "Missing agent reference")
+		statusUpdate.Status.Ready = false
+		statusUpdate.Status.Status = StatusError
+		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseFailed
+		statusUpdate.Status.StatusDetail = err.Error()
+		statusUpdate.Status.Error = err.Error()
+		r.recorder.Event(taskRun, corev1.EventTypeWarning, "ValidationFailed", err.Error())
+		if updateErr := r.Status().Update(ctx, statusUpdate); updateErr != nil {
+			logger.Error(updateErr, "Failed to update TaskRun status")
+			return nil, nil, ctrl.Result{}, updateErr
+		}
+		return nil, nil, ctrl.Result{}, err
+	}
+
 	var agent kubechainv1alpha1.Agent
-	if err := r.Get(ctx, client.ObjectKey{Namespace: task.Namespace, Name: task.Spec.AgentRef.Name}, &agent); err != nil {
+	if err := r.Get(ctx, client.ObjectKey{Namespace: taskRun.Namespace, Name: agentRef.Name}, &agent); err != nil {
 		logger.Error(err, "Failed to get Agent")
 		statusUpdate.Status.Ready = false
 		statusUpdate.Status.Status = StatusPending
@@ -158,6 +186,7 @@ func (r *TaskRunReconciler) validateTaskAndAgent(ctx context.Context, taskRun *k
 		return nil, nil, ctrl.Result{RequeueAfter: time.Second * 5}, nil
 	}
 
+	// If we get here, either task is nil (userMessage + agentRef case) or task is ready
 	return task, &agent, ctrl.Result{}, nil
 }
 
@@ -165,9 +194,33 @@ func (r *TaskRunReconciler) validateTaskAndAgent(ctx context.Context, taskRun *k
 func (r *TaskRunReconciler) prepareForLLM(ctx context.Context, taskRun *kubechainv1alpha1.TaskRun, statusUpdate *kubechainv1alpha1.TaskRun, task *kubechainv1alpha1.Task, agent *kubechainv1alpha1.Agent) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
+	// If we're in Initializing or Pending phase, transition to ReadyForLLM
 	if statusUpdate.Status.Phase == kubechainv1alpha1.TaskRunPhaseInitializing || statusUpdate.Status.Phase == kubechainv1alpha1.TaskRunPhasePending {
 		statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseReadyForLLM
 		statusUpdate.Status.Ready = true
+
+		// Use userMessage from TaskRun if provided, otherwise use task's message
+		message := taskRun.Spec.UserMessage
+		if message == "" && task != nil {
+			message = task.Spec.Message
+		}
+
+		if message == "" {
+			err := fmt.Errorf("no message found in TaskRun or Task")
+			logger.Error(err, "Missing message")
+			statusUpdate.Status.Ready = false
+			statusUpdate.Status.Status = StatusError
+			statusUpdate.Status.Phase = kubechainv1alpha1.TaskRunPhaseFailed
+			statusUpdate.Status.StatusDetail = err.Error()
+			statusUpdate.Status.Error = err.Error()
+			r.recorder.Event(taskRun, corev1.EventTypeWarning, "ValidationFailed", err.Error())
+			if updateErr := r.Status().Update(ctx, statusUpdate); updateErr != nil {
+				logger.Error(updateErr, "Failed to update TaskRun status")
+				return ctrl.Result{}, updateErr
+			}
+			return ctrl.Result{}, err
+		}
+
 		statusUpdate.Status.ContextWindow = []kubechainv1alpha1.Message{
 			{
 				Role:    "system",
@@ -175,7 +228,7 @@ func (r *TaskRunReconciler) prepareForLLM(ctx context.Context, taskRun *kubechai
 			},
 			{
 				Role:    "user",
-				Content: task.Spec.Message,
+				Content: message,
 			},
 		}
 		statusUpdate.Status.Status = StatusReady
@@ -670,22 +723,26 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 	// Skip reconciliation for terminal states
 	if statusUpdate.Status.Phase == kubechainv1alpha1.TaskRunPhaseFinalAnswer || statusUpdate.Status.Phase == kubechainv1alpha1.TaskRunPhaseFailed {
+		// todo do we need this V()??
 		logger.V(1).Info("TaskRun in terminal state, skipping reconciliation", "phase", statusUpdate.Status.Phase)
 		return ctrl.Result{}, nil
 	}
 
 	// Step 1: Validate Task and Agent
+	logger.V(3).Info("Validating Task and Agent")
 	task, agent, result, err := r.validateTaskAndAgent(ctx, &taskRun, statusUpdate)
 	if err != nil || !result.IsZero() {
 		return result, err
 	}
 
 	// Step 2: Initialize Phase if necessary
+	logger.V(3).Info("Preparing for LLM")
 	if result, err := r.prepareForLLM(ctx, &taskRun, statusUpdate, task, agent); err != nil || !result.IsZero() {
 		return result, err
 	}
 
 	// Step 3: Handle tool calls phase
+	logger.V(3).Info("Handling tool calls phase")
 	if taskRun.Status.Phase == kubechainv1alpha1.TaskRunPhaseToolCallsPending {
 		return r.processToolCalls(ctx, &taskRun)
 	}
@@ -697,12 +754,14 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	// Step 5: Get LLM and API credentials
+	logger.V(3).Info("Getting API credentials")
 	llm, apiKey, err := r.getLLMAndCredentials(ctx, agent, &taskRun, statusUpdate)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
 	// Step 6: Create LLM client
+	logger.V(3).Info("Creating LLM client")
 	llmClient, err := r.newLLMClient(ctx, llm, apiKey)
 	if err != nil {
 		logger.Error(err, "Failed to create LLM client")
@@ -733,6 +792,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		defer childSpan.End()
 	}
 
+	logger.V(3).Info("Sending LLM request")
 	// Step 8: Send the prompt to the LLM
 	output, err := llmClient.SendRequest(childCtx, taskRun.Status.ContextWindow, tools)
 	if err != nil {
@@ -773,6 +833,7 @@ func (r *TaskRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		childSpan.SetStatus(codes.Ok, "LLM request succeeded")
 	}
 
+	logger.V(3).Info("Processing LLM response")
 	// Step 9: Process LLM response
 	var llmResult ctrl.Result
 	llmResult, err = r.processLLMResponse(ctx, output, &taskRun, statusUpdate)
