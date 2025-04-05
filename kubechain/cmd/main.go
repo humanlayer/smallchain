@@ -27,7 +27,6 @@ import (
 	"github.com/humanlayer/smallchain/kubechain/internal/controller/contactchannel"
 	"github.com/humanlayer/smallchain/kubechain/internal/controller/llm"
 	"github.com/humanlayer/smallchain/kubechain/internal/controller/mcpserver"
-	"github.com/humanlayer/smallchain/kubechain/internal/controller/taskrun"
 	"github.com/humanlayer/smallchain/kubechain/internal/controller/taskruntoolcall"
 	"github.com/humanlayer/smallchain/kubechain/internal/controller/tool"
 	"github.com/humanlayer/smallchain/kubechain/internal/mcpmanager"
@@ -255,13 +254,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&taskrun.TaskRunReconciler{
+	if err = (&task.TaskReconciler{
 		Client:     mgr.GetClient(),
 		Scheme:     mgr.GetScheme(),
 		MCPManager: mcpManagerInstance,
-		Tracer:     tracerProvider.Tracer("taskrun"),
+		Tracer:     tracerProvider.Tracer("task"),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "TaskRun")
+		setupLog.Error(err, "unable to create controller", "controller", "Task")
 		os.Exit(1)
 	}
 

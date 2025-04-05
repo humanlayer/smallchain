@@ -41,7 +41,7 @@ resources:
   controller: true
   domain: humanlayer.dev
   group: kubechain
-  kind: TaskRun
+  kind: Task
   path: github.com/humanlayer/smallchain/kubechain/api/v1alpha1
   version: v1alpha1
 - api:
