@@ -309,8 +309,10 @@ Events:
   Normal  ValidationSucceeded  64m (x2 over 64m)  agent-controller  All dependencies validated successfully
 ```
 
-</details>### Running Your First TaskRun
-Create a TaskRun to interact with your agent:
+</details>
+
+### Running Your First Task
+Create a Task to interact with your agent:
 
 
 ```bash
@@ -439,7 +441,7 @@ graph RL
 To get just the output, run
 
 ```
-kubectl get taskrun -o jsonpath='{.items[*].status.output}'
+kubectl get task -o jsonpath='{.items[*].status.output}'
 ```
 
 and you'll see
@@ -667,7 +669,7 @@ You can also explore the TaskRunToolCall events
 
 
 ```
-kubectl get taskrun fetch-task-1 -o jsonpath='{.status.output}'
+kubectl get task fetch-task -o jsonpath='{.status.output}'
 ```
 
 > The URL [https://swapi.dev/api/people/1](https://swapi.dev/api/people/1) contains the following data about a Star Wars character:
@@ -703,7 +705,7 @@ and you can describe the task to see the full context window and tool-calling tu
 kubectl describe task fetch-task
 ```
 
-A simplified view of the taskrun:
+A simplified view of the task:
 
 ```mermaid
 flowchart TD
@@ -718,27 +720,26 @@ flowchart TD
     subgraph Task
       subgraph ContextWindow
         direction LR
-        SystemMessage
-        UserMessage
-        ToolCall-1
-        ToolResponse-1
-        AssistantMessage
+        SystemMessage[system:content]
+        UserMessage[user:content]
+        ToolCall-1[assistant:tool_calls]
+        ToolResponse-1[tool:result]
+        AssistantMessage[assistant:content]
       end
     end
     SystemMessage --> UserMessage
 
-    Task2[Task]
     Agent2[Agent]
 
-    UserMessage --> Task --> Agent --> LLM
+    UserMessage --> Agent --> LLM
     Provider --> OpenAI
     Secret --> Credentials
     Credentials --> OpenAI
     OpenAI --> ToolCall-1
-    ToolCall-1 --> Task2 --> Agent2 --> fetch
+    ToolCall-1 --> Agent2 --> fetch
     fetch --> ToolResponse-1
     ToolResponse-1 --> OpenAI2[OpenAI]
-    OpenAI2 --> AssistantMessage
+    OpenAI2 --> AssistantMessage[assistant:content]
 ```
 
 * * *
@@ -802,12 +803,12 @@ Contents of https://swapi.dev/api/people/1:
 Events:
   Type    Reason                     Age                  From                Message
   ----    ------                     ----                 ----                -------
-  Normal  ValidationSucceeded        114s                 taskrun-controller  Task validated successfully
-  Normal  ToolCallsPending           114s                 taskrun-controller  LLM response received, tool calls pending
-  Normal  ToolCallCreated            114s                 taskrun-controller  Created TaskRunToolCall fetch-task-1-toolcall-01
-  Normal  SendingContextWindowToLLM  109s (x2 over 114s)  taskrun-controller  Sending context window to LLM
-  Normal  AllToolCallsCompleted      109s                 taskrun-controller  All tool calls completed, ready to send tool results to LLM
-  Normal  LLMFinalAnswer             105s                 taskrun-controller  LLM response received successfully
+  Normal  ValidationSucceeded        114s                 task-controller  Task validated successfully
+  Normal  ToolCallsPending           114s                 task-controller  LLM response received, tool calls pending
+  Normal  ToolCallCreated            114s                 task-controller  Created TaskRunToolCall fetch-task-1-toolcall-01
+  Normal  SendingContextWindowToLLM  109s (x2 over 114s)  task-controller  Sending context window to LLM
+  Normal  AllToolCallsCompleted      109s                 task-controller  All tool calls completed, ready to send tool results to LLM
+  Normal  LLMFinalAnswer             105s                 task-controller  LLM response received successfully
 ```
 
 That's it! Go add your favorite MCPs and start running durable agents in Kubernetes!
